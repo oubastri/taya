@@ -318,10 +318,10 @@ export default function Home() {
                 </button>
               </div>
               <p style={{ margin: "1em 0 0" }}>
-                that's why i call them moves, not workouts.
-                some days it's a long walk.
-                some days it's yoga.
-                some days it's lifting, pilates, a pickup game, a studio class,
+                that&apos;s why i call them moves, not workouts.
+                some days it&apos;s a long walk.
+                some days it&apos;s yoga.
+                some days it&apos;s lifting, pilates, a pickup game, a studio class,
                 a run outside, a long stretch at night.
                 it all counts.
               </p>
@@ -333,10 +333,10 @@ export default function Home() {
               <p style={{ margin: "1em 0 0" }}>
                 one move.
                 then another.
-                that's the whole thing.
+                that&apos;s the whole thing.
               </p>
               <p style={{ margin: "1em 0 0" }}>
-                maybe you've been doing this for years.
+                maybe you&apos;ve been doing this for years.
                 maybe today is the first day you write it down.
                 either way, imagine what this looks like a year from now.
               </p>
@@ -345,7 +345,7 @@ export default function Home() {
               </p>
               <p style={{ margin: "1em 0 0" }}>
                 this is still early.
-                if something's missing to help us athletes,{" "}
+                if something&apos;s missing to help us athletes,{" "}
                 <a
                   href="https://x.com/alexoubari"
                   target="_blank"
@@ -356,7 +356,7 @@ export default function Home() {
                   dm me on x
                 </a>
                 .
-                i'm listening. i'll build it and add it here.
+                i&apos;m listening. i&apos;ll build it and add it here.
               </p>
               <p className="whitespace-pre-wrap" style={{ margin: "1.5em 0 0" }}>
                 {`with love,
