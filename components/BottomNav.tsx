@@ -4,52 +4,26 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLogSheet } from "@/contexts/log-sheet";
 
-function HomeIcon({ active }: { active: boolean }) {
+function FeedIcon() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-      {active ? (
-        <>
-          <path
-            d="M3 10.5L12 3L21 10.5V20a1 1 0 01-1 1H5a1 1 0 01-1-1V10.5z"
-            fill="currentColor"
-          />
-          <path d="M9 21V13h6v8" fill="rgba(255,255,255,0.7)" />
-        </>
-      ) : (
-        <>
-          <path
-            d="M3 10.5L12 3L21 10.5V20a1 1 0 01-1 1H5a1 1 0 01-1-1V10.5z"
-            stroke="currentColor"
-            strokeWidth="1.75"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M9 21V13h6v8"
-            stroke="currentColor"
-            strokeWidth="1.75"
-          />
-        </>
-      )}
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="square" strokeLinejoin="miter" aria-hidden>
+      <path d="M8.5 10L13.6343 7.97846" strokeLinecap="butt" />
+      <path d="M15.5 2L13.6266 8.00743L14.9792 14.5505L14.9587 14.4514" />
+      <path d="M11.0523 15.8995L11.0962 16.001L8.5 10L3 10" />
+      <path d="M17 18C15.9331 17.7141 14.8364 18.3473 14.5505 19.4142C14.2647 20.4811 14.8978 21.5778 15.9648 21.8637C17.0317 22.1496 18.1284 21.5164 18.4142 20.4495C18.7001 19.3826 18.067 18.2859 17 18Z" />
+      <path d="M21 12.5L11 16L11 22" />
     </svg>
   );
 }
 
-function ProfileIcon({ active }: { active: boolean }) {
-  const w = active ? 2 : 1.75;
+function ProfileIcon() {
   return (
-    <svg
-      width="22"
-      height="22"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={w}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="square" strokeLinejoin="miter" aria-hidden>
+      <circle cx="12" cy="3" r="2" />
+      <path d="M5,15l1.586-5.549c.245-.859,1.03-1.451,1.923-1.451h6.983c.893,0,1.678,.592,1.923,1.451l1.586,5.549" />
+      <line x1="15" y1="23" x2="15" y2="12" />
+      <line x1="9" y1="17" x2="15" y2="17" />
+      <line x1="9" y1="12" x2="9" y2="23" />
     </svg>
   );
 }
@@ -118,13 +92,13 @@ export function BottomNav() {
         aria-label="Main navigation"
       >
         <Link href="/" style={linkStyle(feedActive)} aria-label="Feed">
-          <HomeIcon active={feedActive} />
+          <FeedIcon />
         </Link>
 
         {/* Add — emphasized, center */}
         <button
           type="button"
-          onClick={open}
+          onClick={() => open()}
           aria-label="Log a workout"
           style={{
             width: 52,
@@ -159,7 +133,7 @@ export function BottomNav() {
         </button>
 
         <Link href="/profile" style={linkStyle(profileActive)} aria-label="Profile">
-          <ProfileIcon active={profileActive} />
+          <ProfileIcon />
         </Link>
       </nav>
     </div>

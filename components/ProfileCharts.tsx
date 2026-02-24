@@ -72,7 +72,6 @@ export function ProfileCharts({ workouts }: ProfileChartsProps) {
             backgroundColor: "var(--surface)",
             borderRadius: "var(--radius-lg)",
             padding: "22px 20px 20px",
-            boxShadow: "var(--shadow-card)",
             border: "1px solid var(--border)",
           }}
         >
@@ -114,7 +113,6 @@ export function ProfileCharts({ workouts }: ProfileChartsProps) {
                         ? "var(--accent)"
                         : "var(--foreground)",
                     transition: "height 0.4s var(--ease-out-expo)",
-                    boxShadow: isCurrentWeek && count > 0 ? "0 2px 8px var(--accent-glow)" : "none",
                   }}
                 />
               );
@@ -149,7 +147,6 @@ export function ProfileCharts({ workouts }: ProfileChartsProps) {
             backgroundColor: "var(--surface)",
             borderRadius: "var(--radius-lg)",
             padding: "22px 20px 20px",
-            boxShadow: "var(--shadow-card)",
             border: "1px solid var(--border)",
           }}
         >
@@ -200,7 +197,6 @@ export function ProfileCharts({ workouts }: ProfileChartsProps) {
                           ? "var(--accent)"
                           : "var(--foreground)",
                       transition: "height 0.4s var(--ease-out-expo)",
-                      boxShadow: isFav && count > 0 ? "0 2px 8px var(--accent-glow)" : "none",
                     }}
                   />
                   <span

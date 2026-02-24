@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLogSheet } from "@/contexts/log-sheet";
 import { useWorkouts } from "@/hooks/use-workouts";
 import { ActivityIcon, ACTIVITY_COLORS } from "./ActivityIcon";
@@ -8,13 +8,26 @@ import { ACTIVITY_LABELS, ACTIVITY_TYPES, toDateKey } from "@/types/workout";
 import type { ActivityType } from "@/types/workout";
 
 export function LogSheet() {
-  const { isOpen, close } = useLogSheet();
-  const { addWorkout } = useWorkouts();
+  const { isOpen, close, initialDateKey, workoutToEdit } = useLogSheet();
+  const { addWorkout, updateWorkout } = useWorkouts();
 
   const [selected, setSelected] = useState<ActivityType | null>(null);
   const [description, setDescription] = useState("");
-  const [date] = useState(() => toDateKey(new Date()));
+  const [date, setDate] = useState(() => toDateKey(new Date()));
   const [dragOffset, setDragOffset] = useState(0);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (workoutToEdit) {
+      setDate(workoutToEdit.date);
+      setDescription(workoutToEdit.description ?? "");
+      setSelected((workoutToEdit.activityType ?? "other") as ActivityType);
+    } else {
+      setDate(initialDateKey ?? toDateKey(new Date()));
+      setDescription("");
+      setSelected(null);
+    }
+  }, [isOpen, initialDateKey, workoutToEdit]);
 
   const startYRef = useRef(0);
   const dragging = useRef(false);
@@ -32,7 +45,15 @@ export function LogSheet() {
 
   const handleSubmit = () => {
     if (!selected) return;
-    addWorkout(date, description.trim(), selected);
+    if (workoutToEdit) {
+      updateWorkout(workoutToEdit.id, {
+        date,
+        description: description.trim(),
+        activityType: selected,
+      });
+    } else {
+      addWorkout(date, description.trim(), selected);
+    }
     handleClose();
   };
 
@@ -58,6 +79,7 @@ export function LogSheet() {
 
   const today = toDateKey(new Date());
   const ready = selected !== null;
+  const isEditing = !!workoutToEdit;
 
   return (
     <>
@@ -85,7 +107,7 @@ export function LogSheet() {
         onTouchEnd={onTouchEnd}
         role="dialog"
         aria-modal="true"
-        aria-label="Log a workout"
+        aria-label={isEditing ? "Edit workout" : "Log a workout"}
         style={{
           position: "fixed",
           bottom: 0,
@@ -107,150 +129,120 @@ export function LogSheet() {
         }}
       >
         {/* Drag handle */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            paddingTop: 12,
-            paddingBottom: 20,
-          }}
-        >
+        <div style={{ display: "flex", justifyContent: "center", paddingTop: 10, paddingBottom: 16 }}>
           <div
             style={{
-              width: 36,
-              height: 4,
+              width: 32,
+              height: 3,
               borderRadius: 2,
-              backgroundColor: "var(--border-strong)",
+              backgroundColor: "rgba(0,0,0,0.12)",
             }}
           />
         </div>
 
-        {/* Activity grid */}
-        <div
-          style={{
-            padding: "0 16px",
-            display: "grid",
-            gridTemplateColumns: "repeat(3, 1fr)",
-            gap: 6,
-          }}
-        >
-          {ACTIVITY_TYPES.map((activity) => {
-            const isSel = selected === activity;
-            return (
-              <button
-                key={activity}
-                type="button"
-                onClick={() => setSelected(isSel ? null : activity)}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 7,
-                  padding: "14px 6px 12px",
-                  borderRadius: 12,
-                  border: "none",
-                  backgroundColor: isSel
-                    ? ACTIVITY_COLORS[activity]
-                    : "rgba(0,0,0,0.05)",
-                  color: isSel ? "#fff" : "#000",
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                  WebkitTapHighlightColor: "transparent",
-                  transition: "background-color 0.15s ease, color 0.15s ease",
-                }}
-              >
-                <ActivityIcon type={activity} size={24} />
-                <span
-                  style={{
-                    fontSize: 9,
-                    fontWeight: 700,
-                    letterSpacing: "0.04em",
-                    textTransform: "uppercase",
-                    lineHeight: 1,
-                    opacity: isSel ? 0.9 : 0.6,
-                  }}
-                >
-                  {ACTIVITY_LABELS[activity]}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Date + description row */}
-        <div style={{ padding: "20px 20px 0" }}>
+        {/* Activity picker */}
+        <div style={{ padding: "0 20px 20px" }}>
           <div
             style={{
-              display: "flex",
-              alignItems: "center",
+              display: "grid",
+              gridTemplateColumns: "repeat(4, 1fr)",
               gap: 8,
-              marginBottom: 12,
             }}
           >
-            <span
-              style={{
-                fontSize: 11,
-                fontWeight: 700,
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
-                color: "rgba(0,0,0,0.35)",
-                padding: "4px 10px",
-                borderRadius: 20,
-                border: "1px solid rgba(0,0,0,0.1)",
-              }}
-            >
-              {date === today ? "Today" : date}
-            </span>
+            {ACTIVITY_TYPES.map((activity) => {
+              const isSel = selected === activity;
+              const color = ACTIVITY_COLORS[activity];
+              return (
+                <button
+                  key={activity}
+                  type="button"
+                  onClick={() => setSelected(isSel ? null : activity)}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                    padding: "12px 6px 10px",
+                    borderRadius: 12,
+                    border: isSel ? `2px solid ${color}` : "1px solid rgba(0,0,0,0.08)",
+                    backgroundColor: isSel ? `${color}18` : "transparent",
+                    color: isSel ? color : "rgba(0,0,0,0.6)",
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    fontSize: 11,
+                    fontWeight: 500,
+                    WebkitTapHighlightColor: "transparent",
+                    transition: "border-color 0.2s, background-color 0.2s, color 0.2s",
+                  }}
+                >
+                  <ActivityIcon type={activity} size={32} invert={false} />
+                  <span style={{ textAlign: "center", lineHeight: 1.2 }}>
+                    {ACTIVITY_LABELS[activity]}
+                  </span>
+                </button>
+              );
+            })}
           </div>
+        </div>
 
-          <textarea
-            placeholder="add a note…"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={2}
+        {/* Date + note */}
+        <div style={{ padding: "0 20px 24px" }}>
+          <p style={{ margin: "0 0 8px", fontSize: 13, color: "rgba(0,0,0,0.5)" }}>
+            {date === today ? "Today" : date}
+          </p>
+          <div
             style={{
-              width: "100%",
-              resize: "none",
-              border: "none",
-              borderRadius: 0,
-              borderTop: "1px solid rgba(0,0,0,0.07)",
-              padding: "14px 0 0",
-              fontSize: 15,
-              fontFamily: "inherit",
-              backgroundColor: "transparent",
-              outline: "none",
-              boxSizing: "border-box",
-              color: "#000",
-              letterSpacing: "-0.01em",
+              border: "1px solid rgba(0,0,0,0.1)",
+              borderRadius: 12,
+              backgroundColor: "rgba(0,0,0,0.03)",
+              overflow: "hidden",
             }}
-          />
+          >
+            <textarea
+              placeholder="Note (optional)"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={2}
+              style={{
+                width: "100%",
+                resize: "none",
+                border: "none",
+                padding: "12px 14px",
+                fontSize: 15,
+                fontFamily: "inherit",
+                backgroundColor: "transparent",
+                outline: "none",
+                boxSizing: "border-box",
+                color: "#000",
+                WebkitTapHighlightColor: "transparent",
+              }}
+            />
+          </div>
         </div>
 
         {/* Submit */}
-        <div style={{ padding: "16px 20px 0" }}>
+        <div style={{ padding: "0 20px max(20px, env(safe-area-inset-bottom))" }}>
           <button
             type="button"
             onClick={handleSubmit}
             disabled={!ready}
             style={{
               width: "100%",
-              height: 52,
-              borderRadius: 14,
+              height: 48,
+              borderRadius: 12,
               border: "none",
               backgroundColor: ready ? "var(--foreground)" : "rgba(0,0,0,0.06)",
-              color: ready ? "var(--surface)" : "var(--foreground-faint)",
-              fontSize: 14,
-              fontWeight: 800,
+              color: ready ? "var(--surface)" : "rgba(0,0,0,0.35)",
+              fontSize: 15,
+              fontWeight: 600,
               fontFamily: "inherit",
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
               cursor: ready ? "pointer" : "default",
-              transition: "background-color 0.2s ease, color 0.2s ease",
+              transition: "background-color 0.2s, color 0.2s",
               WebkitTapHighlightColor: "transparent",
             }}
           >
-            Log it
+            {isEditing ? "Save" : "Log"}
           </button>
         </div>
       </div>

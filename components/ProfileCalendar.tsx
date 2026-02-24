@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useDayDetailSheet } from "@/contexts/day-detail-sheet";
+import { useLogSheet } from "@/contexts/log-sheet";
 import type { Workout } from "@/types/workout";
 import { toDateKey } from "@/types/workout";
 
@@ -15,6 +17,8 @@ interface ProfileCalendarProps {
 }
 
 export function ProfileCalendar({ workouts }: ProfileCalendarProps) {
+  const { open: openLogSheet } = useLogSheet();
+  const { open: openDayDetail } = useDayDetailSheet();
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
@@ -214,9 +218,21 @@ export function ProfileCalendar({ workouts }: ProfileCalendarProps) {
                 border = "none";
               }
 
+              const handleDateClick = () => {
+                if (hasWorkout) openDayDetail(dk);
+                else openLogSheet(dk);
+              };
+
               return (
-                <div
+                <button
                   key={di}
+                  type="button"
+                  onClick={handleDateClick}
+                  aria-label={
+                    hasWorkout
+                      ? `View logs for ${date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                      : `Log a move for ${date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                  }
                   style={{
                     flex: 1,
                     aspectRatio: "1",
@@ -228,9 +244,13 @@ export function ProfileCalendar({ workouts }: ProfileCalendarProps) {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    transition: "background-color 0.25s var(--ease-out-expo), border-color 0.2s ease",
-                    boxShadow: hasWorkout && !isToday ? "0 2px 6px rgba(0,0,0,0.12)" : "none",
+                    transition: "background-color 0.25s var(--ease-out-expo), border-color 0.2s ease, transform 0.15s ease",
+                    cursor: "pointer",
+                    padding: 0,
+                    font: "inherit",
+                    WebkitTapHighlightColor: "transparent",
                   }}
+                  className="active:scale-95"
                 >
                   {isToday && (
                     <span
@@ -245,7 +265,7 @@ export function ProfileCalendar({ workouts }: ProfileCalendarProps) {
                       {date.getDate()}
                     </span>
                   )}
-                </div>
+                </button>
               );
             })}
           </div>

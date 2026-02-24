@@ -51,13 +51,13 @@ export function useFriends() {
   );
 
   const getFeedWorkouts = useCallback(
-    (myWorkouts: Workout[]): FeedItem[] => {
+    (myWorkouts: Workout[], currentUserAvatarUrl?: string): FeedItem[] => {
       const myItems: FeedItem[] = myWorkouts.map((w) => ({
         ...w,
         userId: "me",
         userName: "You",
         userHandle: "me",
-        userAvatarUrl: undefined,
+        userAvatarUrl: currentUserAvatarUrl,
       }));
       const friendItems: FeedItem[] = followedFriends.flatMap((f) =>
         f.workouts.map((w) => ({

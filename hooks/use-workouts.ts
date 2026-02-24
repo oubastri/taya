@@ -80,6 +80,21 @@ export function useWorkouts() {
     [persist]
   );
 
+  const updateWorkout = useCallback(
+    (
+      id: string,
+      updates: { date?: string; description?: string; activityType?: ActivityType }
+    ) => {
+      const current = loadWorkouts();
+      persist(
+        current.map((w) =>
+          w.id === id ? { ...w, ...updates } : w
+        )
+      );
+    },
+    [persist]
+  );
+
   const stats = getStats(workouts);
 
   return {
@@ -88,6 +103,7 @@ export function useWorkouts() {
     stats,
     addWorkout,
     deleteWorkout,
+    updateWorkout,
     hasWorkoutOn: (date: string) => workouts.some((w) => w.date === date),
     workoutsOnDate: (date: string) => workouts.filter((w) => w.date === date),
   };

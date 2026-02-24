@@ -5,9 +5,13 @@ import { useUser } from "@/hooks/use-user";
 import { useWorkouts } from "@/hooks/use-workouts";
 import { ProfileCalendar } from "@/components/ProfileCalendar";
 import { ProfileCharts } from "@/components/ProfileCharts";
+import { UserAvatar } from "@/components/UserAvatar";
 import { ActivityIcon, ACTIVITY_COLORS } from "@/components/ActivityIcon";
 import { ACTIVITY_LABELS } from "@/types/workout";
 import type { ActivityType } from "@/types/workout";
+
+// user10 from :profilephotos: — always use this for your profile
+const PROFILE_PHOTO_URL = "/pfp/profile.jpg";
 
 function Card({
   children,
@@ -21,7 +25,6 @@ function Card({
       style={{
         backgroundColor: "var(--surface)",
         borderRadius: "var(--radius-lg)",
-        boxShadow: "var(--shadow-card)",
         border: "1px solid var(--border)",
         overflow: "hidden",
         ...style,
@@ -40,8 +43,14 @@ export default function ProfilePage() {
   const [nameInput, setNameInput] = useState("");
 
   useEffect(() => {
-    if (uh) setNameInput(user.name);
-  }, [uh, user.name]);
+    if (uh) setNameInput("Breezy De Vrij");
+  }, [uh]);
+
+  // Ensure profile photo is set to user10
+  useEffect(() => {
+    if (!uh || user.avatarUrl === PROFILE_PHOTO_URL) return;
+    updateUser({ avatarUrl: PROFILE_PHOTO_URL });
+  }, [uh, user.avatarUrl, updateUser]);
 
   const activityCounts = workouts.reduce<Record<string, number>>((acc, w) => {
     const t = w.activityType ?? "other";
@@ -65,148 +74,157 @@ export default function ProfilePage() {
         paddingBottom: 96,
       }}
     >
-      {/* Identity card */}
-      <div style={{ padding: "max(env(safe-area-inset-top), 52px) 14px 0" }}>
-        <Card style={{ padding: "26px 22px 24px" }}>
+      {/* Identity + stats lockup (no container) */}
+      <div style={{ padding: "max(env(safe-area-inset-top), 52px) 20px 0" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 16,
+            marginBottom: 20,
+          }}
+        >
           <div
             style={{
-              width: 56,
-              height: 56,
+              width: 64,
+              height: 64,
               borderRadius: "50%",
-              backgroundColor: "var(--foreground)",
+              overflow: "hidden",
+              flexShrink: 0,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              marginBottom: 18,
-              boxShadow: "0 4px 14px rgba(0,0,0,0.15)",
+              backgroundColor: "var(--foreground)",
             }}
           >
-            <svg width="26" height="26" viewBox="0 0 80 80" fill="none" aria-hidden>
-              <circle cx="43" cy="18" r="7" fill="var(--accent)" />
-              <line x1="41" y1="25" x2="37" y2="40" stroke="var(--accent)" strokeWidth="5.5" strokeLinecap="round" />
-              <line x1="40" y1="31" x2="54" y2="27" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" />
-              <line x1="40" y1="31" x2="26" y2="38" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" />
-              <line x1="37" y1="40" x2="27" y2="55" stroke="var(--accent)" strokeWidth="5.5" strokeLinecap="round" />
-              <line x1="37" y1="40" x2="50" y2="52" stroke="var(--accent)" strokeWidth="5.5" strokeLinecap="round" />
-            </svg>
-          </div>
-
-          {editingName ? (
-            <input
-              value={nameInput}
-              onChange={(e) => setNameInput(e.target.value)}
-              onBlur={() => {
-                if (nameInput.trim()) updateUser({ name: nameInput.trim() });
-                setEditingName(false);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") e.currentTarget.blur();
-                if (e.key === "Escape") {
-                  setNameInput(user.name);
-                  setEditingName(false);
-                }
-              }}
-              autoFocus
-              style={{
-                fontSize: 26,
-                fontWeight: 800,
-                letterSpacing: "-0.035em",
-                lineHeight: 1,
-                border: "none",
-                borderBottom: "2px solid var(--accent)",
-                background: "transparent",
-                outline: "none",
-                fontFamily: "inherit",
-                color: "var(--foreground)",
-                padding: "2px 0",
-                width: "100%",
-              }}
+            <UserAvatar
+              avatarUrl={user.avatarUrl ?? PROFILE_PHOTO_URL}
+              name="Breezy De Vrij"
+              size="xl"
             />
-          ) : (
-            <h1
-              onClick={() => setEditingName(true)}
-              style={{
-                fontSize: 26,
-                fontWeight: 800,
-                letterSpacing: "-0.035em",
-                lineHeight: 1,
-                margin: 0,
-                cursor: "text",
-                color: "var(--foreground)",
-              }}
-            >
-              {user.name}
-            </h1>
-          )}
-
-          <p
-            style={{
-              margin: "6px 0 0",
-              fontSize: 13,
-              fontWeight: 500,
-              color: "var(--foreground-subtle)",
-            }}
-          >
-            @{user.handle}
-          </p>
-        </Card>
-      </div>
-
-      {/* Stats card */}
-      <div style={{ padding: "14px 14px 0" }}>
-        <Card>
-          <div style={{ display: "flex" }}>
-            {[
-              { label: "Year", value: stats.thisYear },
-              { label: "Month", value: stats.thisMonth },
-              { label: "Week", value: stats.thisWeek },
-            ].map(({ label, value }, i) => (
-              <div
-                key={label}
+          </div>
+          <div style={{ minWidth: 0 }}>
+            {editingName ? (
+              <input
+                value={nameInput}
+                onChange={(e) => setNameInput(e.target.value)}
+                onBlur={() => {
+                  if (nameInput.trim()) updateUser({ name: nameInput.trim() });
+                  setEditingName(false);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                  if (e.key === "Escape") {
+                    setNameInput("Breezy De Vrij");
+                    setEditingName(false);
+                  }
+                }}
+                autoFocus
                 style={{
-                  flex: 1,
-                  padding: "24px 0 22px",
-                  borderLeft: i > 0 ? "1px solid var(--border)" : "none",
-                  textAlign: "center",
+                  fontSize: 22,
+                  fontWeight: 800,
+                  letterSpacing: "-0.035em",
+                  lineHeight: 1.2,
+                  border: "none",
+                  borderBottom: "2px solid var(--accent)",
+                  background: "transparent",
+                  outline: "none",
+                  fontFamily: "inherit",
+                  color: "var(--foreground)",
+                  padding: "2px 0",
+                  width: "100%",
+                }}
+              />
+            ) : (
+              <h1
+                onClick={() => {
+                  setEditingName(true);
+                  setNameInput("Breezy De Vrij");
+                }}
+                style={{
+                  fontSize: 22,
+                  fontWeight: 800,
+                  letterSpacing: "-0.035em",
+                  lineHeight: 1.2,
+                  margin: 0,
+                  cursor: "text",
+                  color: "var(--foreground)",
                 }}
               >
-                <div
-                  style={{
-                    fontSize: 44,
-                    fontWeight: 900,
-                    letterSpacing: "-0.05em",
-                    lineHeight: 1,
-                    color: "var(--foreground)",
-                  }}
-                >
-                  {value}
-                </div>
-                <div
-                  style={{
-                    marginTop: 5,
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
-                    color: "var(--foreground-subtle)",
-                  }}
-                >
-                  {label}
-                </div>
-              </div>
-            ))}
+                Breezy De Vrij
+              </h1>
+            )}
+            <p
+              style={{
+                margin: "4px 0 0",
+                fontSize: 14,
+                fontWeight: 500,
+                color: "var(--foreground-subtle)",
+              }}
+            >
+              @breezyv
+            </p>
           </div>
-        </Card>
+        </div>
+
+        {/* Year / Month / Week inline */}
+        <div
+          style={{
+            display: "flex",
+            borderTop: "1px solid var(--border)",
+            borderBottom: "1px solid var(--border)",
+            padding: "16px 0",
+          }}
+        >
+          {[
+            { label: "Year", value: stats.thisYear },
+            { label: "Month", value: stats.thisMonth },
+            { label: "Week", value: stats.thisWeek },
+          ].map(({ label, value }, i) => (
+            <div
+              key={label}
+              style={{
+                flex: 1,
+                textAlign: "center",
+                borderLeft: i > 0 ? "1px solid var(--border)" : "none",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 32,
+                  fontWeight: 900,
+                  letterSpacing: "-0.05em",
+                  lineHeight: 1,
+                  color: "var(--foreground)",
+                }}
+              >
+                {value}
+              </div>
+              <div
+                style={{
+                  marginTop: 4,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: "var(--foreground-subtle)",
+                }}
+              >
+                {label}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
-      <ProfileCharts workouts={workouts} />
-
-      {/* Calendar card */}
-      <div style={{ padding: "12px 14px 0" }}>
+      {/* Calendar — above consistency & when you train */}
+      <div style={{ padding: "16px 14px 0" }}>
         <Card style={{ padding: "22px 20px" }}>
           <ProfileCalendar workouts={workouts} />
         </Card>
       </div>
+
+      <ProfileCharts workouts={workouts} />
 
       {/* Top activities */}
       {topActivities.length > 0 && (

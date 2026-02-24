@@ -1,8 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import { Lexend_Deca } from "next/font/google";
 import "./globals.css";
+import { DayDetailSheetProvider } from "@/contexts/day-detail-sheet";
 import { LogSheetProvider } from "@/contexts/log-sheet";
 import { BottomNav } from "@/components/BottomNav";
+import { DayDetailSheet } from "@/components/DayDetailSheet";
 import { LogSheet } from "@/components/LogSheet";
 
 const lexendDeca = Lexend_Deca({
@@ -46,9 +48,12 @@ export default function RootLayout({
     <html lang="en" className={lexendDeca.variable}>
       <body className={`min-h-full antialiased ${lexendDeca.className}`}>
         <LogSheetProvider>
-          {children}
-          <BottomNav />
-          <LogSheet />
+          <DayDetailSheetProvider>
+            {children}
+            <BottomNav />
+            <DayDetailSheet />
+            <LogSheet />
+          </DayDetailSheetProvider>
         </LogSheetProvider>
       </body>
     </html>

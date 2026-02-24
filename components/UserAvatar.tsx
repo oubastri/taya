@@ -3,23 +3,38 @@
 interface UserAvatarProps {
   avatarUrl?: string;
   name?: string;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
 }
 
-const SIZE_MAP = { sm: 32, md: 48, lg: 80 } as const;
+const SIZE_MAP = { sm: 32, md: 48, lg: 80, xl: 56 } as const;
 
 export function UserAvatar({ avatarUrl, name, size = "md" }: UserAvatarProps) {
   const px = SIZE_MAP[size];
 
   if (avatarUrl) {
     return (
-      <img
-        src={avatarUrl}
-        alt={name ?? "User avatar"}
-        width={px}
-        height={px}
-        style={{ borderRadius: "50%", objectFit: "cover", display: "block" }}
-      />
+      <div
+        style={{
+          width: px,
+          height: px,
+          borderRadius: "50%",
+          overflow: "hidden",
+          flexShrink: 0,
+          display: "block",
+        }}
+      >
+        <img
+          src={avatarUrl}
+          alt={name ?? "User avatar"}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            objectPosition: "center",
+            display: "block",
+          }}
+        />
+      </div>
     );
   }
 

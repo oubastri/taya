@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { useUser } from "@/hooks/use-user";
 import { useWorkouts } from "@/hooks/use-workouts";
 import { useFriends, type FeedItem } from "@/hooks/use-friends";
 import { FeedPost } from "@/components/FeedPost";
@@ -90,13 +91,14 @@ function groupByDate(
 }
 
 export default function FeedPage() {
+  const { user, hydrated: uh } = useUser();
   const { workouts, hydrated: wh } = useWorkouts();
   const { getFeedWorkouts, hydrated: fh } = useFriends();
 
-  const hydrated = wh && fh;
+  const hydrated = uh && wh && fh;
   const feedItems = useMemo(
-    () => (hydrated ? getFeedWorkouts(workouts) : []),
-    [hydrated, workouts, getFeedWorkouts]
+    () => (hydrated ? getFeedWorkouts(workouts, user.avatarUrl) : []),
+    [hydrated, workouts, getFeedWorkouts, user.avatarUrl]
   );
   const groups = useMemo(() => groupByDate(feedItems), [feedItems]);
   const ordinals = useMemo(
@@ -121,10 +123,12 @@ export default function FeedPage() {
         <h1
           style={{
             margin: 0,
-            fontSize: "clamp(22px, 7.8vw, 47px)",
-            fontWeight: 800,
-            letterSpacing: "-0.03em",
-            lineHeight: 1.15,
+            fontFamily: '"Lexend Deca", var(--font-sans), sans-serif',
+            fontSize: 47,
+            fontStyle: "normal",
+            fontWeight: 500,
+            lineHeight: "normal",
+            letterSpacing: "-4.7px",
             color: "var(--foreground)",
             whiteSpace: "nowrap",
           }}
