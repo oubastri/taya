@@ -3,9 +3,43 @@
 @tailwind utilities;
 
 :root {
-  --background: #FAFAF8;
-  --foreground: #000000;
-  --accent: #11EB0E;
+  /* Surfaces */
+  --background: #F3F3F3;
+  --surface: #FFFFFF;
+  --surface-elevated: #FFFFFF;
+  --overlay: rgba(0, 0, 0, 0.45);
+
+  /* Text */
+  --foreground: #0A0A0A;
+  --foreground-muted: rgba(0, 0, 0, 0.5);
+  --foreground-subtle: rgba(0, 0, 0, 0.35);
+  --foreground-faint: rgba(0, 0, 0, 0.22);
+
+  /* Brand — vibrant “moved” green */
+  --accent: #00C853;
+  --accent-soft: rgba(0, 200, 83, 0.18);
+  --accent-glow: rgba(0, 200, 83, 0.25);
+
+  /* UI */
+  --border: rgba(0, 0, 0, 0.06);
+  --border-strong: rgba(0, 0, 0, 0.1);
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* Shadows — soft, native feel */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04), 0 6px 20px rgba(0, 0, 0, 0.06);
+  --shadow-card-hover: 0 2px 8px rgba(0, 0, 0, 0.06), 0 12px 32px rgba(0, 0, 0, 0.08);
+  --shadow-nav: 0 -1px 0 var(--border), 0 -4px 24px rgba(0, 0, 0, 0.06);
+  --shadow-fab: 0 4px 14px rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.08);
+
+  /* Motion */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-fast: 0.2s;
+  --duration-normal: 0.35s;
 }
 
 html,
@@ -27,7 +61,6 @@ main {
   margin-top: 0;
 }
 
-/* Remove default heading margin so title can sit flush to top */
 main h1 {
   margin: 0;
   padding: 0;
@@ -37,7 +70,6 @@ main h1 {
   body {
     padding-left: max(0px, env(safe-area-inset-left));
     padding-right: max(0px, env(safe-area-inset-right));
-    padding-bottom: max(0px, env(safe-area-inset-bottom));
   }
 }
 
@@ -48,32 +80,49 @@ textarea:focus-visible {
   outline-offset: 2px;
 }
 
-/* Modal enter animation */
-@keyframes modal-in {
+/* Sheet slide-up */
+@keyframes sheet-in {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes fade-in-up {
   from {
     opacity: 0;
-    transform: scale(0.96);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
-    transform: scale(1);
+    transform: translateY(0);
   }
-}
-.animate-modal-in {
-  animation: modal-in 0.2s ease-out forwards;
 }
 
-/* Terminal typewriter cursor */
+.animate-fade-in-up {
+  animation: fade-in-up var(--duration-normal) var(--ease-out-expo) forwards;
+}
+
 @keyframes cursor-blink {
-  0%,
-  50% {
-    opacity: 1;
-  }
-  51%,
-  100% {
-    opacity: 0;
-  }
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
 }
 .cursor-blink {
   animation: cursor-blink 1s step-end infinite;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 2px;
 }

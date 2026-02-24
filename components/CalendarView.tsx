@@ -15,6 +15,22 @@ type Props = {
   onAddWorkout?: (dateKey: string) => void;
 };
 
+function ChevronLeft() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M15 18l-6-6 6-6" />
+    </svg>
+  );
+}
+
+function ChevronRight() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 18l6-6-6-6" />
+    </svg>
+  );
+}
+
 export function CalendarView({
   year,
   month,
@@ -28,7 +44,7 @@ export function CalendarView({
   const [hoveredDateKey, setHoveredDateKey] = useState<string | null>(null);
   const { calendarDays } = useMemo(() => {
     const first = new Date(year, month, 1);
-    const firstDay = (first.getDay() + 6) % 7; // Monday = 0
+    const firstDay = (first.getDay() + 6) % 7;
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const calendarDays: (number | null)[] = [];
     for (let i = 0; i < firstDay; i++) calendarDays.push(null);
@@ -46,40 +62,45 @@ export function CalendarView({
       className="flex w-full flex-col items-center gap-7 px-4"
       style={{ fontFamily: "var(--font-sans), sans-serif", width: "100%" }}
     >
-      {/* Month/year + arrows */}
       <div className="flex w-full items-center justify-between">
         <button
           type="button"
           onClick={onPrevMonth}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-black hover:bg-black/5"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors duration-200 hover:bg-black/6 active:scale-95"
+          style={{ color: "var(--foreground)" }}
           aria-label="Previous month"
         >
           <ChevronLeft />
         </button>
         <span
-          className="text-center font-normal text-black"
-          style={{ letterSpacing: "-0.02em", fontSize: "clamp(1.125rem, 2.5vw, 1.375rem)" }}
+          className="text-center font-semibold"
+          style={{
+            letterSpacing: "-0.025em",
+            fontSize: "clamp(1.125rem, 2.5vw, 1.375rem)",
+            color: "var(--foreground)",
+          }}
         >
           {monthLabel}
         </span>
         <button
           type="button"
           onClick={onNextMonth}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-black hover:bg-black/5"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors duration-200 hover:bg-black/6 active:scale-95"
+          style={{ color: "var(--foreground)" }}
           aria-label="Next month"
         >
           <ChevronRight />
         </button>
       </div>
 
-      {/* Day headers - soft gray so day numbers stand out */}
       <div
         className="grid w-full text-center font-medium"
         style={{
           gridTemplateColumns: "repeat(7, 1fr)",
           gap: 0,
-          fontSize: "clamp(0.875rem, 2vw, 1rem)",
-          color: "#737373",
+          fontSize: "clamp(0.8rem, 2vw, 0.95rem)",
+          color: "var(--foreground-subtle)",
+          letterSpacing: "0.03em",
         }}
       >
         {DAYS.map((d, i) => (
@@ -87,12 +108,11 @@ export function CalendarView({
         ))}
       </div>
 
-      {/* Day grid - rounded squares, full circle on hover (workout days) */}
       <div
         className="grid w-full text-center"
         style={{
           gridTemplateColumns: "repeat(7, 1fr)",
-          gap: 0,
+          gap: 4,
         }}
       >
         {calendarDays.map((d, i) => {
@@ -104,7 +124,7 @@ export function CalendarView({
           const isToday = dateKey === today;
           const isHovered = hoveredDateKey === dateKey;
 
-          const defaultRadius = 12;
+          const defaultRadius = 14;
           const circleRadius = "50%";
           const canViewWorkout = hasWorkout && onSelectDate;
           const canAddWorkout = !hasWorkout && onAddWorkout;
@@ -113,40 +133,42 @@ export function CalendarView({
           let color: string;
           let border: string;
           let radius: number | string = defaultRadius;
+          let boxShadow = "none";
 
           if (hasWorkout) {
-            // Workout days: green circle by default (click to view)
-            bg = "#11EB0E";
-            color = "#000";
+            bg = "var(--accent)";
+            color = "#fff";
             border = "none";
             radius = circleRadius;
+            boxShadow = "0 2px 8px var(--accent-glow)";
           } else if (canAddWorkout && isHovered) {
-            // Non-workout days: grey default, green on hover (no stroke)
-            bg = "#11EB0E";
-            color = "#000";
+            bg = "var(--accent)";
+            color = "#fff";
             border = "none";
             radius = circleRadius;
+            boxShadow = "0 2px 8px var(--accent-glow)";
           } else if (isToday) {
-            bg = "#FFF";
-            color = "#000";
-            border = "1.5px solid #000";
+            bg = "var(--surface)";
+            color = "var(--foreground)";
+            border = "2px solid var(--foreground)";
           } else {
-            bg = "#EFEFEF";
-            color = "#737373";
+            bg = "rgba(0,0,0,0.06)";
+            color = "var(--foreground-subtle)";
             border = "none";
           }
 
           const inner = (
             <div
-              className="flex h-full w-full items-center justify-center font-normal"
+              className="flex h-full w-full items-center justify-center font-semibold"
               style={{
                 backgroundColor: bg,
                 color,
                 border,
                 borderRadius: radius,
+                boxShadow,
                 fontFamily: "var(--font-sans), sans-serif",
-                fontSize: "clamp(0.875rem, 2.2vw, 1.125rem)",
-                transition: "border-radius 0.3s ease, background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease",
+                fontSize: "clamp(0.875rem, 2.2vw, 1.1rem)",
+                transition: "all 0.25s var(--ease-out-expo)",
               }}
             >
               {d}
@@ -161,7 +183,7 @@ export function CalendarView({
                 onClick={() => onSelectDate(dateKey)}
                 onMouseEnter={() => setHoveredDateKey(dateKey)}
                 onMouseLeave={() => setHoveredDateKey(null)}
-                className="flex aspect-square w-full cursor-pointer items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-black active:scale-[0.98]"
+                className="flex aspect-square w-full cursor-pointer items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-black active:scale-95"
               >
                 {inner}
               </button>
@@ -175,7 +197,7 @@ export function CalendarView({
                 onClick={() => onAddWorkout(dateKey)}
                 onMouseEnter={() => setHoveredDateKey(dateKey)}
                 onMouseLeave={() => setHoveredDateKey(null)}
-                className="flex aspect-square w-full cursor-pointer items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-black active:scale-[0.98]"
+                className="flex aspect-square w-full cursor-pointer items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-black active:scale-95"
               >
                 {inner}
               </button>
@@ -192,21 +214,5 @@ export function CalendarView({
         })}
       </div>
     </div>
-  );
-}
-
-function ChevronLeft() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M15 18l-6-6 6-6" />
-    </svg>
-  );
-}
-
-function ChevronRight() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 18l6-6-6-6" />
-    </svg>
   );
 }

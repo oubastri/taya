@@ -1,6 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Lexend_Deca } from "next/font/google";
 import "./globals.css";
+import { LogSheetProvider } from "@/contexts/log-sheet";
+import { BottomNav } from "@/components/BottomNav";
+import { LogSheet } from "@/components/LogSheet";
 
 const lexendDeca = Lexend_Deca({
   subsets: ["latin"],
@@ -9,12 +12,12 @@ const lexendDeca = Lexend_Deca({
 });
 
 export const metadata: Metadata = {
-  title: "To All You Athletes",
-  description: "Workout tracker for athletes",
+  title: "TAYA",
+  description: "To All You Athletes",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "To All You Athletes",
+    title: "TAYA",
   },
   icons: {
     icon: "/icon.svg",
@@ -42,7 +45,11 @@ export default function RootLayout({
   return (
     <html lang="en" className={lexendDeca.variable}>
       <body className={`min-h-full antialiased ${lexendDeca.className}`}>
-        {children}
+        <LogSheetProvider>
+          {children}
+          <BottomNav />
+          <LogSheet />
+        </LogSheetProvider>
       </body>
     </html>
   );

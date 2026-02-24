@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { Workout } from "@/types/workout";
+import type { Workout, ActivityType } from "@/types/workout";
 import { toDateKey } from "@/types/workout";
 import { loadWorkouts, saveWorkouts } from "@/lib/storage";
 
@@ -11,6 +11,8 @@ export type Stats = {
   thisMonth: number;
   thisWeek: number;
 };
+
+const WORKOUTS_CHANGED_EVENT = "taya:workouts-changed";
 
 function getStats(workouts: Workout[]): Stats {
   const now = new Date();
@@ -39,35 +41,6 @@ function getWeekStart(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), diff);
 }
 
-/** Rhythm: consistency over last 4 weeks. Simple: (workouts in period / 12) capped at 100%. */
-function getRhythmScore(workouts: Workout[]): number {
-  const now = new Date();
-  const fourWeeksAgo = new Date(now);
-  fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
-  const inPeriod = workouts.filter((w) => {
-    const d = new Date(w.date + "T12:00:00");
-    return d >= fourWeeksAgo && d <= now;
-  }).length;
-  const target = 12;
-  return Math.min(100, Math.round((inPeriod / target) * 100));
-}
-
-/** Current streak: consecutive days with at least one workout ending today. */
-function getStreak(workouts: Workout[]): number {
-  const keys = Array.from(new Set(workouts.map((w) => w.date))).sort().reverse();
-  if (keys.length === 0) return 0;
-  const today = toDateKey(new Date());
-  if (keys[0] !== today) return 0;
-  let streak = 0;
-  let cursor = new Date(today + "T12:00:00");
-  const set = new Set(keys);
-  while (set.has(toDateKey(cursor))) {
-    streak++;
-    cursor.setDate(cursor.getDate() - 1);
-  }
-  return streak;
-}
-
 export function useWorkouts() {
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [hydrated, setHydrated] = useState(false);
@@ -75,70 +48,47 @@ export function useWorkouts() {
   useEffect(() => {
     setWorkouts(loadWorkouts());
     setHydrated(true);
+
+    const handler = () => setWorkouts(loadWorkouts());
+    window.addEventListener(WORKOUTS_CHANGED_EVENT, handler);
+    return () => window.removeEventListener(WORKOUTS_CHANGED_EVENT, handler);
   }, []);
 
   const persist = useCallback((next: Workout[]) => {
     setWorkouts(next);
     saveWorkouts(next);
+    window.dispatchEvent(new CustomEvent(WORKOUTS_CHANGED_EVENT));
   }, []);
 
   const addWorkout = useCallback(
-    (date: string, description: string) => {
+    (date: string, description: string, activityType: ActivityType = "other") => {
       const id = crypto.randomUUID();
       const created = new Date().toISOString();
-      const w: Workout = { id, date, description, createdAt: created };
-      persist([...workouts, w]);
+      const newWorkout: Workout = { id, date, description, createdAt: created, activityType };
+      // Reload fresh to avoid stale closures (LogSheet has its own instance)
+      const current = loadWorkouts();
+      persist([...current, newWorkout]);
     },
-    [workouts, persist]
-  );
-
-  const updateWorkout = useCallback(
-    (date: string, description: string) => {
-      const rest = workouts.filter((w) => w.date !== date);
-      if (description.trim()) {
-        const existing = workouts.find((w) => w.date === date);
-        const w: Workout = existing
-          ? { ...existing, description }
-          : {
-              id: crypto.randomUUID(),
-              date,
-              description,
-              createdAt: new Date().toISOString(),
-            };
-        persist([...rest, w]);
-      } else {
-        persist(rest);
-      }
-    },
-    [workouts, persist]
-  );
-
-  const getWorkoutByDate = useCallback(
-    (date: string) => workouts.find((w) => w.date === date),
-    [workouts]
+    [persist]
   );
 
   const deleteWorkout = useCallback(
-    (date: string) => {
-      persist(workouts.filter((w) => w.date !== date));
+    (id: string) => {
+      const current = loadWorkouts();
+      persist(current.filter((w) => w.id !== id));
     },
-    [workouts, persist]
+    [persist]
   );
 
   const stats = getStats(workouts);
-  const rhythmScore = getRhythmScore(workouts);
-  const streak = getStreak(workouts);
 
   return {
     workouts,
     hydrated,
     stats,
-    rhythmScore,
-    streak,
     addWorkout,
-    updateWorkout,
     deleteWorkout,
-    getWorkoutByDate,
     hasWorkoutOn: (date: string) => workouts.some((w) => w.date === date),
+    workoutsOnDate: (date: string) => workouts.filter((w) => w.date === date),
   };
 }
