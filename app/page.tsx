@@ -39,7 +39,7 @@ function getOrdinalsForFeed(items: FeedItem[]): Map<string, { week: number; mont
     list.push(item);
     byUser.set(item.userId, list);
   }
-  for (const [, list] of byUser) {
+  for (const [, list] of Array.from(byUser)) {
     const sorted = [...list].sort(
       (a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt)
     );
