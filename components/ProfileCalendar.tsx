@@ -14,9 +14,10 @@ const DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
 
 interface ProfileCalendarProps {
   workouts: Workout[];
+  readOnly?: boolean;
 }
 
-export function ProfileCalendar({ workouts }: ProfileCalendarProps) {
+export function ProfileCalendar({ workouts, readOnly = false }: ProfileCalendarProps) {
   const { open: openLogSheet } = useLogSheet();
   const { open: openDayDetail } = useDayDetailSheet();
   const now = new Date();
@@ -219,6 +220,7 @@ export function ProfileCalendar({ workouts }: ProfileCalendarProps) {
               }
 
               const handleDateClick = () => {
+                if (readOnly) return;
                 if (hasWorkout) openDayDetail(dk);
                 else openLogSheet(dk);
               };
@@ -228,10 +230,13 @@ export function ProfileCalendar({ workouts }: ProfileCalendarProps) {
                   key={di}
                   type="button"
                   onClick={handleDateClick}
+                  disabled={readOnly}
                   aria-label={
-                    hasWorkout
-                      ? `View logs for ${date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
-                      : `Log a move for ${date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                    readOnly
+                      ? undefined
+                      : hasWorkout
+                        ? `View logs for ${date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                        : `Log a move for ${date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
                   }
                   style={{
                     flex: 1,
@@ -245,12 +250,12 @@ export function ProfileCalendar({ workouts }: ProfileCalendarProps) {
                     alignItems: "center",
                     justifyContent: "center",
                     transition: "background-color 0.25s var(--ease-out-expo), border-color 0.2s ease, transform 0.15s ease",
-                    cursor: "pointer",
+                    cursor: readOnly ? "default" : "pointer",
                     padding: 0,
                     font: "inherit",
                     WebkitTapHighlightColor: "transparent",
                   }}
-                  className="active:scale-95"
+                  className={readOnly ? undefined : "active:scale-95"}
                 >
                   {isToday && (
                     <span

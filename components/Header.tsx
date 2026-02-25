@@ -33,7 +33,7 @@ export function Header() {
         }}
       >
         <span style={{ color: "#000000" }}>To All You </span>
-        <span style={{ color: "#11EB0E" }}>Athletes</span>
+        <span style={{ color: "#01EF54" }}>Athletes</span>
       </h1>
 
       {/* Mobile (<768px): TWO lines — less pull so two lines don't get cropped */}
@@ -58,7 +58,7 @@ export function Header() {
         <span className="block whitespace-nowrap" style={{ color: "#000000" }}>
           To All You
         </span>
-        <span className="block whitespace-nowrap" style={{ color: "#11EB0E" }}>
+        <span className="block whitespace-nowrap" style={{ color: "#01EF54" }}>
           Athletes
         </span>
       </h1>

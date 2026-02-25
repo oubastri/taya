@@ -2,7 +2,10 @@
 
 import type { ActivityType } from "@/types/workout";
 
-// Per-activity palette — used by FeedPost, LogSheet, etc.
+/** Brand green used for activity icon backgrounds on moves cards */
+export const BRAND_GREEN = "#01EF54";
+
+// Per-activity palette — used by LogSheet activity picker, etc.
 export const ACTIVITY_COLORS: Record<ActivityType, string> = {
   run: "#FF5C35",
   walk: "#32D74B",
@@ -56,7 +59,6 @@ export function ActivityIcon({
   invert = false,
   className = "",
 }: ActivityIconProps) {
-  const color = ACTIVITY_COLORS[type];
   const iconSize = badge ? Math.round(size * 0.52) : size;
   const radius = Math.round(size * 0.28);
   const useAsset = ACTIVITY_WITH_ICON_FILE.has(type);
@@ -98,7 +100,7 @@ export function ActivityIcon({
         width: size,
         height: size,
         borderRadius: radius,
-        backgroundColor: color,
+        backgroundColor: BRAND_GREEN,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

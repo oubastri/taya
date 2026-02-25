@@ -171,15 +171,25 @@ export default function FriendsPage() {
     }
   };
 
+  const contentMaxWidth = 428;
+
   return (
     <main
       style={{
         minHeight: "100vh",
         background: "var(--background)",
         paddingBottom: 96,
-        padding: "max(env(safe-area-inset-top), 52px) 16px 96px",
       }}
     >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: contentMaxWidth,
+          margin: "0 auto",
+          padding: "max(env(safe-area-inset-top), 52px) 16px 96px",
+          boxSizing: "border-box",
+        }}
+      >
       <div
         style={{
           backgroundColor: "var(--surface)",
@@ -389,6 +399,7 @@ export default function FriendsPage() {
           )}
         </>
       )}
+      </div>
     </main>
   );
 }

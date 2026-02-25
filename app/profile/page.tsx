@@ -1,70 +1,55 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { useUser } from "@/hooks/use-user";
 import { useWorkouts } from "@/hooks/use-workouts";
 import { ProfileCalendar } from "@/components/ProfileCalendar";
-import { ProfileCharts } from "@/components/ProfileCharts";
+import { ProfileSegmentedControl, type ProfileSection } from "@/components/ProfileSegmentedControl";
+import { FeedPost } from "@/components/FeedPost";
+import { ProfileStatNumber } from "@/components/ProfileStatNumber";
+import type { FeedItem } from "@/hooks/use-friends";
 import { UserAvatar } from "@/components/UserAvatar";
-import { ActivityIcon, ACTIVITY_COLORS } from "@/components/ActivityIcon";
-import { ACTIVITY_LABELS } from "@/types/workout";
-import type { ActivityType } from "@/types/workout";
 
-// user10 from :profilephotos: — always use this for your profile
 const PROFILE_PHOTO_URL = "/pfp/profile.jpg";
-
-function Card({
-  children,
-  style,
-}: {
-  children: React.ReactNode;
-  style?: React.CSSProperties;
-}) {
-  return (
-    <div
-      style={{
-        backgroundColor: "var(--surface)",
-        borderRadius: "var(--radius-lg)",
-        border: "1px solid var(--border)",
-        overflow: "hidden",
-        ...style,
-      }}
-    >
-      {children}
-    </div>
-  );
-}
 
 export default function ProfilePage() {
   const { user, hydrated: uh, updateUser } = useUser();
   const { workouts, stats, hydrated: wh } = useWorkouts();
-
+  const [section, setSection] = useState<ProfileSection>("calendar");
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState("");
 
   useEffect(() => {
-    if (uh) setNameInput("Breezy De Vrij");
-  }, [uh]);
+    if (uh) setNameInput(user.name || "Breezy De Vrij");
+  }, [uh, user.name]);
 
-  // Ensure profile photo is set to user10
   useEffect(() => {
     if (!uh || user.avatarUrl === PROFILE_PHOTO_URL) return;
     updateUser({ avatarUrl: PROFILE_PHOTO_URL });
   }, [uh, user.avatarUrl, updateUser]);
 
-  const activityCounts = workouts.reduce<Record<string, number>>((acc, w) => {
-    const t = w.activityType ?? "other";
-    acc[t] = (acc[t] || 0) + 1;
-    return acc;
-  }, {});
+  const handleBlur = () => {
+    if (nameInput.trim()) updateUser({ name: nameInput.trim() });
+    setEditingName(false);
+  };
 
-  const topActivities = Object.entries(activityCounts)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 5);
-
-  const maxCount = topActivities[0]?.[1] ?? 1;
+  const postsSorted = useMemo(
+    () => [...workouts].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [workouts]
+  );
+  const activeDaysThisMonth = useMemo(() => {
+    const now = new Date();
+    const prefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const dates = new Set(workouts.filter((w) => w.date.startsWith(prefix)).map((w) => w.date));
+    return dates.size;
+  }, [workouts]);
 
   if (!uh || !wh) return null;
+
+  const displayName = user.name || "Breezy De Vrij";
+  const handle = user.handle || "breezyv";
+  const contentMaxWidth = 428;
 
   return (
     <main
@@ -74,225 +59,244 @@ export default function ProfilePage() {
         paddingBottom: 96,
       }}
     >
-      {/* Identity + stats lockup (no container) */}
-      <div style={{ padding: "max(env(safe-area-inset-top), 52px) 20px 0" }}>
+      {/* Top bar - full bleed */}
+      <div style={{ padding: "max(env(safe-area-inset-top), 52px) 16px 0" }}>
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 16,
+            justifyContent: "space-between",
+            marginBottom: 24,
+          }}
+        >
+          <Link
+            href="/"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 44,
+              height: 44,
+              borderRadius: 12,
+              color: "var(--foreground)",
+              textDecoration: "none",
+              WebkitTapHighlightColor: "transparent",
+              backgroundColor: "var(--surface)",
+              border: "1px solid var(--border)",
+            }}
+            aria-label="Back to feed"
+          >
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="square"
+              strokeLinejoin="miter"
+              aria-hidden
+            >
+              <path d="M21 12H3" />
+              <path d="M10 19L3 12l7-7" />
+            </svg>
+          </Link>
+        </div>
+      </div>
+
+      {/* Content - constrained column */}
+      <div
+        style={{
+          width: "100%",
+          maxWidth: contentMaxWidth,
+          margin: "0 auto",
+          padding: "0 16px",
+          boxSizing: "border-box",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-start",
             marginBottom: 20,
           }}
         >
           <div
             style={{
-              width: 64,
-              height: 64,
-              borderRadius: "50%",
+              width: 84,
+              height: 84,
+              borderRadius: 32,
               overflow: "hidden",
               flexShrink: 0,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               backgroundColor: "var(--foreground)",
+              marginBottom: 12,
             }}
           >
             <UserAvatar
               avatarUrl={user.avatarUrl ?? PROFILE_PHOTO_URL}
-              name="Breezy De Vrij"
-              size="xl"
+              name={displayName}
+              fillParent
             />
           </div>
-          <div style={{ minWidth: 0 }}>
-            {editingName ? (
-              <input
-                value={nameInput}
-                onChange={(e) => setNameInput(e.target.value)}
-                onBlur={() => {
-                  if (nameInput.trim()) updateUser({ name: nameInput.trim() });
+          {editingName ? (
+            <input
+              value={nameInput}
+              onChange={(e) => setNameInput(e.target.value)}
+              onBlur={handleBlur}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                if (e.key === "Escape") {
+                  setNameInput(displayName);
                   setEditingName(false);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") e.currentTarget.blur();
-                  if (e.key === "Escape") {
-                    setNameInput("Breezy De Vrij");
-                    setEditingName(false);
-                  }
-                }}
-                autoFocus
-                style={{
-                  fontSize: 22,
-                  fontWeight: 800,
-                  letterSpacing: "-0.035em",
-                  lineHeight: 1.2,
-                  border: "none",
-                  borderBottom: "2px solid var(--accent)",
-                  background: "transparent",
-                  outline: "none",
-                  fontFamily: "inherit",
-                  color: "var(--foreground)",
-                  padding: "2px 0",
-                  width: "100%",
-                }}
-              />
-            ) : (
-              <h1
-                onClick={() => {
-                  setEditingName(true);
-                  setNameInput("Breezy De Vrij");
-                }}
-                style={{
-                  fontSize: 22,
-                  fontWeight: 800,
-                  letterSpacing: "-0.035em",
-                  lineHeight: 1.2,
-                  margin: 0,
-                  cursor: "text",
-                  color: "var(--foreground)",
-                }}
-              >
-                Breezy De Vrij
-              </h1>
-            )}
-            <p
+                }
+              }}
+              autoFocus
               style={{
-                margin: "4px 0 0",
-                fontSize: 14,
-                fontWeight: 500,
-                color: "var(--foreground-subtle)",
+                fontFamily: '"Lexend Deca", var(--font-sans), sans-serif',
+                fontSize: 32,
+                fontStyle: "normal",
+                fontWeight: 400,
+                lineHeight: "normal",
+                letterSpacing: "-1.28px",
+                color: "#000",
+                border: "none",
+                borderBottom: "2px solid var(--accent)",
+                background: "transparent",
+                outline: "none",
+                padding: "2px 0",
+                textAlign: "left",
+                width: "100%",
+              }}
+            />
+          ) : (
+            <h1
+              onClick={() => {
+                setEditingName(true);
+                setNameInput(displayName);
+              }}
+              style={{
+                fontFamily: '"Lexend Deca", var(--font-sans), sans-serif',
+                fontSize: 32,
+                fontStyle: "normal",
+                fontWeight: 400,
+                lineHeight: "normal",
+                letterSpacing: "-1.28px",
+                color: "#000",
+                margin: 0,
+                cursor: "text",
+                textAlign: "left",
               }}
             >
-              @breezyv
-            </p>
-          </div>
+              {displayName}
+            </h1>
+          )}
+          <p
+            style={{
+              margin: "4px 0 0",
+              fontSize: 14,
+              fontWeight: 500,
+              color: "var(--foreground-subtle)",
+              textAlign: "left",
+            }}
+          >
+            @{handle}
+          </p>
         </div>
 
-        {/* Year / Month / Week inline */}
-        <div
+        <div style={{ marginBottom: 28 }}>
+          <ProfileSegmentedControl value={section} onChange={setSection} />
+        </div>
+
+        <p
           style={{
-            display: "flex",
-            borderTop: "1px solid var(--border)",
-            borderBottom: "1px solid var(--border)",
-            padding: "16px 0",
+            fontFamily: '"Lexend Deca", var(--font-sans), sans-serif',
+            fontSize: 32,
+            fontStyle: "normal",
+            fontWeight: 400,
+            lineHeight: "normal",
+            letterSpacing: "-1.28px",
+            color: "#000",
+            marginTop: 28,
+            marginBottom: 40,
+            overflow: "visible",
           }}
         >
-          {[
-            { label: "Year", value: stats.thisYear },
-            { label: "Month", value: stats.thisMonth },
-            { label: "Week", value: stats.thisWeek },
-          ].map(({ label, value }, i) => (
+          <ProfileStatNumber variant={0}>{workouts.length}</ProfileStatNumber> total moves.{" "}
+          <ProfileStatNumber variant={1}>{stats.thisMonth}</ProfileStatNumber> this month.{" "}
+          <ProfileStatNumber variant={2}>{stats.thisWeek}</ProfileStatNumber> this week.
+        </p>
+
+        <div
+          key={section}
+          className="animate-fade-in-up"
+          style={{
+            animationDuration: "0.35s",
+            animationTimingFunction: "var(--ease-out-expo)",
+          }}
+        >
+        {section === "calendar" && (
+          <div>
             <div
-              key={label}
               style={{
-                flex: 1,
-                textAlign: "center",
-                borderLeft: i > 0 ? "1px solid var(--border)" : "none",
+                backgroundColor: "var(--surface)",
+                borderRadius: 8,
+                border: "1px solid var(--border)",
+                padding: "22px 20px",
               }}
             >
-              <div
+              <p
                 style={{
-                  fontSize: 32,
-                  fontWeight: 900,
-                  letterSpacing: "-0.05em",
-                  lineHeight: 1,
-                  color: "var(--foreground)",
+                  fontSize: 16,
+                  fontWeight: 400,
+                  color: "var(--foreground-muted)",
+                  marginBottom: 20,
                 }}
               >
-                {value}
-              </div>
-              <div
-                style={{
-                  marginTop: 4,
-                  fontSize: 10,
-                  fontWeight: 700,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  color: "var(--foreground-subtle)",
-                }}
-              >
-                {label}
-              </div>
+                {activeDaysThisMonth} active {activeDaysThisMonth === 1 ? "day" : "days"} this month
+              </p>
+              <ProfileCalendar workouts={workouts} />
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
+        )}
 
-      {/* Calendar — above consistency & when you train */}
-      <div style={{ padding: "16px 14px 0" }}>
-        <Card style={{ padding: "22px 20px" }}>
-          <ProfileCalendar workouts={workouts} />
-        </Card>
-      </div>
-
-      <ProfileCharts workouts={workouts} />
-
-      {/* Top activities */}
-      {topActivities.length > 0 && (
-        <div style={{ padding: "12px 14px 0" }}>
-          <Card style={{ padding: "8px 22px 6px" }}>
-            {topActivities.map(([type, count], i) => (
-              <div
-                key={type}
+        {section === "posts" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {postsSorted.length === 0 ? (
+              <p
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 14,
-                  paddingTop: 16,
-                  paddingBottom: 16,
-                  borderBottom:
-                    i < topActivities.length - 1
-                      ? "1px solid var(--border)"
-                      : "none",
+                  fontSize: 16,
+                  color: "var(--foreground-muted)",
+                  textAlign: "center",
+                  padding: "32px 0",
                 }}
               >
-                <ActivityIcon type={type as ActivityType} size={36} badge />
-                <span
-                  style={{
-                    flex: 1,
-                    fontSize: 14,
-                    fontWeight: 700,
-                    letterSpacing: "-0.02em",
-                    color: "var(--foreground)",
-                  }}
-                >
-                  {ACTIVITY_LABELS[type as ActivityType]}
-                </span>
-                <div
-                  style={{
-                    flex: 2,
-                    height: 6,
-                    backgroundColor: "rgba(0,0,0,0.06)",
-                    borderRadius: 3,
-                    overflow: "hidden",
-                  }}
-                >
-                  <div
-                    style={{
-                      height: "100%",
-                      width: `${(count / maxCount) * 100}%`,
-                      backgroundColor: ACTIVITY_COLORS[type as ActivityType],
-                      borderRadius: 3,
-                      transition: "width 0.4s var(--ease-out-expo)",
-                    }}
+                No posts yet. Log a move to see it here.
+              </p>
+            ) : (
+              postsSorted.map((workout) => {
+                const feedItem: FeedItem = {
+                  ...workout,
+                  userId: "me",
+                  userName: displayName,
+                  userHandle: handle,
+                  userAvatarUrl: user.avatarUrl,
+                };
+                return (
+                  <FeedPost
+                    key={workout.id}
+                    workout={feedItem}
                   />
-                </div>
-                <span
-                  style={{
-                    fontSize: 14,
-                    fontWeight: 700,
-                    color: "var(--foreground-muted)",
-                    minWidth: 24,
-                    textAlign: "right",
-                    letterSpacing: "-0.02em",
-                  }}
-                >
-                  {count}
-                </span>
-              </div>
-            ))}
-          </Card>
+                );
+              })
+            )}
+          </div>
+        )}
         </div>
-      )}
+      </div>
     </main>
   );
 }

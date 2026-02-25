@@ -15,10 +15,10 @@
   --foreground-subtle: rgba(0, 0, 0, 0.35);
   --foreground-faint: rgba(0, 0, 0, 0.22);
 
-  /* Brand — vibrant “moved” green */
-  --accent: #00C853;
-  --accent-soft: rgba(0, 200, 83, 0.18);
-  --accent-glow: rgba(0, 200, 83, 0.25);
+  /* Brand green */
+  --accent: #01EF54;
+  --accent-soft: rgba(1, 239, 84, 0.18);
+  --accent-glow: rgba(1, 239, 84, 0.25);
 
   /* UI */
   --border: rgba(0, 0, 0, 0.06);
@@ -42,9 +42,15 @@
   --duration-normal: 0.35s;
 }
 
+html {
+  min-height: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
 html,
 body {
   overflow-x: hidden;
+  min-height: 100vh;
 }
 
 body {

@@ -4,7 +4,7 @@ import type { Stats } from "@/hooks/use-workouts";
 
 type Props = { stats: Stats };
 
-const green = "#11EB0E";
+const green = "#01EF54";
 const black = "#000000";
 
 export function StatsBlock({ stats }: Props) {

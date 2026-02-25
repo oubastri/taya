@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useDayDetailSheet } from "@/contexts/day-detail-sheet";
 import { useLogSheet } from "@/contexts/log-sheet";
 import { useWorkouts } from "@/hooks/use-workouts";
-import { ActivityIcon, ACTIVITY_COLORS } from "./ActivityIcon";
+import { ActivityIcon, BRAND_GREEN } from "./ActivityIcon";
 import { ACTIVITY_LABELS, toDateKey } from "@/types/workout";
 import type { ActivityType } from "@/types/workout";
 import type { Workout } from "@/types/workout";
@@ -160,7 +160,6 @@ export function DayDetailSheet() {
               )
               .map((w) => {
                 const type = (w.activityType ?? "other") as ActivityType;
-                const color = ACTIVITY_COLORS[type];
                 return (
                   <div
                     key={w.id}
@@ -179,7 +178,7 @@ export function DayDetailSheet() {
                         width: 44,
                         height: 44,
                         borderRadius: 12,
-                        backgroundColor: color,
+                        backgroundColor: BRAND_GREEN,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",

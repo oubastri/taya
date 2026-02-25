@@ -53,7 +53,7 @@ export function DayDetailModal({
     height: 44,
     borderRadius: "50%",
     border: "none",
-    backgroundColor: hovered ? "#11EB0E" : "#EFEFEF",
+    backgroundColor: hovered ? "#01EF54" : "#EFEFEF",
     color: "#000",
     cursor: "pointer",
     transition: "border-radius 0.3s ease, background-color 0.3s ease",
@@ -133,7 +133,7 @@ export function DayDetailModal({
               return (
                 <>
                   {prefix}
-                  <span style={{ color: "#11EB0E" }}>{day}</span>
+                  <span style={{ color: "#01EF54" }}>{day}</span>
                 </>
               );
             })()}

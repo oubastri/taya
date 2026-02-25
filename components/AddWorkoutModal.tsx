@@ -53,7 +53,7 @@ export function AddWorkoutModal({
     height: 44,
     borderRadius: "50%",
     border: "none",
-    backgroundColor: hovered ? "#11EB0E" : "#EFEFEF",
+    backgroundColor: hovered ? "#01EF54" : "#EFEFEF",
     color: "#000",
     cursor: "pointer",
     transition: "border-radius 0.3s ease, background-color 0.3s ease",
@@ -111,7 +111,7 @@ export function AddWorkoutModal({
           {/* Title - same position as DayDetailModal */}
           <h2 id="add-workout-title" style={DATE_TITLE_STYLE} className="shrink-0 mt-6">
             {prefix}
-            <span style={{ color: "#11EB0E" }}>{day}</span>
+            <span style={{ color: "#01EF54" }}>{day}</span>
           </h2>
 
           {/* Body: 48px below title, then field + 24px + CTA; spacer keeps CTA 24px from modal bottom */}

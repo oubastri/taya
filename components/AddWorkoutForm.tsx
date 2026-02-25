@@ -51,7 +51,7 @@ export function AddWorkoutForm({
     <form onSubmit={handleSubmit} className="flex flex-col gap-6 pt-8">
       <p style={DATE_TITLE_STYLE}>
         {prefix}
-        <span style={{ color: "#11EB0E" }}>{day}</span>
+        <span style={{ color: "#01EF54" }}>{day}</span>
         {suffix}
       </p>
       <div className="relative">

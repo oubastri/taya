@@ -44,7 +44,7 @@ const activeStyle: React.CSSProperties = {
 
 const hoverStyle: React.CSSProperties = {
   ...defaultStyle,
-  backgroundColor: "#11EB0E",
+  backgroundColor: "#01EF54",
   color: "#000",
   borderRadius: "clamp(16px, 6vw, 42px)",
   border: "1.5px solid transparent",
