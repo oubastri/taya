@@ -112,6 +112,21 @@ textarea:focus-visible {
   animation: fade-in-up var(--duration-normal) var(--ease-out-expo) forwards;
 }
 
+@keyframes fade-out-down {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+.calendar-post-exit {
+  animation: fade-out-down 0.2s var(--ease-out-expo) forwards;
+}
+
 @keyframes cursor-blink {
   0%, 50% { opacity: 1; }
   51%, 100% { opacity: 0; }

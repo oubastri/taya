@@ -186,7 +186,7 @@ export default function FriendsPage() {
           width: "100%",
           maxWidth: contentMaxWidth,
           margin: "0 auto",
-          padding: "max(env(safe-area-inset-top), 52px) 16px 96px",
+          padding: "max(env(safe-area-inset-top), 20px) 16px 96px",
           boxSizing: "border-box",
         }}
       >

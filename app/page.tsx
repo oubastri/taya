@@ -40,7 +40,7 @@ export default function FeedPage() {
       {/* Header — full bleed */}
       <header
         style={{
-          padding: "max(env(safe-area-inset-top), 52px) 20px 24px",
+          padding: "max(env(safe-area-inset-top), 20px) 20px 24px",
           display: "flex",
           alignItems: "flex-start",
           justifyContent: "space-between",

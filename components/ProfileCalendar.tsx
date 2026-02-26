@@ -15,9 +15,18 @@ const DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
 interface ProfileCalendarProps {
   workouts: Workout[];
   readOnly?: boolean;
+  /** When readOnly, optionally control which day is selected (black circle tap). */
+  selectedDateKey?: string | null;
+  /** When readOnly, called when user taps a day that has a workout. */
+  onSelectDate?: (dateKey: string) => void;
 }
 
-export function ProfileCalendar({ workouts, readOnly = false }: ProfileCalendarProps) {
+export function ProfileCalendar({
+  workouts,
+  readOnly = false,
+  selectedDateKey = null,
+  onSelectDate,
+}: ProfileCalendarProps) {
   const { open: openLogSheet } = useLogSheet();
   const { open: openDayDetail } = useDayDetailSheet();
   const now = new Date();
@@ -100,9 +109,7 @@ export function ProfileCalendar({ workouts, readOnly = false }: ProfileCalendarP
           }}
           className="active:scale-95"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--foreground)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
+          <img src="/icons/nav/arrow-left.svg?v=1" alt="" width={14} height={14} aria-hidden style={{ display: "block" }} />
         </button>
 
         <div style={{ textAlign: "center" }}>
@@ -154,13 +161,11 @@ export function ProfileCalendar({ workouts, readOnly = false }: ProfileCalendarP
           }}
           className="active:scale-95"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--foreground)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <polyline points="9 18 15 12 9 6" />
-          </svg>
+          <img src="/icons/nav/arrow-right.svg?v=1" alt="" width={14} height={14} aria-hidden style={{ display: "block" }} />
         </button>
       </div>
 
-      <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+      <div style={{ display: "flex", gap: 0, marginBottom: 6 }}>
         {DAY_LABELS.map((d, i) => (
           <div
             key={i}
@@ -178,9 +183,9 @@ export function ProfileCalendar({ workouts, readOnly = false }: ProfileCalendarP
         ))}
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
         {weeks.map((week, wi) => (
-          <div key={wi} style={{ display: "flex", gap: 6 }}>
+          <div key={wi} style={{ display: "flex", gap: 0 }}>
             {week.map((date, di) => {
               const dk = toDateKey(date);
               const inMonth = date.getMonth() === month;
@@ -192,7 +197,7 @@ export function ProfileCalendar({ workouts, readOnly = false }: ProfileCalendarP
                 return (
                   <div
                     key={di}
-                    style={{ flex: 1, aspectRatio: "1" }}
+                    style={{ flex: 1, aspectRatio: "1", minWidth: 0 }}
                   />
                 );
               }
@@ -209,7 +214,7 @@ export function ProfileCalendar({ workouts, readOnly = false }: ProfileCalendarP
                 bg = "transparent";
                 border = "2px solid var(--accent)";
               } else if (hasWorkout) {
-                bg = "var(--foreground)";
+                bg = "var(--accent)";
                 border = "none";
               } else if (isFuture) {
                 bg = "rgba(0,0,0,0.04)";
@@ -220,57 +225,78 @@ export function ProfileCalendar({ workouts, readOnly = false }: ProfileCalendarP
               }
 
               const handleDateClick = () => {
+                if (onSelectDate) {
+                  onSelectDate(dk);
+                  return;
+                }
                 if (readOnly) return;
                 if (hasWorkout) openDayDetail(dk);
                 else openLogSheet(dk);
               };
 
+              const isSelected = selectedDateKey === dk;
+              const dayNum = date.getDate();
+              const isGreenCircle = hasWorkout || (isToday && hasWorkout);
+              const dayLabelColor =
+                isGreenCircle ? "#000" : isToday ? "var(--accent)" : "var(--foreground-muted)";
+
               return (
-                <button
+                <div
                   key={di}
-                  type="button"
-                  onClick={handleDateClick}
-                  disabled={readOnly}
-                  aria-label={
-                    readOnly
-                      ? undefined
-                      : hasWorkout
-                        ? `View logs for ${date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
-                        : `Log a move for ${date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
-                  }
                   style={{
                     flex: 1,
                     aspectRatio: "1",
-                    borderRadius: "50%",
-                    backgroundColor: bg,
-                    border,
-                    boxSizing: "border-box",
-                    transform: `scale(${scale})`,
+                    minWidth: 0,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    transition: "background-color 0.25s var(--ease-out-expo), border-color 0.2s ease, transform 0.15s ease",
-                    cursor: readOnly ? "default" : "pointer",
-                    padding: 0,
-                    font: "inherit",
-                    WebkitTapHighlightColor: "transparent",
                   }}
-                  className={readOnly ? undefined : "active:scale-95"}
                 >
-                  {isToday && (
+                  <button
+                    type="button"
+                    onClick={handleDateClick}
+                    disabled={readOnly && !hasWorkout}
+                    aria-label={
+                      readOnly
+                        ? (hasWorkout ? `View post for ${date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` : undefined)
+                        : hasWorkout
+                          ? `View logs for ${date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                          : `Select ${date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                    }
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      minWidth: 0,
+                      minHeight: 0,
+                      borderRadius: "50%",
+                      backgroundColor: bg,
+                      border: isSelected ? "1.5px solid var(--foreground)" : border,
+                      boxSizing: "border-box",
+                      transform: `scale(${scale})`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      transition: "background-color 0.25s var(--ease-out-expo), border-color 0.2s ease, transform 0.15s ease",
+                      cursor: readOnly ? (hasWorkout ? "pointer" : "default") : "pointer",
+                      padding: 0,
+                      font: "inherit",
+                      WebkitTapHighlightColor: "transparent",
+                    }}
+                    className={readOnly && hasWorkout ? "active:scale-95" : readOnly ? undefined : "active:scale-95"}
+                  >
                     <span
                       style={{
                         fontSize: 11,
                         fontWeight: 800,
-                        color: hasWorkout ? "#fff" : "var(--accent)",
+                        color: dayLabelColor,
                         letterSpacing: "-0.03em",
                         lineHeight: 1,
                       }}
                     >
-                      {date.getDate()}
+                      {dayNum}
                     </span>
-                  )}
-                </button>
+                  </button>
+                </div>
               );
             })}
           </div>

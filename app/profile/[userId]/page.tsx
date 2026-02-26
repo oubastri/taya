@@ -46,6 +46,9 @@ export default function UserProfilePage() {
   const userId = typeof params.userId === "string" ? params.userId : "";
   const { friends, hydrated: fh, follow, unfollow } = useFriends();
   const [section, setSection] = useState<ProfileSection>("calendar");
+  const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
+  const [calendarDisplayKey, setCalendarDisplayKey] = useState<string | null>(null);
+  const [calendarExiting, setCalendarExiting] = useState(false);
 
   const isMe = userId === "me";
   const friend = !isMe ? friends.find((f) => f.id === userId) : null;
@@ -55,11 +58,26 @@ export default function UserProfilePage() {
     () => [...workouts].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [workouts]
   );
-  const activeDaysThisMonth = useMemo(() => {
-    const now = new Date();
-    const prefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    return new Set(workouts.filter((w) => w.date.startsWith(prefix)).map((w) => w.date)).size;
-  }, [workouts]);
+
+  /** Group workouts by month (year-month from date), newest month first */
+  const movesByMonth = useMemo(() => {
+    const map = new Map<string, typeof workouts>();
+    for (const w of postsSorted) {
+      const key = w.date.slice(0, 7); // "YYYY-MM"
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(w);
+    }
+    return Array.from(map.entries())
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([key, list]) => {
+        const [y, m] = key.split("-").map(Number);
+        const label = new Date(y, m - 1, 1).toLocaleDateString("en-US", {
+          month: "long",
+          year: "numeric",
+        });
+        return { key, label, workouts: list };
+      });
+  }, [postsSorted]);
 
   const stats = friend ? getStats(workouts) : { thisMonth: 0, thisWeek: 0 };
   const isFollowing = friend?.following ?? false;
@@ -73,6 +91,24 @@ export default function UserProfilePage() {
     }
   }, [isMe, fh, router]);
 
+  useEffect(() => {
+    if (selectedDateKey !== null) {
+      setCalendarDisplayKey(selectedDateKey);
+      setCalendarExiting(false);
+    } else if (calendarDisplayKey !== null) {
+      setCalendarExiting(true);
+    }
+  }, [selectedDateKey, calendarDisplayKey]);
+
+  useEffect(() => {
+    if (!calendarExiting) return;
+    const t = setTimeout(() => {
+      setCalendarDisplayKey(null);
+      setCalendarExiting(false);
+    }, 200);
+    return () => clearTimeout(t);
+  }, [calendarExiting]);
+
   if (!fh || isMe) return null;
 
   if (!friend) {
@@ -81,7 +117,7 @@ export default function UserProfilePage() {
         style={{
           minHeight: "100vh",
           background: "var(--background)",
-          padding: "max(env(safe-area-inset-top), 52px) 20px",
+          padding: "max(env(safe-area-inset-top), 20px) 20px",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", marginBottom: 24 }}>
@@ -134,7 +170,7 @@ export default function UserProfilePage() {
       }}
     >
       {/* Top bar - full bleed (same as profile) */}
-      <div style={{ padding: "max(env(safe-area-inset-top), 52px) 16px 0" }}>
+      <div style={{ padding: "max(env(safe-area-inset-top), 20px) 16px 0" }}>
         <div
           style={{
             display: "flex",
@@ -303,33 +339,83 @@ export default function UserProfilePage() {
         }}
       >
         {section === "calendar" && (
-          <div>
+          <div
+            style={{
+              backgroundColor: "var(--surface)",
+              borderRadius: 8,
+              border: "1px solid var(--border)",
+              padding: "22px 20px",
+              overflow: "hidden",
+            }}
+          >
+            <ProfileCalendar
+              workouts={workouts}
+              readOnly
+              selectedDateKey={selectedDateKey}
+              onSelectDate={(dk) => setSelectedDateKey((prev) => (prev === dk ? null : dk))}
+            />
             <div
               style={{
-                backgroundColor: "var(--surface)",
-                borderRadius: 8,
-                border: "1px solid var(--border)",
-                padding: "22px 20px",
+                display: "grid",
+                gridTemplateRows:
+                  calendarDisplayKey !== null && !calendarExiting ? "1fr" : "0fr",
+                transition: `grid-template-rows ${calendarExiting ? "0.2" : "0.3"}s var(--ease-out-expo)`,
+                minHeight: 0,
               }}
             >
-              <p
-                style={{
-                  fontSize: 16,
-                  fontWeight: 400,
-                  color: "var(--foreground-muted)",
-                  marginBottom: 20,
-                }}
-              >
-                {activeDaysThisMonth} active {activeDaysThisMonth === 1 ? "day" : "days"} this month
-              </p>
-              <ProfileCalendar workouts={workouts} readOnly />
+              <div style={{ minHeight: 0, overflow: "hidden" }}>
+                {calendarDisplayKey && (
+                  <>
+                    <div
+                      style={{
+                        borderTop: "1px solid var(--border)",
+                        marginTop: 40,
+                        paddingTop: 20,
+                        paddingBottom: 20,
+                      }}
+                    />
+                    <div
+                      key={calendarDisplayKey}
+                      className={calendarExiting ? "calendar-post-exit" : "animate-fade-in-up"}
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 14,
+                        marginTop: -20,
+                        animationDuration: calendarExiting ? undefined : "0.3s",
+                        animationTimingFunction: "var(--ease-out-expo)",
+                        paddingBottom: 10,
+                      }}
+                    >
+                      {workouts
+                        .filter((w) => w.date === calendarDisplayKey)
+                        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+                        .map((workout) => {
+                          const feedItem: FeedItem = {
+                            ...workout,
+                            userId: friend.id,
+                            userName: friend.name,
+                            userHandle: friend.handle,
+                            userAvatarUrl: friend.avatarUrl,
+                          };
+                          return (
+                            <FeedPost
+                              key={workout.id}
+                              workout={feedItem}
+                            />
+                          );
+                        })}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         )}
 
         {section === "posts" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {postsSorted.length === 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+            {movesByMonth.length === 0 ? (
               <p
                 style={{
                   fontSize: 16,
@@ -341,21 +427,39 @@ export default function UserProfilePage() {
                 No posts yet.
               </p>
             ) : (
-              postsSorted.map((workout) => {
-                const feedItem: FeedItem = {
-                  ...workout,
-                  userId: friend.id,
-                  userName: friend.name,
-                  userHandle: friend.handle,
-                  userAvatarUrl: friend.avatarUrl,
-                };
-                return (
-                  <FeedPost
-                    key={workout.id}
-                    workout={feedItem}
-                  />
-                );
-              })
+              movesByMonth.map(({ key, label, workouts: monthWorkouts }) => (
+                <section key={key}>
+                  <h2
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: "var(--foreground-subtle)",
+                      letterSpacing: "0.02em",
+                      margin: "0 0 12px",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {label}
+                  </h2>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                    {monthWorkouts.map((workout) => {
+                      const feedItem: FeedItem = {
+                        ...workout,
+                        userId: friend.id,
+                        userName: friend.name,
+                        userHandle: friend.handle,
+                        userAvatarUrl: friend.avatarUrl,
+                      };
+                      return (
+                        <FeedPost
+                          key={workout.id}
+                          workout={feedItem}
+                        />
+                      );
+                    })}
+                  </div>
+                </section>
+              ))
             )}
           </div>
         )}
