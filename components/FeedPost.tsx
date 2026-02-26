@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import type { FeedItem } from "@/hooks/use-friends";
 import { ACTIVITY_FEED_PHRASE, ACTIVITY_FEED_HIGHLIGHT } from "@/types/workout";
@@ -42,11 +43,11 @@ function getActivityPhrase(activityType: string): string {
 
 interface FeedPostProps {
   workout: FeedItem;
-  /** View count shown next to eye icon (default 0) */
-  viewCount?: number;
+  /** Initial like count (default 0) */
+  initialLikeCount?: number;
 }
 
-export function FeedPost({ workout, viewCount = 0 }: FeedPostProps) {
+export function FeedPost({ workout, initialLikeCount = 0 }: FeedPostProps) {
   const activityType = (workout.activityType ?? "other") as ActivityType;
   const phrase = getActivityPhrase(activityType);
   const highlight = ACTIVITY_FEED_HIGHLIGHT[activityType] ?? ACTIVITY_FEED_HIGHLIGHT.other;
@@ -56,6 +57,22 @@ export function FeedPost({ workout, viewCount = 0 }: FeedPostProps) {
   const dateLabel = formatDateLabel(workout.createdAt);
   const beforeHighlight = phrase.slice(0, phrase.indexOf(highlight));
   const afterHighlight = phrase.slice(phrase.indexOf(highlight) + highlight.length);
+
+  const [liked, setLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(initialLikeCount);
+  const [animating, setAnimating] = useState(false);
+
+  const handleLike = () => {
+    if (liked) {
+      setLiked(false);
+      setLikeCount((c) => Math.max(0, c - 1));
+    } else {
+      setLiked(true);
+      setLikeCount((c) => c + 1);
+      setAnimating(true);
+      setTimeout(() => setAnimating(false), 500);
+    }
+  };
 
   return (
     <article
@@ -69,7 +86,7 @@ export function FeedPost({ workout, viewCount = 0 }: FeedPostProps) {
         overflow: "hidden",
       }}
     >
-      {/* Top row: avatar + overlapping activity icon (left), eye + view count (right) */}
+      {/* Top row: avatar + overlapping activity icon (left), like button (right) */}
       <div
         style={{
           display: "flex",
@@ -130,28 +147,12 @@ export function FeedPost({ workout, viewCount = 0 }: FeedPostProps) {
             <ActivityIcon type={activityType} size={ICON_SIZE} />
           </div>
         </div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 4,
-            flexShrink: 0,
-          }}
-        >
-          <EyeIcon />
-          <span
-            style={{
-              fontFamily: '"Lexend Deca", var(--font-sans), sans-serif',
-              fontSize: 14,
-              fontWeight: 400,
-              color: "#919191",
-              letterSpacing: "-0.56px",
-            }}
-          >
-            {viewCount}
-          </span>
-        </div>
+        <LikeButton
+          liked={liked}
+          likeCount={likeCount}
+          animating={animating}
+          onToggle={handleLike}
+        />
       </div>
 
       {/* Content: "@handle [phrase] today at 7:37am." + optional description */}
@@ -208,22 +209,81 @@ export function FeedPost({ workout, viewCount = 0 }: FeedPostProps) {
   );
 }
 
-function EyeIcon() {
+const HEART_COLOR = "#ff3b5c";
+const HEART_GRAY = "#919191";
+
+function LikeButton({
+  liked,
+  likeCount,
+  animating,
+  onToggle,
+}: {
+  liked: boolean;
+  likeCount: number;
+  animating: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={liked ? "Unlike" : "Like"}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 4,
+        padding: "6px 0",
+        border: "none",
+        background: "none",
+        cursor: "pointer",
+        flexShrink: 0,
+        WebkitTapHighlightColor: "transparent",
+      }}
+    >
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          transform: animating ? "scale(1.35)" : liked ? "scale(1.1)" : "scale(1)",
+          transition: "transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.2s ease",
+        }}
+      >
+        <HeartIcon filled={liked} />
+      </span>
+      <span
+        style={{
+          fontFamily: '"Lexend Deca", var(--font-sans), sans-serif',
+          fontSize: 14,
+          fontWeight: 500,
+          color: liked ? HEART_COLOR : HEART_GRAY,
+          letterSpacing: "-0.56px",
+          transition: "color 0.2s ease",
+        }}
+      >
+        {likeCount}
+      </span>
+    </button>
+  );
+}
+
+function HeartIcon({ filled }: { filled: boolean }) {
+  const color = filled ? HEART_COLOR : HEART_GRAY;
   return (
     <svg
-      width="16"
-      height="16"
+      width="20"
+      height="20"
       viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
+      fill={filled ? color : "none"}
+      stroke={color}
       strokeWidth="2"
-      strokeLinecap="square"
-      strokeLinejoin="miter"
-      style={{ color: "#919191", flexShrink: 0 }}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ flexShrink: 0, color }}
       aria-hidden
     >
-      <circle cx="12" cy="12" r="3" fill="currentColor" stroke="currentColor" strokeWidth="2" />
-      <path d="M1.125 12S4.989 4 12 4s10.875 8 10.875 8c0 0-3.865 8-10.875 8S1.125 12 1.125 12z" fill="none" stroke="currentColor" strokeWidth="2" />
+      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
     </svg>
   );
 }

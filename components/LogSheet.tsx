@@ -227,7 +227,7 @@ export function LogSheet() {
             overflow: "hidden",
           }}
         >
-          {/* Step 1 pane */}
+          {/* Step 1 pane — flex column so title stays fixed, only activities scroll */}
           <div
             aria-hidden={step !== 1}
             style={{
@@ -235,22 +235,24 @@ export function LogSheet() {
               inset: 0,
               width: "100%",
               height: "100%",
-              overflowY: "auto",
-              overflowX: "hidden",
-              paddingBottom: "max(28px, env(safe-area-inset-bottom))",
-              WebkitOverflowScrolling: "touch" as React.CSSProperties["WebkitOverflowScrolling"],
-              scrollbarWidth: "none" as React.CSSProperties["scrollbarWidth"],
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
               transform: step === 1 ? "translateX(0)" : "translateX(-100%)",
               transition: "transform 0.35s cubic-bezier(0.32, 0.72, 0, 1)",
               pointerEvents: step === 1 ? "auto" : "none",
             }}
           >
+            {/* Same left padding (16px) for all elements for equal left alignment */}
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
-                padding: "0 16px 8px",
+                paddingLeft: 16,
+                paddingRight: 16,
+                paddingBottom: 4,
+                flexShrink: 0,
               }}
             >
               <CloseButton onClick={handleClose} ariaLabel="Close" />
@@ -259,23 +261,37 @@ export function LogSheet() {
             <h2
               style={{
                 fontFamily: "var(--font-sans), sans-serif",
-                fontSize: 32,
-                fontWeight: 400,
-                lineHeight: 1.2,
-                letterSpacing: "-0.04em",
+                fontSize: "clamp(22px, 5.5vw, 28px)",
+                fontWeight: 500,
+                lineHeight: 1.25,
+                letterSpacing: "-0.02em",
                 color: "#000",
-                margin: "0 16px 24px",
-                maxWidth: 320,
+                margin: 0,
+                marginLeft: 16,
+                marginRight: 16,
+                marginBottom: 12,
+                flexShrink: 0,
               }}
             >
               What activity did you do?
             </h2>
-            <div style={{ padding: "0 16px 24px" }}>
+            <div
+              style={{
+                flex: "1 1 0",
+                minHeight: 0,
+                paddingLeft: 16,
+                paddingRight: 16,
+                paddingBottom: "max(24px, env(safe-area-inset-bottom))",
+                overflowY: "auto",
+                WebkitOverflowScrolling: "touch" as React.CSSProperties["WebkitOverflowScrolling"],
+                scrollbarWidth: "none" as React.CSSProperties["scrollbarWidth"],
+              }}
+            >
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "repeat(4, 1fr)",
-                  gap: 12,
+                  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                  gap: 8,
                 }}
               >
                 {ACTIVITY_GROUPS.flatMap((group) =>
@@ -293,24 +309,35 @@ export function LogSheet() {
                         alignItems: "center",
                         justifyContent: "center",
                         gap: 4,
-                        padding: 16,
-                        borderRadius: 20,
+                        padding: "10px 6px",
+                        borderRadius: 14,
                         border: "1px solid #e7e7e7",
                         backgroundColor: "#fff",
                         cursor: "pointer",
                         fontFamily: "inherit",
-                        fontSize: 16,
-                        fontWeight: 400,
+                        fontSize: 12,
+                        fontWeight: 500,
                         color: "#919191",
-                        letterSpacing: "-0.04em",
+                        letterSpacing: "-0.02em",
+                        lineHeight: 1.2,
                         WebkitTapHighlightColor: "transparent",
                         transition: "border-color 0.2s, background-color 0.2s, color 0.2s",
+                        minHeight: 72,
                       }}
                     >
-                      <div style={{ width: 48, height: 48, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <ActivityIcon type={activity} size={48} invert={false} />
+                      <div
+                        style={{
+                          width: 40,
+                          height: 40,
+                          flexShrink: 0,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <ActivityIcon type={activity} size={40} invert={false} />
                       </div>
-                      <span style={{ textAlign: "center", lineHeight: 1.2 }}>
+                      <span style={{ textAlign: "center" }}>
                         {ACTIVITY_LABELS[activity]}
                       </span>
                     </button>
