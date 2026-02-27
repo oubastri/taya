@@ -6,6 +6,7 @@ import { useUser } from "@/hooks/use-user";
 import { useWorkouts } from "@/hooks/use-workouts";
 import { useFriends, type FeedItem } from "@/hooks/use-friends";
 import { FeedPost } from "@/components/FeedPost";
+import { MovesCounter } from "@/components/MovesCounter";
 import { UserAvatar } from "@/components/UserAvatar";
 
 export default function FeedPage() {
@@ -94,6 +95,13 @@ export default function FeedPage() {
           boxSizing: "border-box",
         }}
       >
+        {/* Live counter: total moves ever logged (you + friends) */}
+        {hydrated && (
+          <div style={{ padding: "0 16px" }}>
+            <MovesCounter count={feedItems.length} />
+          </div>
+        )}
+
         {/* Empty state */}
         {hydrated && sortedFeedItems.length === 0 && (
           <div style={{ padding: "0 24px" }}>
