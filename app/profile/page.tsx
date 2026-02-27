@@ -12,7 +12,7 @@ import { ProfileStatNumber } from "@/components/ProfileStatNumber";
 import type { FeedItem } from "@/hooks/use-friends";
 import { UserAvatar } from "@/components/UserAvatar";
 
-const PROFILE_PHOTO_URL = "/pfp/profile.jpg";
+const PROFILE_PHOTO_URL = "/profilephotos/user10.jpg";
 
 export default function ProfilePage() {
   const { user, hydrated: uh, updateUser } = useUser();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import type { FeedItem } from "@/hooks/use-friends";
 import { ACTIVITY_FEED_PHRASE, ACTIVITY_FEED_HIGHLIGHT } from "@/types/workout";
@@ -61,6 +61,7 @@ export function FeedPost({ workout, initialLikeCount = 0 }: FeedPostProps) {
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(initialLikeCount);
   const [animating, setAnimating] = useState(false);
+  const lastTapRef = useRef(0);
 
   const handleLike = () => {
     if (liked) {
@@ -74,8 +75,23 @@ export function FeedPost({ workout, initialLikeCount = 0 }: FeedPostProps) {
     }
   };
 
+  const handleDoubleTapLike = (e: React.TouchEvent | React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest?.("button")) return;
+    const now = Date.now();
+    if (now - lastTapRef.current < 400) {
+      e.preventDefault();
+      handleLike();
+      lastTapRef.current = 0;
+      return;
+    }
+    lastTapRef.current = now;
+  };
+
   return (
     <article
+      onTouchEnd={handleDoubleTapLike}
+      onDoubleClick={handleDoubleTapLike}
       style={{
         backgroundColor: "#fff",
         borderRadius: 8,

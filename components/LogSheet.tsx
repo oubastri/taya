@@ -1,17 +1,29 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { useLogSheet } from "@/contexts/log-sheet";
 import { useWorkouts } from "@/hooks/use-workouts";
 import { ActivityIcon } from "./ActivityIcon";
 import {
-  ACTIVITY_GROUPS,
   ACTIVITY_LABELS,
+  ACTIVITY_TYPES,
   fromDateKey,
   toDateKey,
 } from "@/types/workout";
 import type { ActivityType } from "@/types/workout";
+
+/** Default 8 for new users (FTUX) — 2×4 grid. */
+const DEFAULT_TOP_8: ActivityType[] = [
+  "run",
+  "walk",
+  "cycle",
+  "yoga",
+  "lift",
+  "hiit",
+  "pilates",
+  "swim",
+];
 
 const MAX_DESCRIPTION_LENGTH = 150;
 
@@ -83,15 +95,99 @@ function BackButton({
   );
 }
 
+function ActivityCard({
+  activity,
+  onSelect,
+}: {
+  activity: ActivityType;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-label={ACTIVITY_LABELS[activity]}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        padding: "16px 12px",
+        borderRadius: 14,
+        border: "1px solid #e7e7e7",
+        backgroundColor: "#fff",
+        cursor: "pointer",
+        fontFamily: "inherit",
+        fontSize: 14,
+        fontWeight: 500,
+        color: "#919191",
+        letterSpacing: "-0.02em",
+        lineHeight: 1.2,
+        WebkitTapHighlightColor: "transparent",
+        transition: "border-color 0.2s, background-color 0.2s, color 0.2s",
+        minHeight: 88,
+      }}
+      className="active:opacity-90"
+    >
+      <div
+        style={{
+          width: 44,
+          height: 44,
+          flexShrink: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <ActivityIcon type={activity} size={44} invert={false} />
+      </div>
+      <span style={{ textAlign: "center" }}>{ACTIVITY_LABELS[activity]}</span>
+    </button>
+  );
+}
+
+function getTop8FromWorkouts(workouts: { activityType?: ActivityType }[]): ActivityType[] {
+  if (workouts.length === 0) return [...DEFAULT_TOP_8];
+  const count = new Map<ActivityType, number>();
+  for (const w of workouts) {
+    const t = (w.activityType ?? "other") as ActivityType;
+    count.set(t, (count.get(t) ?? 0) + 1);
+  }
+  const sorted = [...count.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([a]) => a);
+  const top8: ActivityType[] = [];
+  for (const a of sorted) {
+    if (top8.length >= 8) break;
+    top8.push(a);
+  }
+  for (const a of DEFAULT_TOP_8) {
+    if (top8.length >= 8) break;
+    if (!top8.includes(a)) top8.push(a);
+  }
+  return top8;
+}
+
 export function LogSheet() {
   const { isOpen, close, initialDateKey, workoutToEdit } = useLogSheet();
-  const { addWorkout, updateWorkout } = useWorkouts();
+  const { workouts, addWorkout, updateWorkout } = useWorkouts();
 
   const [step, setStep] = useState<1 | 2>(1);
   const [selected, setSelected] = useState<ActivityType | null>(null);
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(() => toDateKey(new Date()));
   const [dragOffset, setDragOffset] = useState(0);
+  const [showAllActivities, setShowAllActivities] = useState(false);
+
+  const top8 = useMemo(
+    () => getTop8FromWorkouts(workouts),
+    [workouts]
+  );
+  const remainingActivities = useMemo(
+    () => ACTIVITY_TYPES.filter((a) => !top8.includes(a)),
+    [top8]
+  );
 
   useEffect(() => {
     if (!isOpen) return;
@@ -116,6 +212,7 @@ export function LogSheet() {
     setSelected(null);
     setDescription("");
     setDragOffset(0);
+    setShowAllActivities(false);
   };
 
   const handleClose = () => {
@@ -178,34 +275,44 @@ export function LogSheet() {
         }}
       />
 
-      {/* Sheet — fixed height so step transition doesn't resize */}
+      {/* Sheet — fixed height; on desktop constrained to site max-width (428px) and centered */}
       <div
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
-        role="dialog"
-        aria-modal="true"
-        aria-label={isEditing ? "Edit workout" : "Log a workout"}
         style={{
           position: "fixed",
           bottom: 0,
           left: 0,
           right: 0,
-          height: "88vh",
-          maxHeight: "88vh",
-          backgroundColor: "var(--surface)",
-          borderRadius: "var(--radius-xl) var(--radius-xl) 0 0",
-          zIndex: 101,
-          transform: isOpen ? `translateY(${dragOffset}px)` : "translateY(105%)",
-          transition:
-            dragOffset === 0
-              ? `transform ${isOpen ? "0.42s" : "0.32s"} cubic-bezier(0.32, 0.72, 0, 1)`
-              : "none",
           display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
+          justifyContent: "center",
+          zIndex: 101,
+          pointerEvents: isOpen ? "auto" : "none",
         }}
       >
+        <div
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+          role="dialog"
+          aria-modal="true"
+          aria-label={isEditing ? "Edit workout" : "Log a workout"}
+          style={{
+            width: "100%",
+            maxWidth: 428,
+            height: "88vh",
+            maxHeight: "88vh",
+            backgroundColor: "var(--surface)",
+            borderRadius: "var(--radius-xl) var(--radius-xl) 0 0",
+            transform: isOpen ? `translateY(${dragOffset}px)` : "translateY(105%)",
+            transition:
+              dragOffset === 0
+                ? `transform ${isOpen ? "0.42s" : "0.32s"} cubic-bezier(0.32, 0.72, 0, 1)`
+                : "none",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            boxShadow: "0 -4px 24px rgba(0,0,0,0.12)",
+          }}
+        >
         {/* Drag handle */}
         <div style={{ display: "flex", justifyContent: "center", paddingTop: 10, paddingBottom: 16, flexShrink: 0 }}>
           <div
@@ -287,63 +394,84 @@ export function LogSheet() {
                 scrollbarWidth: "none" as React.CSSProperties["scrollbarWidth"],
               }}
             >
+              {/* 4×2 grid: top 8 activities (4 per row, 2 rows) */}
               <div
                 style={{
                   display: "grid",
                   gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-                  gap: 8,
+                  gap: 12,
                 }}
               >
-                {ACTIVITY_GROUPS.flatMap((group) =>
-                  group.activities.map((activity) => (
-                    <button
-                      key={activity}
-                      type="button"
-                      onClick={() => {
-                        setSelected(activity);
-                        setStep(2);
-                      }}
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: 4,
-                        padding: "10px 6px",
-                        borderRadius: 14,
-                        border: "1px solid #e7e7e7",
-                        backgroundColor: "#fff",
-                        cursor: "pointer",
-                        fontFamily: "inherit",
-                        fontSize: 12,
-                        fontWeight: 500,
-                        color: "#919191",
-                        letterSpacing: "-0.02em",
-                        lineHeight: 1.2,
-                        WebkitTapHighlightColor: "transparent",
-                        transition: "border-color 0.2s, background-color 0.2s, color 0.2s",
-                        minHeight: 72,
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: 40,
-                          height: 40,
-                          flexShrink: 0,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <ActivityIcon type={activity} size={40} invert={false} />
-                      </div>
-                      <span style={{ textAlign: "center" }}>
-                        {ACTIVITY_LABELS[activity]}
-                      </span>
-                    </button>
-                  ))
-                )}
+                {top8.map((activity) => (
+                  <ActivityCard
+                    key={activity}
+                    activity={activity}
+                    onSelect={() => {
+                      setSelected(activity);
+                      setStep(2);
+                    }}
+                  />
+                ))}
               </div>
+
+              {!showAllActivities ? (
+                <button
+                  type="button"
+                  onClick={() => setShowAllActivities(true)}
+                  style={{
+                    width: "100%",
+                    marginTop: 20,
+                    padding: "16px 20px",
+                    borderRadius: 14,
+                    border: "1px solid #e7e7e7",
+                    backgroundColor: "#fff",
+                    cursor: "pointer",
+                    fontFamily: "var(--font-sans), sans-serif",
+                    fontSize: 15,
+                    fontWeight: 500,
+                    color: "#919191",
+                    letterSpacing: "-0.02em",
+                    WebkitTapHighlightColor: "transparent",
+                    transition: "border-color 0.2s, background-color 0.2s, color 0.2s",
+                    minHeight: 52,
+                  }}
+                  className="active:opacity-90"
+                >
+                  View more
+                </button>
+              ) : (
+                <>
+                  <p
+                    style={{
+                      margin: "24px 0 12px",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: "var(--foreground-subtle)",
+                      letterSpacing: "0.02em",
+                    }}
+                  >
+                    All activities
+                  </p>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                      gap: 12,
+                    }}
+                  >
+                    {remainingActivities.map((activity) => (
+                      <ActivityCard
+                        key={activity}
+                        activity={activity}
+                        onSelect={() => {
+                          setSelected(activity);
+                          setStep(2);
+                        }}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -493,6 +621,7 @@ export function LogSheet() {
               </button>
             </div>
           </div>
+        </div>
         </div>
       </div>
     </div>

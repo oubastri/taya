@@ -86,7 +86,7 @@ export function ProfileCalendar({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          marginBottom: 20,
+          marginBottom: 28,
         }}
       >
         <button
@@ -116,7 +116,7 @@ export function ProfileCalendar({
           <div
             style={{
               fontSize: 16,
-              fontWeight: 800,
+              fontWeight: 400,
               letterSpacing: "-0.03em",
               color: "var(--foreground)",
               lineHeight: 1,
@@ -165,7 +165,7 @@ export function ProfileCalendar({
         </button>
       </div>
 
-      <div style={{ display: "flex", gap: 0, marginBottom: 6 }}>
+      <div style={{ display: "flex", gap: 0, marginTop: 4, marginBottom: 6 }}>
         {DAY_LABELS.map((d, i) => (
           <div
             key={i}

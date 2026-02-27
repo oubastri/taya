@@ -22,6 +22,7 @@ export const SEED_FRIENDS: Omit<FriendData, "following">[] = [
     name: "Jordan Lee",
     handle: "jordan",
     phone: "+15550001234",
+    avatarUrl: "/profilephotos/user1.png",
     workouts: [
       w("j1", "2026-02-19", "run", "8 miles tempo"),
       w("j2", "2026-02-17", "run", "easy 5k recovery"),
@@ -44,6 +45,7 @@ export const SEED_FRIENDS: Omit<FriendData, "following">[] = [
     name: "Maya Chen",
     handle: "maya",
     phone: "+15550005678",
+    avatarUrl: "/profilephotos/user2.png",
     workouts: [
       w("m1", "2026-02-18", "yoga", "morning flow 60min"),
       w("m2", "2026-02-16", "swim", "2km open water"),
@@ -64,6 +66,7 @@ export const SEED_FRIENDS: Omit<FriendData, "following">[] = [
     name: "Sam Rodriguez",
     handle: "sam",
     phone: "+15550009012",
+    avatarUrl: "/profilephotos/user3.png",
     workouts: [
       w("s1", "2026-02-19", "basketball", "5v5 rec league 🏀"),
       w("s2", "2026-02-16", "hiit", "45 min circuit"),

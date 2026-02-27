@@ -14,7 +14,7 @@ export function useUser() {
   const [user, setUser] = useState<User>(DEFAULT_USER);
   const [hydrated, setHydrated] = useState(false);
 
-  const CORRECT_AVATAR_URL = "/pfp/profile.jpg"; // user10 from :profilephotos:
+  const CORRECT_AVATAR_URL = "/profilephotos/user10.jpg";
 
   useEffect(() => {
     let stored = loadUser();
