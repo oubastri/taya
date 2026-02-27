@@ -154,7 +154,7 @@ function getTop8FromWorkouts(workouts: { activityType?: ActivityType }[]): Activ
     const t = (w.activityType ?? "other") as ActivityType;
     count.set(t, (count.get(t) ?? 0) + 1);
   }
-  const sorted = [...count.entries()]
+  const sorted = Array.from(count.entries())
     .sort((a, b) => b[1] - a[1])
     .map(([a]) => a);
   const top8: ActivityType[] = [];
