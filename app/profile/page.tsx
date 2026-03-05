@@ -83,18 +83,19 @@ export default function ProfilePage() {
       });
   }, [postsSorted]);
 
+  const handleShareProfile = useCallback(async () => {
+    const name = user.name || "Breezy De Vrij";
+    await shareUrl("/profile/me", {
+      title: "TAYA",
+      text: `Check out my profile on TAYA — ${name}`,
+    });
+  }, [user.name]);
+
   if (!uh || !wh) return null;
 
   const displayName = user.name || "Breezy De Vrij";
   const handle = user.handle || "breezyv";
   const contentMaxWidth = 428;
-
-  const handleShareProfile = useCallback(async () => {
-    await shareUrl("/profile/me", {
-      title: "TAYA",
-      text: `Check out my profile on TAYA — ${displayName}`,
-    });
-  }, [displayName]);
 
   return (
     <main

@@ -53,7 +53,7 @@ export default function UserProfilePage() {
 
   const isMe = userId === "me";
   const friend = !isMe ? friends.find((f) => f.id === userId) : null;
-  const workouts = friend?.workouts ?? [];
+  const workouts = useMemo(() => friend?.workouts ?? [], [friend?.workouts]);
 
   const postsSorted = useMemo(
     () => [...workouts].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
