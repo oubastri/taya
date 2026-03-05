@@ -64,26 +64,43 @@ export default function FeedPage() {
           <br />
           <span style={{ color: "#01EF54" }}>Athletes</span>
         </h1>
-        <Link
-          href="/profile"
-          style={{
-            flexShrink: 0,
-            width: 48,
-            height: 48,
-            borderRadius: 16,
-            overflow: "hidden",
-            display: "block",
-            textDecoration: "none",
-            color: "inherit",
-          }}
-          aria-label="View your profile"
-        >
-          <UserAvatar
-            avatarUrl={user.avatarUrl}
-            name={user.name}
-            fillParent
-          />
-        </Link>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+          <Link
+            href="/friends"
+            style={{
+              padding: "10px 16px",
+              borderRadius: 12,
+              backgroundColor: "var(--surface)",
+              border: "1px solid var(--border)",
+              fontSize: 14,
+              fontWeight: 600,
+              color: "var(--foreground)",
+              textDecoration: "none",
+            }}
+            className="active:opacity-80"
+          >
+            Friends
+          </Link>
+          <Link
+            href="/profile"
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: 16,
+              overflow: "hidden",
+              display: "block",
+              textDecoration: "none",
+              color: "inherit",
+            }}
+            aria-label="View your profile"
+          >
+            <UserAvatar
+              avatarUrl={user.avatarUrl}
+              name={user.name}
+              fillParent
+            />
+          </Link>
+        </div>
       </header>
 
       {/* Content — constrained column */}

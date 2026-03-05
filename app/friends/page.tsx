@@ -1,8 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useCallback, useMemo, useState } from "react";
 import { useFriends } from "@/hooks/use-friends";
 import type { FriendData } from "@/types/user";
+import { shareUrl } from "@/lib/share";
 
 function Avatar({ name }: { name: string }) {
   const initials = name
@@ -140,6 +142,18 @@ export default function FriendsPage() {
   const [contactsState, setContactsState] = useState<
     "idle" | "unsupported" | "synced"
   >("idle");
+  const [inviteCopied, setInviteCopied] = useState(false);
+
+  const handleInviteFriends = useCallback(async () => {
+    const ok = await shareUrl("/", {
+      title: "TAYA",
+      text: "Join me on TAYA — share your moves with friends.",
+    });
+    if (ok) {
+      setInviteCopied(true);
+      setTimeout(() => setInviteCopied(false), 2000);
+    }
+  }, []);
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -190,6 +204,53 @@ export default function FriendsPage() {
           boxSizing: "border-box",
         }}
       >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+        <Link
+          href="/"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 44,
+            height: 44,
+            borderRadius: 12,
+            color: "var(--foreground)",
+            backgroundColor: "var(--surface)",
+            border: "1px solid var(--border)",
+            textDecoration: "none",
+          }}
+          aria-label="Back to feed"
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="miter">
+            <path d="M21 12H3" />
+            <path d="M10 19L3 12l7-7" />
+          </svg>
+        </Link>
+        <span style={{ fontSize: 18, fontWeight: 700, color: "var(--foreground)" }}>Friends</span>
+        <div style={{ width: 44 }} />
+      </div>
+      <p
+        style={{
+          margin: 0,
+          fontSize: 22,
+          fontWeight: 800,
+          letterSpacing: "-0.03em",
+          color: "var(--foreground)",
+          marginBottom: 4,
+        }}
+      >
+        Find athletes
+      </p>
+      <p
+        style={{
+          margin: "0 0 14px",
+          fontSize: 14,
+          color: "var(--foreground-muted)",
+          lineHeight: 1.4,
+        }}
+      >
+        Search by name or @handle to find and follow people.
+      </p>
       <div
         style={{
           backgroundColor: "var(--surface)",
@@ -217,7 +278,7 @@ export default function FriendsPage() {
         </svg>
         <input
           type="text"
-          placeholder="Search athletes…"
+          placeholder="Name or @handle…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           style={{
@@ -241,16 +302,48 @@ export default function FriendsPage() {
       {query.trim() && (
         <>
           {results.length === 0 ? (
-            <p
-              style={{
-                marginTop: 28,
-                fontSize: 14,
-                color: "var(--foreground-subtle)",
-                paddingLeft: 4,
-              }}
-            >
-              No athletes found.
-            </p>
+            <div style={{ marginTop: 20, paddingLeft: 4 }}>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 15,
+                  fontWeight: 600,
+                  color: "var(--foreground)",
+                }}
+              >
+                No one found
+              </p>
+              <p
+                style={{
+                  margin: "6px 0 0",
+                  fontSize: 14,
+                  color: "var(--foreground-muted)",
+                  lineHeight: 1.5,
+                }}
+              >
+                Try a different name or @handle. Or invite friends to join TAYA — they’ll show up here once they sign up.
+              </p>
+              <button
+                type="button"
+                onClick={handleInviteFriends}
+                style={{
+                  marginTop: 16,
+                  padding: "12px 20px",
+                  borderRadius: "var(--radius-full)",
+                  border: "none",
+                  backgroundColor: "var(--accent)",
+                  color: "var(--foreground)",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  fontFamily: "inherit",
+                  cursor: "pointer",
+                  WebkitTapHighlightColor: "transparent",
+                }}
+                className="active:opacity-90"
+              >
+                Invite friends
+              </button>
+            </div>
           ) : (
             <div
               style={{
@@ -275,6 +368,60 @@ export default function FriendsPage() {
 
       {!query && (
         <>
+          {hydrated && following.length === 0 && suggestions.length === 0 && (
+            <div
+              style={{
+                marginTop: 32,
+                marginBottom: 8,
+              }}
+            >
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 28,
+                  fontWeight: 800,
+                  letterSpacing: "-0.04em",
+                  lineHeight: 1.15,
+                  color: "var(--foreground)",
+                }}
+              >
+                No friends yet
+              </p>
+              <p
+                style={{
+                  margin: "12px 0 20px",
+                  fontSize: 15,
+                  fontWeight: 500,
+                  color: "var(--foreground-muted)",
+                  lineHeight: 1.5,
+                }}
+              >
+                Sync contacts or invite people to join TAYA. When they sign up, you can find and follow them here.
+              </p>
+              <button
+                type="button"
+                onClick={handleInviteFriends}
+                style={{
+                  padding: "14px 24px",
+                  borderRadius: "var(--radius-full)",
+                  border: "none",
+                  backgroundColor: "var(--accent)",
+                  color: "var(--foreground)",
+                  fontSize: 15,
+                  fontWeight: 700,
+                  fontFamily: "inherit",
+                  letterSpacing: "-0.02em",
+                  cursor: "pointer",
+                  WebkitTapHighlightColor: "transparent",
+                  boxShadow: "var(--shadow-card)",
+                }}
+                className="active:opacity-90"
+              >
+                {inviteCopied ? "Link copied!" : "Invite friends"}
+              </button>
+            </div>
+          )}
+
           <SectionLabel label="From your contacts" />
           <div>
             {contactsState === "unsupported" ? (
@@ -298,11 +445,7 @@ export default function FriendsPage() {
                   Not available on this browser.{" "}
                   <button
                     type="button"
-                    onClick={() =>
-                      navigator.clipboard
-                        ?.writeText(window.location.origin)
-                        .catch(() => {})
-                    }
+                    onClick={handleInviteFriends}
                     style={{
                       color: "var(--foreground)",
                       fontWeight: 700,

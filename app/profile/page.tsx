@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useUser } from "@/hooks/use-user";
 import { useWorkouts } from "@/hooks/use-workouts";
 import { useLogSheet } from "@/contexts/log-sheet";
@@ -11,6 +11,7 @@ import { FeedPost } from "@/components/FeedPost";
 import { ProfileStatNumber } from "@/components/ProfileStatNumber";
 import type { FeedItem } from "@/hooks/use-friends";
 import { UserAvatar } from "@/components/UserAvatar";
+import { shareUrl } from "@/lib/share";
 
 const PROFILE_PHOTO_URL = "/profilephotos/user10.jpg";
 
@@ -88,6 +89,13 @@ export default function ProfilePage() {
   const handle = user.handle || "breezyv";
   const contentMaxWidth = 428;
 
+  const handleShareProfile = useCallback(async () => {
+    await shareUrl("/profile/me", {
+      title: "TAYA",
+      text: `Check out my profile on TAYA — ${displayName}`,
+    });
+  }, [displayName]);
+
   return (
     <main
       style={{
@@ -138,6 +146,33 @@ export default function ProfilePage() {
               <path d="M10 19L3 12l7-7" />
             </svg>
           </Link>
+          <button
+            type="button"
+            onClick={handleShareProfile}
+            aria-label="Share profile"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 44,
+              height: 44,
+              borderRadius: 12,
+              color: "var(--foreground)",
+              backgroundColor: "var(--surface)",
+              border: "1px solid var(--border)",
+              cursor: "pointer",
+              WebkitTapHighlightColor: "transparent",
+            }}
+            className="active:opacity-80"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <circle cx="18" cy="5" r="3" />
+              <circle cx="6" cy="12" r="3" />
+              <circle cx="18" cy="19" r="3" />
+              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+            </svg>
+          </button>
         </div>
       </div>
 

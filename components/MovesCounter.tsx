@@ -92,7 +92,7 @@ export function MovesCounter({ count, className = "" }: MovesCounterProps) {
       style={{
         display: "flex",
         alignItems: "center",
-        justifyContent: "center",
+        justifyContent: "space-between",
         width: "100%",
         gap: 10,
         marginBottom: 12,
@@ -120,7 +120,7 @@ export function MovesCounter({ count, className = "" }: MovesCounterProps) {
             width: 6,
             height: 6,
             borderRadius: "50%",
-            background: "#000",
+            background: "#01EF54",
             flexShrink: 0,
             animation: "moves-counter-pulse 1.5s ease-in-out infinite",
           }}

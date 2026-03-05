@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useFriends } from "@/hooks/use-friends";
 import { ProfileCalendar } from "@/components/ProfileCalendar";
 import { ProfileSegmentedControl, type ProfileSection } from "@/components/ProfileSegmentedControl";
@@ -11,6 +11,7 @@ import { ProfileStatNumber } from "@/components/ProfileStatNumber";
 import type { FeedItem } from "@/hooks/use-friends";
 import { UserAvatar } from "@/components/UserAvatar";
 import type { Workout } from "@/types/workout";
+import { shareUrl } from "@/lib/share";
 
 function getStats(workouts: Workout[]) {
   const now = new Date();
@@ -82,6 +83,14 @@ export default function UserProfilePage() {
   const stats = friend ? getStats(workouts) : { thisMonth: 0, thisWeek: 0 };
   const isFollowing = friend?.following ?? false;
   const contentMaxWidth = 428;
+
+  const handleShareProfile = useCallback(async () => {
+    if (!friend) return;
+    await shareUrl(`/profile/${friend.id}`, {
+      title: "TAYA",
+      text: `Check out ${friend.name}'s profile on TAYA — @${friend.handle}`,
+    });
+  }, [friend]);
 
   useEffect(() => {
     if (!fh) return;
@@ -226,7 +235,35 @@ export default function UserProfilePage() {
           >
             @{friend.handle}
           </p>
-          <div style={{ flex: 1, display: "flex", justifyContent: "flex-end", minWidth: 0 }}>
+          <div style={{ flex: 1, display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8, minWidth: 0 }}>
+            <button
+              type="button"
+              onClick={handleShareProfile}
+              aria-label="Share profile"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 40,
+                height: 40,
+                borderRadius: 12,
+                color: "var(--foreground)",
+                backgroundColor: "var(--surface)",
+                border: "1px solid var(--border)",
+                cursor: "pointer",
+                flexShrink: 0,
+                WebkitTapHighlightColor: "transparent",
+              }}
+              className="active:opacity-80"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <circle cx="18" cy="5" r="3" />
+                <circle cx="6" cy="12" r="3" />
+                <circle cx="18" cy="19" r="3" />
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+              </svg>
+            </button>
             <button
               type="button"
               onClick={() => (isFollowing ? unfollow(friend.id) : follow(friend.id))}
