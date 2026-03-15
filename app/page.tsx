@@ -1,24 +1,41 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { useUser } from "@/hooks/use-user";
 import { useWorkouts } from "@/hooks/use-workouts";
-import { useFriends, type FeedItem } from "@/hooks/use-friends";
+import { useFriends } from "@/hooks/use-friends";
 import { FeedPost } from "@/components/FeedPost";
 import { MovesCounter } from "@/components/MovesCounter";
 import { UserAvatar } from "@/components/UserAvatar";
+import { FeedToggle, type FeedMode } from "@/components/FeedToggle";
 
 export default function FeedPage() {
   const { user, hydrated: uh } = useUser();
   const { workouts, hydrated: wh } = useWorkouts();
-  const { getFeedWorkouts, hydrated: fh } = useFriends();
+  const { getFeedWorkouts, getAllFeedWorkouts, hydrated: fh } = useFriends();
+
+  const [feedMode, setFeedMode] = useState<FeedMode>("team");
 
   const hydrated = uh && wh && fh;
-  const feedItems = useMemo(
-    () => (hydrated ? getFeedWorkouts(workouts, user.avatarUrl) : []),
-    [hydrated, workouts, getFeedWorkouts, user.avatarUrl]
+
+  const currentUser = useMemo(
+    () => ({ id: user.id, name: user.name, handle: user.handle, avatarUrl: user.avatarUrl }),
+    [user.id, user.name, user.handle, user.avatarUrl],
   );
+
+  const teamItems = useMemo(
+    () => (hydrated ? getFeedWorkouts(workouts, currentUser) : []),
+    [hydrated, workouts, getFeedWorkouts, currentUser]
+  );
+
+  const stadiumItems = useMemo(
+    () => (hydrated ? getAllFeedWorkouts(workouts, currentUser) : []),
+    [hydrated, workouts, getAllFeedWorkouts, currentUser]
+  );
+
+  const feedItems = feedMode === "team" ? teamItems : stadiumItems;
+
   const sortedFeedItems = useMemo(
     () =>
       [...feedItems].sort((a, b) => {
@@ -27,6 +44,10 @@ export default function FeedPage() {
       }),
     [feedItems]
   );
+
+  const handleFeedModeChange = useCallback((mode: FeedMode) => {
+    setFeedMode(mode);
+  }, []);
 
   const contentMaxWidth = 428;
 
@@ -43,63 +64,73 @@ export default function FeedPage() {
         style={{
           padding: "max(env(safe-area-inset-top), 20px) 20px 24px",
           display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
+          flexDirection: "column",
           gap: 16,
         }}
       >
-        <h1
+        {/* Top row: title + toggle + actions */}
+        <div
           style={{
-            margin: 0,
-            color: "#000",
-            fontFamily: '"Lexend Deca", var(--font-sans), sans-serif',
-            fontSize: "50.848px",
-            fontStyle: "normal",
-            fontWeight: 500,
-            lineHeight: "44px",
-            letterSpacing: "-5.085px",
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 12,
           }}
         >
-          To All You
-          <br />
-          <span style={{ color: "#01EF54" }}>Athletes</span>
-        </h1>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-          <Link
-            href="/friends"
+          <h1
             style={{
-              padding: "10px 16px",
-              borderRadius: 12,
-              backgroundColor: "var(--surface)",
-              border: "1px solid var(--border)",
-              fontSize: 14,
-              fontWeight: 600,
-              color: "var(--foreground)",
-              textDecoration: "none",
+              margin: 0,
+              color: "#000",
+              fontFamily: '"Lexend Deca", var(--font-sans), sans-serif',
+              fontSize: "50.848px",
+              fontStyle: "normal",
+              fontWeight: 500,
+              lineHeight: "44px",
+              letterSpacing: "-5.085px",
             }}
-            className="active:opacity-80"
           >
-            Friends
-          </Link>
-          <Link
-            href="/profile"
-            style={{
-              width: 48,
-              height: 48,
-              borderRadius: 16,
-              overflow: "hidden",
-              display: "block",
-              textDecoration: "none",
-              color: "inherit",
-            }}
-            aria-label="View your profile"
-          >
-            <UserAvatar
-              avatarUrl={user.avatarUrl}
-              name={user.name}
-              fillParent
-            />
-          </Link>
+            To All You
+            <br />
+            <span style={{ color: "#01EF54" }}>Athletes</span>
+          </h1>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 10, flexShrink: 0 }}>
+            <FeedToggle value={feedMode} onChange={handleFeedModeChange} />
+            <Link
+              href="/friends"
+              style={{
+                padding: "10px 16px",
+                borderRadius: 12,
+                backgroundColor: "var(--surface)",
+                border: "1px solid var(--border)",
+                fontSize: 14,
+                fontWeight: 600,
+                color: "var(--foreground)",
+                textDecoration: "none",
+              }}
+              className="active:opacity-80"
+            >
+              Friends
+            </Link>
+            <Link
+              href="/profile"
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 16,
+                overflow: "hidden",
+                display: "block",
+                textDecoration: "none",
+                color: "inherit",
+              }}
+              aria-label="View your profile"
+            >
+              <UserAvatar
+                avatarUrl={user.avatarUrl}
+                name={user.name}
+                fillParent
+              />
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -112,7 +143,7 @@ export default function FeedPage() {
           boxSizing: "border-box",
         }}
       >
-        {/* Live counter: total moves ever logged (you + friends) */}
+        {/* Live counter: total moves ever logged */}
         {hydrated && (
           <div style={{ padding: "0 16px" }}>
             <MovesCounter count={feedItems.length} />
@@ -132,7 +163,7 @@ export default function FeedPage() {
                 color: "var(--foreground)",
               }}
             >
-              Start moving.
+              {feedMode === "team" ? "Start moving." : "No moves yet."}
             </p>
             <p
               style={{
@@ -143,7 +174,9 @@ export default function FeedPage() {
                 lineHeight: 1.5,
               }}
             >
-              Tap the + button to log your first workout. Your friends will see when you move.
+              {feedMode === "team"
+                ? "Tap the + button to log your first workout. Your friends will see when you move."
+                : "Be the first to log a workout and show up in the Stadium."}
             </p>
           </div>
         )}
@@ -152,11 +185,11 @@ export default function FeedPage() {
         <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 14 }}>
           {sortedFeedItems.map((item, i) => (
             <div
-              key={`${item.userId}-${item.id}`}
+              key={`${item.userId}-${item.id}-${feedMode}`}
               style={{ animationDelay: `${i * 40}ms` }}
               className="animate-fade-in-up"
             >
-              <FeedPost workout={item} />
+              <FeedPost workout={item} currentUserId={user.id} />
             </div>
           ))}
         </div>

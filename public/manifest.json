@@ -1,0 +1,17 @@
+{
+  "name": "To All You Athletes",
+  "short_name": "TAYA",
+  "description": "Log your moves. Follow your friends.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F3F3F3",
+  "theme_color": "#0A0A0A",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

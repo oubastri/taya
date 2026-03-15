@@ -2,8 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Workout, ActivityType } from "@/types/workout";
-import { toDateKey } from "@/types/workout";
-import { loadWorkouts, saveWorkouts } from "@/lib/storage";
+import {
+  getAdapter,
+  isRealMode,
+  fetchWorkouts,
+  addWorkoutSupabase,
+  deleteWorkoutSupabase,
+  updateWorkoutSupabase,
+} from "@/lib/data-adapter";
+
+const adapter = getAdapter();
 
 export type Stats = {
   total: number;
@@ -46,53 +54,77 @@ export function useWorkouts() {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    setWorkouts(loadWorkouts());
-    setHydrated(true);
+    if (isRealMode) {
+      fetchWorkouts().then((w) => {
+        setWorkouts(w);
+        setHydrated(true);
+      });
+    } else {
+      setWorkouts(adapter.getWorkouts());
+      setHydrated(true);
+    }
 
-    const handler = () => setWorkouts(loadWorkouts());
+    const handler = () => setWorkouts(adapter.getWorkouts());
     window.addEventListener(WORKOUTS_CHANGED_EVENT, handler);
     return () => window.removeEventListener(WORKOUTS_CHANGED_EVENT, handler);
   }, []);
 
   const persist = useCallback((next: Workout[]) => {
     setWorkouts(next);
-    saveWorkouts(next);
+    adapter.setWorkouts(next);
     window.dispatchEvent(new CustomEvent(WORKOUTS_CHANGED_EVENT));
   }, []);
 
   const addWorkout = useCallback(
     (date: string, description: string, activityType: ActivityType = "other") => {
+      if (isRealMode) {
+        addWorkoutSupabase(date, description, activityType).then((w) => {
+          if (w) {
+            setWorkouts((prev) => [w, ...prev]);
+            adapter.setWorkouts(adapter.getWorkouts());
+            window.dispatchEvent(new CustomEvent(WORKOUTS_CHANGED_EVENT));
+          }
+        });
+        return;
+      }
       const id = crypto.randomUUID();
       const created = new Date().toISOString();
       const newWorkout: Workout = { id, date, description, createdAt: created, activityType };
-      // Reload fresh to avoid stale closures (LogSheet has its own instance)
-      const current = loadWorkouts();
+      const current = adapter.getWorkouts();
       persist([...current, newWorkout]);
     },
-    [persist]
+    [persist],
   );
 
   const deleteWorkout = useCallback(
     (id: string) => {
-      const current = loadWorkouts();
+      if (isRealMode) {
+        setWorkouts((prev) => prev.filter((w) => w.id !== id));
+        deleteWorkoutSupabase(id);
+        window.dispatchEvent(new CustomEvent(WORKOUTS_CHANGED_EVENT));
+        return;
+      }
+      const current = adapter.getWorkouts();
       persist(current.filter((w) => w.id !== id));
     },
-    [persist]
+    [persist],
   );
 
   const updateWorkout = useCallback(
     (
       id: string,
-      updates: { date?: string; description?: string; activityType?: ActivityType }
+      updates: { date?: string; description?: string; activityType?: ActivityType },
     ) => {
-      const current = loadWorkouts();
-      persist(
-        current.map((w) =>
-          w.id === id ? { ...w, ...updates } : w
-        )
-      );
+      if (isRealMode) {
+        setWorkouts((prev) => prev.map((w) => (w.id === id ? { ...w, ...updates } : w)));
+        updateWorkoutSupabase(id, updates);
+        window.dispatchEvent(new CustomEvent(WORKOUTS_CHANGED_EVENT));
+        return;
+      }
+      const current = adapter.getWorkouts();
+      persist(current.map((w) => (w.id === id ? { ...w, ...updates } : w)));
     },
-    [persist]
+    [persist],
   );
 
   const stats = getStats(workouts);

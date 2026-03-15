@@ -6,6 +6,7 @@ import { LogSheetProvider } from "@/contexts/log-sheet";
 import { BottomNav } from "@/components/BottomNav";
 import { DayDetailSheet } from "@/components/DayDetailSheet";
 import { LogSheet } from "@/components/LogSheet";
+import { DevPanel } from "@/components/DevPanel";
 
 const lexendDeca = Lexend_Deca({
   subsets: ["latin"],
@@ -16,6 +17,7 @@ const lexendDeca = Lexend_Deca({
 export const metadata: Metadata = {
   title: "TAYA",
   description: "To All You Athletes",
+  manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -23,12 +25,6 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: "/icon.svg",
-    apple: [
-      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
-      { url: "/apple-touch-icon-167x167.png", sizes: "167x167", type: "image/png" },
-      { url: "/apple-touch-icon-152x152.png", sizes: "152x152", type: "image/png" },
-      { url: "/apple-touch-icon-120x120.png", sizes: "120x120", type: "image/png" },
-    ],
   },
 };
 
@@ -53,6 +49,7 @@ export default function RootLayout({
             <BottomNav />
             <DayDetailSheet />
             <LogSheet />
+            <DevPanel />
           </DayDetailSheetProvider>
         </LogSheetProvider>
       </body>

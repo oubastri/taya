@@ -43,15 +43,15 @@ function getActivityPhrase(activityType: string): string {
 
 interface FeedPostProps {
   workout: FeedItem;
-  /** Initial like count (default 0) */
+  currentUserId?: string;
   initialLikeCount?: number;
 }
 
-export function FeedPost({ workout, initialLikeCount = 0 }: FeedPostProps) {
+export function FeedPost({ workout, currentUserId, initialLikeCount = 0 }: FeedPostProps) {
   const activityType = (workout.activityType ?? "other") as ActivityType;
   const phrase = getActivityPhrase(activityType);
   const highlight = ACTIVITY_FEED_HIGHLIGHT[activityType] ?? ACTIVITY_FEED_HIGHLIGHT.other;
-  const isMe = workout.userId === "me";
+  const isMe = currentUserId ? workout.userId === currentUserId : workout.userId === "me";
   const hasDescription = Boolean(workout.description?.trim());
   const timeStr = formatTime(workout.createdAt);
   const dateLabel = formatDateLabel(workout.createdAt);
@@ -192,7 +192,7 @@ export function FeedPost({ workout, initialLikeCount = 0 }: FeedPostProps) {
               style={{ textDecoration: "underline", color: "inherit" }}
               aria-label="View your profile"
             >
-              me
+              {workout.userHandle}
             </Link>
           ) : (
             <Link

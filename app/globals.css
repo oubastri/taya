@@ -135,6 +135,33 @@ textarea:focus-visible {
   animation: cursor-blink 1s step-end infinite;
 }
 
+/* Feed toggle — liquid glass shimmer */
+@keyframes glass-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.feed-toggle-track {
+  transition: box-shadow 0.4s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.feed-toggle-track:active .feed-toggle-pill {
+  transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1),
+              box-shadow 0.3s ease;
+}
+
+.feed-toggle-pill {
+  will-change: transform;
+}
+
+.feed-toggle-glass {
+  will-change: backdrop-filter;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 4px;
