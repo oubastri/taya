@@ -162,6 +162,17 @@ textarea:focus-visible {
   will-change: backdrop-filter;
 }
 
+/* Skeleton loading pulse */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.15; }
+}
+.skeleton {
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+  background: var(--border-strong);
+  border-radius: 8px;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 4px;

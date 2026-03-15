@@ -214,9 +214,27 @@ export default function LoginPage() {
           </button>
         </form>
 
+        <div
+          style={{
+            marginTop: 12,
+            textAlign: "center",
+          }}
+        >
+          <Link
+            href="/forgot-password"
+            style={{
+              fontSize: 14,
+              color: "var(--foreground-muted)",
+              textDecoration: "none",
+            }}
+          >
+            Forgot password?
+          </Link>
+        </div>
+
         <p
           style={{
-            marginTop: 28,
+            marginTop: 20,
             textAlign: "center",
             fontSize: 14,
             color: "var(--foreground-muted)",

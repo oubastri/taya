@@ -100,16 +100,24 @@ const supabaseAdapter: DataAdapter = {
 };
 
 // ---------------------------------------------------------------------------
-// Async Supabase helpers — called by hooks in real mode
+// Auth user ID cache — avoids a network round-trip on every Supabase call
 // ---------------------------------------------------------------------------
+
+let cachedAuthUserId: string | null = null;
 
 function supabase() {
   return createClient();
 }
 
 async function getAuthUserId(): Promise<string | null> {
+  if (cachedAuthUserId) return cachedAuthUserId;
   const { data: { user } } = await supabase().auth.getUser();
-  return user?.id ?? null;
+  cachedAuthUserId = user?.id ?? null;
+  return cachedAuthUserId;
+}
+
+export function clearAuthCache() {
+  cachedAuthUserId = null;
 }
 
 // ---- User / Profile ----
@@ -203,7 +211,8 @@ export async function addWorkoutSupabase(
 }
 
 export async function deleteWorkoutSupabase(id: string): Promise<void> {
-  await supabase().from("workouts").delete().eq("id", id);
+  const { error } = await supabase().from("workouts").delete().eq("id", id);
+  if (error) throw error;
   supabaseCache.workouts = supabaseCache.workouts.filter((w) => w.id !== id);
 }
 
@@ -216,7 +225,9 @@ export async function updateWorkoutSupabase(
   if (updates.description !== undefined) dbUpdates.description = updates.description;
   if (updates.activityType !== undefined) dbUpdates.activity_type = updates.activityType;
 
-  await supabase().from("workouts").update(dbUpdates).eq("id", id);
+  const { error } = await supabase().from("workouts").update(dbUpdates).eq("id", id);
+  if (error) throw error;
+
   supabaseCache.workouts = supabaseCache.workouts.map((w) =>
     w.id === id ? { ...w, ...updates } : w,
   );
@@ -236,7 +247,7 @@ export async function fetchFriends(): Promise<FriendData[]> {
   const followingIds = new Set((follows ?? []).map((f) => f.following_id));
 
   const friendIds = (profiles ?? []).map((p) => p.id);
-  let workoutsByUser: Record<string, Workout[]> = {};
+  const workoutsByUser: Record<string, Workout[]> = {};
 
   if (friendIds.length > 0) {
     const { data: wRows } = await supabase()
@@ -274,17 +285,81 @@ export async function fetchFriends(): Promise<FriendData[]> {
 export async function followUserSupabase(followingId: string): Promise<void> {
   const uid = await getAuthUserId();
   if (!uid) return;
-  await supabase().from("follows").insert({ follower_id: uid, following_id: followingId });
+  const { error } = await supabase()
+    .from("follows")
+    .insert({ follower_id: uid, following_id: followingId });
+  if (error) throw error;
 }
 
 export async function unfollowUserSupabase(followingId: string): Promise<void> {
   const uid = await getAuthUserId();
   if (!uid) return;
-  await supabase()
+  const { error } = await supabase()
     .from("follows")
     .delete()
     .eq("follower_id", uid)
     .eq("following_id", followingId);
+  if (error) throw error;
+}
+
+// ---- Likes ----
+
+export async function fetchLikesForWorkouts(
+  workoutIds: string[],
+): Promise<Record<string, { count: number; likedByMe: boolean }>> {
+  if (workoutIds.length === 0) return {};
+  const uid = await getAuthUserId();
+  if (!uid) return {};
+
+  const { data } = await supabase()
+    .from("likes")
+    .select("workout_id, user_id")
+    .in("workout_id", workoutIds);
+
+  const result: Record<string, { count: number; likedByMe: boolean }> = {};
+  for (const id of workoutIds) {
+    result[id] = { count: 0, likedByMe: false };
+  }
+  for (const row of data ?? []) {
+    if (!result[row.workout_id]) {
+      result[row.workout_id] = { count: 0, likedByMe: false };
+    }
+    result[row.workout_id].count++;
+    if (row.user_id === uid) {
+      result[row.workout_id].likedByMe = true;
+    }
+  }
+  return result;
+}
+
+export async function toggleLikeSupabase(
+  workoutId: string,
+): Promise<{ liked: boolean } | null> {
+  const uid = await getAuthUserId();
+  if (!uid) return null;
+
+  const { data: existing } = await supabase()
+    .from("likes")
+    .select("user_id")
+    .eq("user_id", uid)
+    .eq("workout_id", workoutId)
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await supabase()
+      .from("likes")
+      .delete()
+      .eq("user_id", uid)
+      .eq("workout_id", workoutId);
+    if (error) return null;
+    return { liked: false };
+  } else {
+    const { error } = await supabase()
+      .from("likes")
+      .insert({ user_id: uid, workout_id: workoutId });
+    if (error) return null;
+    return { liked: true };
+  }
 }
 
 // ---------------------------------------------------------------------------

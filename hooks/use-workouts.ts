@@ -10,6 +10,7 @@ import {
   deleteWorkoutSupabase,
   updateWorkoutSupabase,
 } from "@/lib/data-adapter";
+import { useToast } from "@/contexts/toast";
 
 const adapter = getAdapter();
 
@@ -52,13 +53,19 @@ function getWeekStart(d: Date): Date {
 export function useWorkouts() {
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     if (isRealMode) {
-      fetchWorkouts().then((w) => {
-        setWorkouts(w);
-        setHydrated(true);
-      });
+      fetchWorkouts()
+        .then((w) => {
+          setWorkouts(w);
+          setHydrated(true);
+        })
+        .catch(() => {
+          toast("Failed to load workouts", "error");
+          setHydrated(true);
+        });
     } else {
       setWorkouts(adapter.getWorkouts());
       setHydrated(true);
@@ -67,6 +74,7 @@ export function useWorkouts() {
     const handler = () => setWorkouts(adapter.getWorkouts());
     window.addEventListener(WORKOUTS_CHANGED_EVENT, handler);
     return () => window.removeEventListener(WORKOUTS_CHANGED_EVENT, handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const persist = useCallback((next: Workout[]) => {
@@ -78,13 +86,19 @@ export function useWorkouts() {
   const addWorkout = useCallback(
     (date: string, description: string, activityType: ActivityType = "other") => {
       if (isRealMode) {
-        addWorkoutSupabase(date, description, activityType).then((w) => {
-          if (w) {
-            setWorkouts((prev) => [w, ...prev]);
-            adapter.setWorkouts(adapter.getWorkouts());
-            window.dispatchEvent(new CustomEvent(WORKOUTS_CHANGED_EVENT));
-          }
-        });
+        addWorkoutSupabase(date, description, activityType)
+          .then((w) => {
+            if (w) {
+              setWorkouts((prev) => [w, ...prev]);
+              adapter.setWorkouts(adapter.getWorkouts());
+              window.dispatchEvent(new CustomEvent(WORKOUTS_CHANGED_EVENT));
+            } else {
+              toast("Couldn't save workout — try again", "error");
+            }
+          })
+          .catch(() => {
+            toast("Couldn't save workout — try again", "error");
+          });
         return;
       }
       const id = crypto.randomUUID();
@@ -93,21 +107,32 @@ export function useWorkouts() {
       const current = adapter.getWorkouts();
       persist([...current, newWorkout]);
     },
-    [persist],
+    [persist, toast],
   );
 
   const deleteWorkout = useCallback(
     (id: string) => {
       if (isRealMode) {
-        setWorkouts((prev) => prev.filter((w) => w.id !== id));
-        deleteWorkoutSupabase(id);
+        setWorkouts((prev) => {
+          const next = prev.filter((w) => w.id !== id);
+          adapter.setWorkouts(next);
+          return next;
+        });
         window.dispatchEvent(new CustomEvent(WORKOUTS_CHANGED_EVENT));
+        deleteWorkoutSupabase(id).catch(() => {
+          fetchWorkouts().then((fresh) => {
+            setWorkouts(fresh);
+            adapter.setWorkouts(fresh);
+            window.dispatchEvent(new CustomEvent(WORKOUTS_CHANGED_EVENT));
+          });
+          toast("Couldn't delete workout — try again", "error");
+        });
         return;
       }
       const current = adapter.getWorkouts();
       persist(current.filter((w) => w.id !== id));
     },
-    [persist],
+    [persist, toast],
   );
 
   const updateWorkout = useCallback(
@@ -116,15 +141,26 @@ export function useWorkouts() {
       updates: { date?: string; description?: string; activityType?: ActivityType },
     ) => {
       if (isRealMode) {
-        setWorkouts((prev) => prev.map((w) => (w.id === id ? { ...w, ...updates } : w)));
-        updateWorkoutSupabase(id, updates);
+        setWorkouts((prev) => {
+          const next = prev.map((w) => (w.id === id ? { ...w, ...updates } : w));
+          adapter.setWorkouts(next);
+          return next;
+        });
         window.dispatchEvent(new CustomEvent(WORKOUTS_CHANGED_EVENT));
+        updateWorkoutSupabase(id, updates).catch(() => {
+          fetchWorkouts().then((fresh) => {
+            setWorkouts(fresh);
+            adapter.setWorkouts(fresh);
+            window.dispatchEvent(new CustomEvent(WORKOUTS_CHANGED_EVENT));
+          });
+          toast("Couldn't update workout — try again", "error");
+        });
         return;
       }
       const current = adapter.getWorkouts();
       persist(current.map((w) => (w.id === id ? { ...w, ...updates } : w)));
     },
-    [persist],
+    [persist, toast],
   );
 
   const stats = getStats(workouts);

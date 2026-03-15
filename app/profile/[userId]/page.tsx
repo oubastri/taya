@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useFriends } from "@/hooks/use-friends";
+import { useLikes } from "@/hooks/use-likes";
 import { ProfileCalendar } from "@/components/ProfileCalendar";
 import { ProfileSegmentedControl, type ProfileSection } from "@/components/ProfileSegmentedControl";
 import { FeedPost } from "@/components/FeedPost";
@@ -41,6 +42,19 @@ function getStats(workouts: Workout[]) {
   };
 }
 
+function UserProfileSkeleton() {
+  return (
+    <div style={{ padding: "0 16px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 28 }}>
+        <div className="skeleton" style={{ width: 84, height: 84, borderRadius: 32 }} />
+        <div className="skeleton" style={{ width: 180, height: 32, borderRadius: 8 }} />
+      </div>
+      <div className="skeleton" style={{ height: 40, borderRadius: 8, marginBottom: 28 }} />
+      <div className="skeleton" style={{ height: 300, borderRadius: 8 }} />
+    </div>
+  );
+}
+
 export default function UserProfilePage() {
   const params = useParams();
   const router = useRouter();
@@ -55,16 +69,18 @@ export default function UserProfilePage() {
   const friend = !isMe ? friends.find((f) => f.id === userId) : null;
   const workouts = useMemo(() => friend?.workouts ?? [], [friend?.workouts]);
 
+  const workoutIds = useMemo(() => workouts.map((w) => w.id), [workouts]);
+  const { getLike, toggleLike } = useLikes(workoutIds);
+
   const postsSorted = useMemo(
     () => [...workouts].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [workouts]
   );
 
-  /** Group workouts by month (year-month from date), newest month first */
   const movesByMonth = useMemo(() => {
     const map = new Map<string, typeof workouts>();
     for (const w of postsSorted) {
-      const key = w.date.slice(0, 7); // "YYYY-MM"
+      const key = w.date.slice(0, 7);
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(w);
     }
@@ -118,7 +134,18 @@ export default function UserProfilePage() {
     return () => clearTimeout(t);
   }, [calendarExiting]);
 
-  if (!fh || isMe) return null;
+  if (!fh || isMe) {
+    return (
+      <main style={{ minHeight: "100vh", background: "var(--background)", paddingBottom: 96 }}>
+        <div style={{ padding: "max(env(safe-area-inset-top), 20px) 16px 0" }}>
+          <div style={{ height: 44, marginBottom: 24 }} />
+        </div>
+        <div style={{ maxWidth: 428, margin: "0 auto" }}>
+          <UserProfileSkeleton />
+        </div>
+      </main>
+    );
+  }
 
   if (!friend) {
     return (
@@ -170,6 +197,26 @@ export default function UserProfilePage() {
     );
   }
 
+  function renderFeedPost(workout: Workout) {
+    const feedItem: FeedItem = {
+      ...workout,
+      userId: friend!.id,
+      userName: friend!.name,
+      userHandle: friend!.handle,
+      userAvatarUrl: friend!.avatarUrl,
+    };
+    const like = getLike(workout.id);
+    return (
+      <FeedPost
+        key={workout.id}
+        workout={feedItem}
+        liked={like.likedByMe}
+        likeCount={like.count}
+        onToggleLike={() => toggleLike(workout.id)}
+      />
+    );
+  }
+
   return (
     <main
       style={{
@@ -178,7 +225,6 @@ export default function UserProfilePage() {
         paddingBottom: 96,
       }}
     >
-      {/* Top bar - full bleed (same as profile) */}
       <div style={{ padding: "max(env(safe-area-inset-top), 20px) 16px 0" }}>
         <div
           style={{
@@ -287,7 +333,6 @@ export default function UserProfilePage() {
         </div>
       </div>
 
-      {/* Content - constrained column */}
       <div
         style={{
           width: "100%",
@@ -427,21 +472,7 @@ export default function UserProfilePage() {
                       {workouts
                         .filter((w) => w.date === calendarDisplayKey)
                         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-                        .map((workout) => {
-                          const feedItem: FeedItem = {
-                            ...workout,
-                            userId: friend.id,
-                            userName: friend.name,
-                            userHandle: friend.handle,
-                            userAvatarUrl: friend.avatarUrl,
-                          };
-                          return (
-                            <FeedPost
-                              key={workout.id}
-                              workout={feedItem}
-                            />
-                          );
-                        })}
+                        .map(renderFeedPost)}
                     </div>
                   </>
                 )}
@@ -479,21 +510,7 @@ export default function UserProfilePage() {
                     {label}
                   </h2>
                   <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                    {monthWorkouts.map((workout) => {
-                      const feedItem: FeedItem = {
-                        ...workout,
-                        userId: friend.id,
-                        userName: friend.name,
-                        userHandle: friend.handle,
-                        userAvatarUrl: friend.avatarUrl,
-                      };
-                      return (
-                        <FeedPost
-                          key={workout.id}
-                          workout={feedItem}
-                        />
-                      );
-                    })}
+                    {monthWorkouts.map(renderFeedPost)}
                   </div>
                 </section>
               ))

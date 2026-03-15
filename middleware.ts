@@ -42,7 +42,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/login") ||
     pathname.startsWith("/signup") ||
     pathname.startsWith("/onboarding") ||
-    pathname.startsWith("/auth/callback");
+    pathname.startsWith("/auth/callback") ||
+    pathname.startsWith("/forgot-password");
 
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();

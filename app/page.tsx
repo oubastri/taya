@@ -5,10 +5,25 @@ import { useMemo, useState, useCallback } from "react";
 import { useUser } from "@/hooks/use-user";
 import { useWorkouts } from "@/hooks/use-workouts";
 import { useFriends } from "@/hooks/use-friends";
+import { useLikes } from "@/hooks/use-likes";
 import { FeedPost } from "@/components/FeedPost";
 import { MovesCounter } from "@/components/MovesCounter";
 import { UserAvatar } from "@/components/UserAvatar";
 import { FeedToggle, type FeedMode } from "@/components/FeedToggle";
+
+function FeedSkeleton() {
+  return (
+    <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 14 }}>
+      {[1, 2, 3, 4].map((i) => (
+        <div
+          key={i}
+          className="skeleton"
+          style={{ height: 120, borderRadius: 8 }}
+        />
+      ))}
+    </div>
+  );
+}
 
 export default function FeedPage() {
   const { user, hydrated: uh } = useUser();
@@ -45,6 +60,12 @@ export default function FeedPage() {
     [feedItems]
   );
 
+  const workoutIds = useMemo(
+    () => sortedFeedItems.map((item) => item.id),
+    [sortedFeedItems],
+  );
+  const { getLike, toggleLike } = useLikes(workoutIds);
+
   const handleFeedModeChange = useCallback((mode: FeedMode) => {
     setFeedMode(mode);
   }, []);
@@ -68,7 +89,6 @@ export default function FeedPage() {
           gap: 16,
         }}
       >
-        {/* Top row: title + toggle + actions */}
         <div
           style={{
             display: "flex",
@@ -150,6 +170,9 @@ export default function FeedPage() {
           </div>
         )}
 
+        {/* Loading skeleton */}
+        {!hydrated && <FeedSkeleton />}
+
         {/* Empty state */}
         {hydrated && sortedFeedItems.length === 0 && (
           <div style={{ padding: "0 24px" }}>
@@ -182,17 +205,28 @@ export default function FeedPage() {
         )}
 
         {/* Feed */}
-        <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 14 }}>
-          {sortedFeedItems.map((item, i) => (
-            <div
-              key={`${item.userId}-${item.id}-${feedMode}`}
-              style={{ animationDelay: `${i * 40}ms` }}
-              className="animate-fade-in-up"
-            >
-              <FeedPost workout={item} currentUserId={user.id} />
-            </div>
-          ))}
-        </div>
+        {hydrated && (
+          <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 14 }}>
+            {sortedFeedItems.map((item, i) => {
+              const like = getLike(item.id);
+              return (
+                <div
+                  key={`${item.userId}-${item.id}-${feedMode}`}
+                  style={{ animationDelay: `${i * 40}ms` }}
+                  className="animate-fade-in-up"
+                >
+                  <FeedPost
+                    workout={item}
+                    currentUserId={user.id}
+                    liked={like.likedByMe}
+                    likeCount={like.count}
+                    onToggleLike={() => toggleLike(item.id)}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </main>
   );

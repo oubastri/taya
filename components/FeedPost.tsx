@@ -14,7 +14,6 @@ const AVATAR_SIZE = 44;
 const ICON_SIZE = 28;
 const OVERLAP = 10;
 
-/** Format time as "7:37am" from ISO string */
 function formatTime(isoString: string): string {
   return new Date(isoString).toLocaleTimeString("en-US", {
     hour: "numeric",
@@ -23,7 +22,6 @@ function formatTime(isoString: string): string {
   });
 }
 
-/** "today" | "yesterday" | "Feb 22" based on date relative to now */
 function formatDateLabel(isoString: string): string {
   const d = new Date(isoString);
   const today = new Date();
@@ -36,7 +34,6 @@ function formatDateLabel(isoString: string): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-/** Grammar-correct phrase for feed: "did yoga", "played golf", "went for a run", etc. */
 function getActivityPhrase(activityType: string): string {
   return ACTIVITY_FEED_PHRASE[activityType as ActivityType] ?? ACTIVITY_FEED_PHRASE.other;
 }
@@ -44,10 +41,18 @@ function getActivityPhrase(activityType: string): string {
 interface FeedPostProps {
   workout: FeedItem;
   currentUserId?: string;
-  initialLikeCount?: number;
+  liked?: boolean;
+  likeCount?: number;
+  onToggleLike?: () => void;
 }
 
-export function FeedPost({ workout, currentUserId, initialLikeCount = 0 }: FeedPostProps) {
+export function FeedPost({
+  workout,
+  currentUserId,
+  liked: likedProp,
+  likeCount: likeCountProp,
+  onToggleLike,
+}: FeedPostProps) {
   const activityType = (workout.activityType ?? "other") as ActivityType;
   const phrase = getActivityPhrase(activityType);
   const highlight = ACTIVITY_FEED_HIGHLIGHT[activityType] ?? ACTIVITY_FEED_HIGHLIGHT.other;
@@ -58,18 +63,29 @@ export function FeedPost({ workout, currentUserId, initialLikeCount = 0 }: FeedP
   const beforeHighlight = phrase.slice(0, phrase.indexOf(highlight));
   const afterHighlight = phrase.slice(phrase.indexOf(highlight) + highlight.length);
 
-  const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(initialLikeCount);
+  const managed = likedProp !== undefined && onToggleLike !== undefined;
+  const [localLiked, setLocalLiked] = useState(false);
+  const [localCount, setLocalCount] = useState(0);
+
+  const liked = managed ? likedProp : localLiked;
+  const likeCount = managed ? (likeCountProp ?? 0) : localCount;
+
   const [animating, setAnimating] = useState(false);
   const lastTapRef = useRef(0);
 
   const handleLike = () => {
-    if (liked) {
-      setLiked(false);
-      setLikeCount((c) => Math.max(0, c - 1));
+    if (managed) {
+      onToggleLike();
     } else {
-      setLiked(true);
-      setLikeCount((c) => c + 1);
+      if (localLiked) {
+        setLocalLiked(false);
+        setLocalCount((c) => Math.max(0, c - 1));
+      } else {
+        setLocalLiked(true);
+        setLocalCount((c) => c + 1);
+      }
+    }
+    if (!liked) {
       setAnimating(true);
       setTimeout(() => setAnimating(false), 500);
     }
@@ -102,7 +118,6 @@ export function FeedPost({ workout, currentUserId, initialLikeCount = 0 }: FeedP
         overflow: "hidden",
       }}
     >
-      {/* Top row: avatar + overlapping activity icon (left), like button (right) */}
       <div
         style={{
           display: "flex",
@@ -171,7 +186,6 @@ export function FeedPost({ workout, currentUserId, initialLikeCount = 0 }: FeedP
         />
       </div>
 
-      {/* Content: "@handle [phrase] today at 7:37am." + optional description */}
       <div
         style={{
           display: "flex",

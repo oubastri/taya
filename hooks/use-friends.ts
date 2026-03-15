@@ -10,6 +10,7 @@ import {
   followUserSupabase,
   unfollowUserSupabase,
 } from "@/lib/data-adapter";
+import { useToast } from "@/contexts/toast";
 import { SEED_FRIENDS } from "@/lib/seed-data";
 
 const adapter = getAdapter();
@@ -24,13 +25,19 @@ export type FeedItem = Workout & {
 export function useFriends() {
   const [friends, setFriends] = useState<FriendData[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     if (isRealMode) {
-      fetchFriends().then((f) => {
-        setFriends(f);
-        setHydrated(true);
-      });
+      fetchFriends()
+        .then((f) => {
+          setFriends(f);
+          setHydrated(true);
+        })
+        .catch(() => {
+          toast("Failed to load friends", "error");
+          setHydrated(true);
+        });
     } else {
       if (!adapter.isSeeded()) {
         if (adapter.shouldUseSeed()) {
@@ -47,6 +54,7 @@ export function useFriends() {
       }
       setHydrated(true);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const follow = useCallback((id: string) => {
@@ -56,8 +64,16 @@ export function useFriends() {
       return next;
     });
     if (isRealMode) {
-      followUserSupabase(id);
+      followUserSupabase(id).catch(() => {
+        setFriends((prev) => {
+          const rollback = prev.map((f) => (f.id === id ? { ...f, following: false } : f));
+          adapter.setFriends(rollback);
+          return rollback;
+        });
+        toast("Couldn't follow — try again", "error");
+      });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const unfollow = useCallback((id: string) => {
@@ -67,8 +83,16 @@ export function useFriends() {
       return next;
     });
     if (isRealMode) {
-      unfollowUserSupabase(id);
+      unfollowUserSupabase(id).catch(() => {
+        setFriends((prev) => {
+          const rollback = prev.map((f) => (f.id === id ? { ...f, following: true } : f));
+          adapter.setFriends(rollback);
+          return rollback;
+        });
+        toast("Couldn't unfollow — try again", "error");
+      });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const followedFriends = useMemo(

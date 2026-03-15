@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 import { useFriends } from "@/hooks/use-friends";
 import type { FriendData } from "@/types/user";
+import { BackButton } from "@/components/BackButton";
 import { shareUrl } from "@/lib/share";
 
 function Avatar({ name }: { name: string }) {
@@ -205,27 +206,7 @@ export default function FriendsPage() {
         }}
       >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <Link
-          href="/"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: 44,
-            height: 44,
-            borderRadius: 12,
-            color: "var(--foreground)",
-            backgroundColor: "var(--surface)",
-            border: "1px solid var(--border)",
-            textDecoration: "none",
-          }}
-          aria-label="Back to feed"
-        >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="miter">
-            <path d="M21 12H3" />
-            <path d="M10 19L3 12l7-7" />
-          </svg>
-        </Link>
+        <BackButton href="/" label="Back to feed" />
         <span style={{ fontSize: 18, fontWeight: 700, color: "var(--foreground)" }}>Friends</span>
         <div style={{ width: 44 }} />
       </div>
@@ -529,16 +510,15 @@ export default function FriendsPage() {
           )}
 
           {!hydrated && (
-            <p
-              style={{
-                marginTop: 40,
-                fontSize: 22,
-                letterSpacing: "-0.04em",
-                color: "var(--foreground-faint)",
-              }}
-            >
-              •••
-            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 20 }}>
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="skeleton"
+                  style={{ height: 76, borderRadius: "var(--radius-md)" }}
+                />
+              ))}
+            </div>
           )}
         </>
       )}

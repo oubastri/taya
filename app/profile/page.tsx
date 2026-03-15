@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useUser } from "@/hooks/use-user";
 import { useWorkouts } from "@/hooks/use-workouts";
+import { useLikes } from "@/hooks/use-likes";
 import { useLogSheet } from "@/contexts/log-sheet";
 import { ProfileCalendar } from "@/components/ProfileCalendar";
 import { ProfileSegmentedControl, type ProfileSection } from "@/components/ProfileSegmentedControl";
@@ -11,10 +12,26 @@ import { FeedPost } from "@/components/FeedPost";
 import { ProfileStatNumber } from "@/components/ProfileStatNumber";
 import type { FeedItem } from "@/hooks/use-friends";
 import { UserAvatar } from "@/components/UserAvatar";
+import { BackButton } from "@/components/BackButton";
+import { IconButton } from "@/components/IconButton";
 import { shareUrl } from "@/lib/share";
 import { isRealMode } from "@/lib/data-adapter";
 
 const PROFILE_PHOTO_URL = "/profilephotos/user10.jpg";
+
+function ProfileSkeleton() {
+  return (
+    <div style={{ padding: "0 16px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 28 }}>
+        <div className="skeleton" style={{ width: 84, height: 84, borderRadius: 32 }} />
+        <div className="skeleton" style={{ width: 180, height: 32, borderRadius: 8 }} />
+        <div className="skeleton" style={{ width: 100, height: 16, borderRadius: 6 }} />
+      </div>
+      <div className="skeleton" style={{ height: 40, borderRadius: 8, marginBottom: 28 }} />
+      <div className="skeleton" style={{ height: 300, borderRadius: 8 }} />
+    </div>
+  );
+}
 
 export default function ProfilePage() {
   const { user, hydrated: uh, updateUser } = useUser();
@@ -26,6 +43,9 @@ export default function ProfilePage() {
   const [calendarExiting, setCalendarExiting] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState("");
+
+  const workoutIds = useMemo(() => workouts.map((w) => w.id), [workouts]);
+  const { getLike, toggleLike } = useLikes(workoutIds);
 
   useEffect(() => {
     if (uh) setNameInput(user.name || "");
@@ -65,11 +85,10 @@ export default function ProfilePage() {
     [workouts]
   );
 
-  /** Group workouts by month (year-month from date), newest month first */
   const movesByMonth = useMemo(() => {
     const map = new Map<string, typeof workouts>();
     for (const w of postsSorted) {
-      const key = w.date.slice(0, 7); // "YYYY-MM"
+      const key = w.date.slice(0, 7);
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(w);
     }
@@ -93,11 +112,43 @@ export default function ProfilePage() {
     });
   }, [user.name]);
 
-  if (!uh || !wh) return null;
+  if (!uh || !wh) {
+    return (
+      <main style={{ minHeight: "100vh", background: "var(--background)", paddingBottom: 96 }}>
+        <div style={{ padding: "max(env(safe-area-inset-top), 20px) 16px 0" }}>
+          <div style={{ height: 44, marginBottom: 24 }} />
+        </div>
+        <div style={{ maxWidth: 428, margin: "0 auto" }}>
+          <ProfileSkeleton />
+        </div>
+      </main>
+    );
+  }
 
   const displayName = user.name || "Athlete";
   const handle = user.handle || "you";
   const contentMaxWidth = 428;
+
+  function renderFeedPost(workout: typeof workouts[number]) {
+    const feedItem: FeedItem = {
+      ...workout,
+      userId: user.id,
+      userName: displayName,
+      userHandle: handle,
+      userAvatarUrl: user.avatarUrl,
+    };
+    const like = getLike(workout.id);
+    return (
+      <FeedPost
+        key={workout.id}
+        workout={feedItem}
+        currentUserId={user.id}
+        liked={like.likedByMe}
+        likeCount={like.count}
+        onToggleLike={() => toggleLike(workout.id)}
+      />
+    );
+  }
 
   return (
     <main
@@ -117,80 +168,15 @@ export default function ProfilePage() {
             marginBottom: 24,
           }}
         >
-          <Link
-            href="/"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: 44,
-              height: 44,
-              borderRadius: 12,
-              color: "var(--foreground)",
-              textDecoration: "none",
-              WebkitTapHighlightColor: "transparent",
-              backgroundColor: "var(--surface)",
-              border: "1px solid var(--border)",
-            }}
-            aria-label="Back to feed"
-          >
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="square"
-              strokeLinejoin="miter"
-              aria-hidden
-            >
-              <path d="M21 12H3" />
-              <path d="M10 19L3 12l7-7" />
-            </svg>
-          </Link>
+          <BackButton href="/" label="Back to feed" />
           <div style={{ display: "flex", gap: 8 }}>
-            <Link
-              href="/settings"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 44,
-                height: 44,
-                borderRadius: 12,
-                color: "var(--foreground)",
-                backgroundColor: "var(--surface)",
-                border: "1px solid var(--border)",
-                textDecoration: "none",
-                WebkitTapHighlightColor: "transparent",
-              }}
-              aria-label="Settings"
-            >
+            <IconButton href="/settings" label="Settings">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <circle cx="12" cy="12" r="3" />
                 <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
               </svg>
-            </Link>
-            <button
-              type="button"
-              onClick={handleShareProfile}
-              aria-label="Share profile"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 44,
-                height: 44,
-                borderRadius: 12,
-                color: "var(--foreground)",
-                backgroundColor: "var(--surface)",
-                border: "1px solid var(--border)",
-                cursor: "pointer",
-                WebkitTapHighlightColor: "transparent",
-              }}
-              className="active:opacity-80"
-            >
+            </IconButton>
+            <IconButton onClick={handleShareProfile} label="Share profile">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <circle cx="18" cy="5" r="3" />
                 <circle cx="6" cy="12" r="3" />
@@ -198,7 +184,7 @@ export default function ProfilePage() {
                 <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
                 <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
               </svg>
-            </button>
+            </IconButton>
           </div>
         </div>
       </div>
@@ -432,22 +418,7 @@ export default function ProfilePage() {
                             </div>
                           );
                         }
-                        return dayWorkouts.map((workout) => {
-                          const feedItem: FeedItem = {
-                            ...workout,
-                            userId: user.id,
-                            userName: displayName,
-                            userHandle: handle,
-                            userAvatarUrl: user.avatarUrl,
-                          };
-                          return (
-                            <FeedPost
-                              key={workout.id}
-                              workout={feedItem}
-                              currentUserId={user.id}
-                            />
-                          );
-                        });
+                        return dayWorkouts.map(renderFeedPost);
                       })()}
                     </div>
                   </>
@@ -486,22 +457,7 @@ export default function ProfilePage() {
                     {label}
                   </h2>
                   <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                    {monthWorkouts.map((workout) => {
-                      const feedItem: FeedItem = {
-                        ...workout,
-                        userId: user.id,
-                        userName: displayName,
-                        userHandle: handle,
-                        userAvatarUrl: user.avatarUrl,
-                      };
-                      return (
-                        <FeedPost
-                          key={workout.id}
-                          workout={feedItem}
-                          currentUserId={user.id}
-                        />
-                      );
-                    })}
+                    {monthWorkouts.map(renderFeedPost)}
                   </div>
                 </section>
               ))

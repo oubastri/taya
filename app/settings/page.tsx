@@ -4,8 +4,9 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/hooks/use-user";
 import { UserAvatar } from "@/components/UserAvatar";
+import { BackButton } from "@/components/BackButton";
 import { createClient } from "@/lib/supabase/client";
-import { isRealMode } from "@/lib/data-adapter";
+import { isRealMode, clearAuthCache } from "@/lib/data-adapter";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -74,6 +75,7 @@ export default function SettingsPage() {
       if (isRealMode) {
         const supabase = createClient();
         await supabase.auth.signOut();
+        clearAuthCache();
       }
       router.push("/login");
       router.refresh();
@@ -94,6 +96,7 @@ export default function SettingsPage() {
           return;
         }
         await supabase.auth.signOut();
+        clearAuthCache();
       }
       router.push("/login");
       router.refresh();
@@ -115,29 +118,7 @@ export default function SettingsPage() {
       {/* Header */}
       <div style={{ padding: "max(env(safe-area-inset-top), 20px) 16px 0" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
-          <button
-            type="button"
-            onClick={() => router.back()}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: 44,
-              height: 44,
-              borderRadius: 12,
-              color: "var(--foreground)",
-              backgroundColor: "var(--surface)",
-              border: "1px solid var(--border)",
-              cursor: "pointer",
-              WebkitTapHighlightColor: "transparent",
-            }}
-            aria-label="Back"
-          >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square" strokeLinejoin="miter" aria-hidden>
-              <path d="M21 12H3" />
-              <path d="M10 19L3 12l7-7" />
-            </svg>
-          </button>
+          <BackButton onClick={() => router.back()} label="Back" />
           <h1
             style={{
               margin: 0,

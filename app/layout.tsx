@@ -3,6 +3,7 @@ import { Lexend_Deca } from "next/font/google";
 import "./globals.css";
 import { DayDetailSheetProvider } from "@/contexts/day-detail-sheet";
 import { LogSheetProvider } from "@/contexts/log-sheet";
+import { ToastProvider } from "@/contexts/toast";
 import { BottomNav } from "@/components/BottomNav";
 import { DayDetailSheet } from "@/components/DayDetailSheet";
 import { LogSheet } from "@/components/LogSheet";
@@ -43,15 +44,17 @@ export default function RootLayout({
   return (
     <html lang="en" className={lexendDeca.variable}>
       <body className={`min-h-full antialiased ${lexendDeca.className}`}>
-        <LogSheetProvider>
-          <DayDetailSheetProvider>
-            {children}
-            <BottomNav />
-            <DayDetailSheet />
-            <LogSheet />
-            <DevPanel />
-          </DayDetailSheetProvider>
-        </LogSheetProvider>
+        <ToastProvider>
+          <LogSheetProvider>
+            <DayDetailSheetProvider>
+              {children}
+              <BottomNav />
+              <DayDetailSheet />
+              <LogSheet />
+              <DevPanel />
+            </DayDetailSheetProvider>
+          </LogSheetProvider>
+        </ToastProvider>
       </body>
     </html>
   );

@@ -199,3 +199,72 @@ CREATE POLICY "Users can overwrite own avatars"
   ON storage.objects FOR UPDATE
   TO authenticated
   USING (bucket_id = 'avatars');
+
+
+-- ============================================================
+-- Likes
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS likes (
+  user_id    UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  workout_id UUID NOT NULL REFERENCES workouts(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, workout_id)
+);
+
+CREATE INDEX IF NOT EXISTS likes_workout_idx ON likes(workout_id);
+CREATE INDEX IF NOT EXISTS likes_user_idx ON likes(user_id);
+
+ALTER TABLE likes ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "likes: anyone authenticated can read"
+  ON likes FOR SELECT
+  TO authenticated
+  USING (true);
+
+CREATE POLICY "likes: users can like"
+  ON likes FOR INSERT
+  TO authenticated
+  WITH CHECK (user_id = auth.uid());
+
+CREATE POLICY "likes: users can unlike"
+  ON likes FOR DELETE
+  TO authenticated
+  USING (user_id = auth.uid());
+
+
+-- ============================================================
+-- Fix: Allow all authenticated users to read any workout
+-- (needed for the Stadium / global feed)
+-- ============================================================
+
+DROP POLICY IF EXISTS "workouts: read own or followed" ON workouts;
+
+CREATE POLICY "workouts: all authenticated can read"
+  ON workouts FOR SELECT
+  TO authenticated
+  USING (true);
+
+
+-- ============================================================
+-- Fix: Scope avatar uploads to the user's own file
+-- ============================================================
+
+DROP POLICY IF EXISTS "Authenticated users can upload avatars" ON storage.objects;
+DROP POLICY IF EXISTS "Users can overwrite own avatars" ON storage.objects;
+
+CREATE POLICY "Users can upload own avatar"
+  ON storage.objects FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    bucket_id = 'avatars'
+    AND name LIKE (auth.uid()::text || '.%')
+  );
+
+CREATE POLICY "Users can update own avatar"
+  ON storage.objects FOR UPDATE
+  TO authenticated
+  USING (
+    bucket_id = 'avatars'
+    AND name LIKE (auth.uid()::text || '.%')
+  );
