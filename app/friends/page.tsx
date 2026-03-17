@@ -5,92 +5,94 @@ import { useRouter } from "next/navigation";
 import { useFriends } from "@/hooks/use-friends";
 import { useUser } from "@/hooks/use-user";
 import { AthletesCounter } from "@/components/AthletesCounter";
-import type { FriendData, User } from "@/types/user";
+import type { FriendData } from "@/types/user";
 
-// ─── virtual canvas ───────────────────────────────────────────────────────────
-const VWIDTH = 2000;
-const VHEIGHT = 1800;
-const CX = VWIDTH / 2;
-const CY = VHEIGHT / 2;
-const GOLDEN = 2.39996323;
-const ZOOM_MIN = 0.15;
-const ZOOM_MAX = 3;
-// tab bar nav pill height (6px padding * 2 + nav-item 42px = 54px)
+// ─── layout constants ──────────────────────────────────────────────────────────
 const NAV_HEIGHT = 54;
+const FONT = '"Lexend Deca", var(--font-sans), sans-serif';
+const GOLDEN = 2.39996323;
+
+// Friend card dimensions (design units = pixels at zoom 1)
+const CARD_W = 120;
+const CARD_H = 168;
+// "YOU" card is larger + centred
+const YOU_W = 150;
+const YOU_H = 210;
+
+// Spiral geometry — radius grows as √(i+1) so density stays roughly constant
+const SPIRAL_MIN_R = 230; // px from YOU centre to first friend card
+const SPIRAL_STEP = 192; // additional radius per √‐unit
+// Canvas padding beyond the outermost card
+const CANVAS_PAD = CARD_W + 60;
+// At the initial "fit-all" zoom, cards appear at least this many screen-px wide
+const MIN_CARD_SCREEN_PX = 54;
+
+const ZOOM_MIN = 0.08;
+const ZOOM_MAX = 3.5;
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-function nodePos(i: number) {
-  const r = 90 + Math.sqrt(i + 1) * 130;
+// ─── golden-ratio spiral position (centred at origin) ──────────────────────────
+function spiralPos(i: number): { x: number; y: number } {
+  const r = SPIRAL_MIN_R + Math.sqrt(i + 1) * SPIRAL_STEP;
   return {
-    x: CX + Math.cos(i * GOLDEN) * r,
-    y: CY + Math.sin(i * GOLDEN) * r * 0.82,
+    x: Math.cos(i * GOLDEN) * r,
+    y: Math.sin(i * GOLDEN) * r * 0.82, // slight vertical squeeze
   };
 }
 
-interface View {
-  px: number;
-  py: number;
-  z: number;
+// Deterministic organic tilt — each card gets a stable ±5.5° rotation
+function cardTilt(i: number): number {
+  return (((i * 97 + 13) % 110) - 55) / 10;
 }
 
-// ─── Avatar (sharp at any zoom) ────────────────────────────────────────────────
-function Avatar({
-  avatarUrl,
-  name,
-  size,
-}: {
-  avatarUrl?: string;
+// ─── types ────────────────────────────────────────────────────────────────────
+type PersonEntry = {
+  id: string;
   name: string;
-  size: number;
-}) {
+  handle: string;
+  avatarUrl?: string;
+  following: boolean;
+  isYou: boolean;
+};
+
+interface View {
+  px: number; // canvas origin x in screen-space
+  py: number; // canvas origin y in screen-space
+  z: number;  // zoom
+}
+
+// ─── AvatarFill ───────────────────────────────────────────────────────────────
+// Fills its parent 100%×100% — used inside the photo section of each card
+function AvatarFill({ avatarUrl, name, fw }: { avatarUrl?: string; name: string; fw: number }) {
   if (avatarUrl) {
     return (
-      <div
-        style={{
-          width: size,
-          height: size,
-          borderRadius: "50%",
-          overflow: "hidden",
-          background: "#111",
-          flexShrink: 0,
-        }}
-      >
-        <img
-          src={avatarUrl}
-          alt={name}
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            display: "block",
-          }}
-        />
-      </div>
+      <img
+        src={avatarUrl}
+        alt={name}
+        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+      />
     );
   }
-
   const initials = name
     .split(" ")
     .map((w) => w[0])
     .join("")
     .slice(0, 2)
     .toUpperCase();
-
   return (
     <div
       style={{
-        width: size,
-        height: size,
-        borderRadius: "50%",
-        background: "var(--surface)",
+        width: "100%",
+        height: "100%",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        fontSize: size * 0.28,
+        background: "rgba(255,255,255,0.04)",
+        fontSize: fw * 0.26,
         fontWeight: 800,
         color: "var(--accent)",
-        flexShrink: 0,
+        fontFamily: FONT,
       }}
     >
       {initials}
@@ -98,21 +100,26 @@ function Avatar({
   );
 }
 
-// ─── AvatarNode ───────────────────────────────────────────────────────────────
-function AvatarNode({
-  friend,
+// ─── PersonCard ───────────────────────────────────────────────────────────────
+// A polaroid-style card: photo on top, name strip on bottom, slight tilt.
+function PersonCard({
+  person,
   x,
   y,
+  tilt,
   zoom,
   onClick,
 }: {
-  friend: FriendData;
+  person: PersonEntry;
   x: number;
   y: number;
+  tilt: number;
   zoom: number;
   onClick: () => void;
 }) {
-  const showLabel = zoom >= 0.65;
+  const showLabel = zoom >= 0.46;
+  const photoH = Math.round(CARD_H * 0.63);
+  const labelH = CARD_H - photoH;
 
   return (
     <div
@@ -124,142 +131,177 @@ function AvatarNode({
         position: "absolute",
         left: x,
         top: y,
-        transform: "translate(-50%, -50%)",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 7,
+        width: CARD_W,
+        height: CARD_H,
+        transform: `translate(-50%, -50%) rotate(${tilt}deg)`,
+        borderRadius: 13,
+        background: "var(--surface)",
+        border: person.following
+          ? "1.5px solid var(--accent)"
+          : "1px solid rgba(255,255,255,0.09)",
+        overflow: "hidden",
         cursor: "pointer",
-        WebkitTapHighlightColor: "transparent",
         userSelect: "none",
+        WebkitTapHighlightColor: "transparent",
       }}
     >
-      {/* ring */}
+      {/* photo */}
       <div
         style={{
-          borderRadius: "50%",
-          padding: friend.following ? 2.5 : 1.5,
-          background: friend.following ? "var(--accent)" : "rgba(255,255,255,0.18)",
+          height: photoH,
+          overflow: "hidden",
+          background: "rgba(255,255,255,0.03)",
         }}
       >
-        <Avatar avatarUrl={friend.avatarUrl} name={friend.name} size={56} />
+        <AvatarFill avatarUrl={person.avatarUrl} name={person.name} fw={CARD_W} />
       </div>
 
-      {/* labels */}
+      {/* name strip */}
       <div
         style={{
-          opacity: showLabel ? 1 : 0,
-          transition: "opacity 0.22s ease",
+          height: labelH,
+          padding: "6px 9px",
           display: "flex",
           flexDirection: "column",
-          alignItems: "center",
-          pointerEvents: "none",
+          justifyContent: "center",
           gap: 2,
-          transform: "translateZ(0)",
-          WebkitFontSmoothing: "antialiased",
+          opacity: showLabel ? 1 : 0,
+          transition: "opacity 0.22s ease",
         }}
       >
         <span
           style={{
+            fontFamily: FONT,
             fontSize: 11,
             fontWeight: 700,
             color: "var(--foreground)",
-            letterSpacing: "-0.01em",
+            letterSpacing: "-0.02em",
             whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
           }}
         >
-          {friend.name}
+          {person.name}
         </span>
         <span
           style={{
+            fontFamily: FONT,
             fontSize: 9.5,
             fontWeight: 500,
             color: "var(--foreground-subtle)",
-            whiteSpace: "nowrap",
+            letterSpacing: "-0.01em",
           }}
         >
-          @{friend.handle}
+          @{person.handle}
         </span>
       </div>
     </div>
   );
 }
 
-// ─── YouNode ──────────────────────────────────────────────────────────────────
-function YouNode({ user, zoom }: { user: User; zoom: number }) {
-  const showLabel = zoom >= 0.5;
+// ─── YouCard ──────────────────────────────────────────────────────────────────
+// Larger, centered, accent border, "YOU" badge — non-interactive.
+function YouCard({
+  person,
+  x,
+  y,
+  zoom,
+}: {
+  person: PersonEntry;
+  x: number;
+  y: number;
+  zoom: number;
+}) {
+  const showLabel = zoom >= 0.36;
+  const photoH = Math.round(YOU_H * 0.63);
+  const labelH = YOU_H - photoH;
 
   return (
     <div
       style={{
         position: "absolute",
-        left: CX,
-        top: CY,
+        left: x,
+        top: y,
+        width: YOU_W,
+        height: YOU_H,
         transform: "translate(-50%, -50%)",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 7,
+        borderRadius: 17,
+        background: "var(--surface)",
+        border: "2px solid var(--accent)",
+        overflow: "hidden",
         userSelect: "none",
         pointerEvents: "none",
       }}
     >
-      <span
+      {/* YOU badge */}
+      <div
         style={{
-          fontSize: 9,
+          position: "absolute",
+          top: 8,
+          left: 8,
+          zIndex: 2,
+          background: "var(--accent)",
+          borderRadius: 100,
+          padding: "2px 8px",
+          fontFamily: FONT,
+          fontSize: 7.5,
           fontWeight: 800,
           letterSpacing: "0.12em",
-          color: "var(--accent)",
+          color: "#fff",
           textTransform: "uppercase",
-          opacity: showLabel ? 1 : 0,
-          transition: "opacity 0.22s ease",
         }}
       >
         YOU
-      </span>
-
-      <div
-        style={{
-          borderRadius: "50%",
-          padding: 3,
-          background: "var(--accent)",
-        }}
-      >
-        <Avatar avatarUrl={user.avatarUrl} name={user.name} size={68} />
       </div>
 
+      {/* photo */}
       <div
         style={{
-          opacity: showLabel ? 1 : 0,
-          transition: "opacity 0.22s ease",
+          height: photoH,
+          overflow: "hidden",
+          background: "rgba(255,255,255,0.03)",
+        }}
+      >
+        <AvatarFill avatarUrl={person.avatarUrl} name={person.name} fw={YOU_W} />
+      </div>
+
+      {/* name strip */}
+      <div
+        style={{
+          height: labelH,
+          padding: "7px 10px",
           display: "flex",
           flexDirection: "column",
-          alignItems: "center",
+          justifyContent: "center",
           gap: 2,
-          transform: "translateZ(0)",
-          WebkitFontSmoothing: "antialiased",
+          opacity: showLabel ? 1 : 0,
+          transition: "opacity 0.22s ease",
         }}
       >
         <span
           style={{
-            fontSize: 12,
+            fontFamily: FONT,
+            fontSize: 13,
             fontWeight: 700,
             color: "var(--foreground)",
-            letterSpacing: "-0.01em",
+            letterSpacing: "-0.02em",
             whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
           }}
         >
-          {user.name}
+          {person.name}
         </span>
         <span
           style={{
-            fontSize: 10,
+            fontFamily: FONT,
+            fontSize: 10.5,
             fontWeight: 500,
             color: "var(--foreground-subtle)",
-            whiteSpace: "nowrap",
+            letterSpacing: "-0.01em",
           }}
         >
-          @{user.handle}
+          @{person.handle}
         </span>
       </div>
     </div>
@@ -280,7 +322,6 @@ function SearchOverlay({
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // small delay so the overlay animation settles first
     const t = setTimeout(() => inputRef.current?.focus(), 60);
     return () => clearTimeout(t);
   }, []);
@@ -305,7 +346,6 @@ function SearchOverlay({
   return (
     <>
       <style>{`#taya-search-input::placeholder { color: rgba(0,0,0,0.28); }`}</style>
-
       <div
         style={{
           position: "fixed",
@@ -316,7 +356,6 @@ function SearchOverlay({
           flexDirection: "column",
         }}
       >
-        {/* ── top bar ─────────────────────────────────────────────────────── */}
         <div
           style={{
             padding: "max(env(safe-area-inset-top), 20px) 20px 0",
@@ -338,7 +377,7 @@ function SearchOverlay({
               border: "none",
               outline: "none",
               background: "transparent",
-              fontFamily: "var(--font-sans), sans-serif",
+              fontFamily: FONT,
               fontSize: "clamp(26px, 8vw, 34px)",
               fontWeight: 500,
               letterSpacing: "-0.07em",
@@ -351,8 +390,6 @@ function SearchOverlay({
             autoCapitalize="off"
             spellCheck={false}
           />
-
-          {/* X button — exact same style as the search button */}
           <button
             type="button"
             onClick={onClose}
@@ -363,8 +400,8 @@ function SearchOverlay({
               borderRadius: "100px",
               backdropFilter: "blur(24px) saturate(1.8)",
               WebkitBackdropFilter: "blur(24px) saturate(1.8)",
-              background: "rgba(255, 255, 255, 0.58)",
-              border: "1px solid rgba(255, 255, 255, 0.55)",
+              background: "rgba(255,255,255,0.58)",
+              border: "1px solid rgba(255,255,255,0.55)",
               boxShadow:
                 "0 0 0 0.5px rgba(0,0,0,0.09), inset 0 1px 0 rgba(255,255,255,0.85), 0 4px 20px rgba(0,0,0,0.07)",
               display: "flex",
@@ -391,7 +428,6 @@ function SearchOverlay({
           </button>
         </div>
 
-        {/* ── results list ────────────────────────────────────────────────── */}
         <div
           style={{
             flex: 1,
@@ -456,17 +492,18 @@ function SearchOverlay({
                       fontSize: 14,
                       fontWeight: 800,
                       color: "var(--accent)",
+                      fontFamily: FONT,
                     }}
                   >
                     {f.name.slice(0, 2).toUpperCase()}
                   </div>
                 )}
               </div>
-
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p
                   style={{
                     margin: 0,
+                    fontFamily: FONT,
                     fontSize: 15,
                     fontWeight: 600,
                     color: "#000",
@@ -481,6 +518,7 @@ function SearchOverlay({
                 <p
                   style={{
                     margin: "1px 0 0",
+                    fontFamily: FONT,
                     fontSize: 13,
                     color: "rgba(0,0,0,0.4)",
                     fontWeight: 400,
@@ -490,10 +528,10 @@ function SearchOverlay({
                   @{f.handle}
                 </p>
               </div>
-
               {f.following && (
                 <span
                   style={{
+                    fontFamily: FONT,
                     fontSize: 12,
                     fontWeight: 600,
                     color: "var(--accent)",
@@ -511,6 +549,7 @@ function SearchOverlay({
             <p
               style={{
                 margin: "32px 20px 0",
+                fontFamily: FONT,
                 fontSize: 15,
                 color: "rgba(0,0,0,0.3)",
                 fontWeight: 500,
@@ -531,57 +570,79 @@ export default function FriendsPage() {
   const router = useRouter();
   const { friends, hydrated } = useFriends();
   const { user } = useUser();
-
-  const [view, setView] = useState<View>({ px: 0, py: 0, z: 1 });
-  const viewRef = useRef<View>({ px: 0, py: 0, z: 1 });
   const [searchOpen, setSearchOpen] = useState(false);
 
+  const N = friends.length;
+
+  // ── Canvas geometry (recalculates only when friend count changes) ───────────
+  // All positions are in canvas-space coordinates.
+  // CX/CY is where YOU sits; friend i is at canvasPositions[i].
+  const { VWIDTH, VHEIGHT, CX, CY, canvasPositions } = useMemo(() => {
+    const rawPos = Array.from({ length: N }, (_, i) => spiralPos(i));
+    const maxR =
+      rawPos.length > 0
+        ? Math.max(...rawPos.map((p) => Math.hypot(p.x, p.y)))
+        : SPIRAL_MIN_R + SPIRAL_STEP;
+    const HALF = maxR + CANVAS_PAD;
+    const VW = HALF * 2;
+    const VH = HALF * 2;
+    return {
+      VWIDTH: VW,
+      VHEIGHT: VH,
+      CX: HALF,
+      CY: HALF,
+      canvasPositions: rawPos.map((p) => ({ x: HALF + p.x, y: HALF + p.y })),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [N]);
+
+  // ── View state ────────────────────────────────────────────────────────────
+  const [view, setView] = useState<View>({ px: 0, py: 0, z: 1 });
+  const viewRef = useRef<View>({ px: 0, py: 0, z: 1 });
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // pointer tracking
-  const ptrs = useRef(new Map<number, { x: number; y: number }>());
-  const prevPinchDist = useRef(0);
-
-  // pan inertia
-  const rafPanRef = useRef<number | null>(null);
-  const velRef = useRef({ x: 0, y: 0 });
-  const ptrHistory = useRef<Array<{ x: number; y: number; t: number }>>([]);
-
-  // pinch zoom inertia
-  const rafZoomRef = useRef<number | null>(null);
-  const zoomVelRef = useRef(1); // multiplicative scale per frame (1 = stopped)
-  const zoomMidRef = useRef({ x: 0, y: 0 });
-  const pinchHistory = useRef<Array<{ dist: number; t: number }>>([]);
-
-  // wheel zoom — smooth ease-to-target
-  const rafWheelRef = useRef<number | null>(null);
-  const wheelTargetRef = useRef<number | null>(null);
-  const wheelCursorRef = useRef({ x: 0, y: 0 });
-
-  // ── initial centering ──────────────────────────────────────────────────────
+  // ── Set initial view: centered on YOU, zoom fits content with min card size ─
   useEffect(() => {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const z = clamp(
-      Math.min(vw / VWIDTH, vh / VHEIGHT) * 0.92,
-      ZOOM_MIN,
-      ZOOM_MAX
+    // Fit-all zoom
+    const fitZ = Math.min(
+      (vw * 0.88) / VWIDTH,
+      ((vh - 160) * 0.88) / VHEIGHT
     );
+    // Floor: cards always readable
+    const minZ = MIN_CARD_SCREEN_PX / CARD_W;
+    const z = clamp(Math.max(fitZ, minZ), ZOOM_MIN, ZOOM_MAX);
     const v: View = {
-      px: (vw - VWIDTH * z) / 2,
-      py: (vh - VHEIGHT * z) / 2,
+      // Center YOU on screen (YOU is at canvas position CX, CY)
+      px: vw / 2 - CX * z,
+      py: vh / 2 - CY * z,
       z,
     };
     viewRef.current = v;
     setView(v);
-  }, []);
+  }, [VWIDTH, VHEIGHT, CX, CY]);
 
   const commit = useCallback((v: View) => {
     viewRef.current = v;
     setView(v);
   }, []);
 
-  // ── inertia helpers ────────────────────────────────────────────────────────
+  // ── Inertia refs ──────────────────────────────────────────────────────────
+  const ptrs = useRef(new Map<number, { x: number; y: number }>());
+  const prevPinchDist = useRef(0);
+  const velRef = useRef({ x: 0, y: 0 });
+  const ptrHistory = useRef<Array<{ x: number; y: number; t: number }>>([]);
+  const pinchHistory = useRef<Array<{ dist: number; t: number }>>([]);
+  const zoomVelRef = useRef(1);
+  const zoomMidRef = useRef({ x: 0, y: 0 });
+  const rafPanRef = useRef<number | null>(null);
+  const rafZoomRef = useRef<number | null>(null);
+  const rafWheelRef = useRef<number | null>(null);
+  const wheelTargetRef = useRef<number | null>(null);
+  const wheelCursorRef = useRef({ x: 0, y: 0 });
+  const didDragRef = useRef(false);
+
   const stopInertia = useCallback(() => {
     if (rafPanRef.current !== null) {
       cancelAnimationFrame(rafPanRef.current);
@@ -600,42 +661,35 @@ export default function FriendsPage() {
     wheelTargetRef.current = null;
   }, []);
 
+  // Pan inertia
   const startInertia = useCallback(() => {
     const FRICTION = 0.95;
-    const MIN_VEL = 0.25;
-
     const step = () => {
       velRef.current.x *= FRICTION;
       velRef.current.y *= FRICTION;
-
       if (
-        Math.abs(velRef.current.x) < MIN_VEL &&
-        Math.abs(velRef.current.y) < MIN_VEL
+        Math.abs(velRef.current.x) < 0.25 &&
+        Math.abs(velRef.current.y) < 0.25
       ) {
         rafPanRef.current = null;
         return;
       }
-
       const { px, py, z } = viewRef.current;
       commit({ px: px + velRef.current.x, py: py + velRef.current.y, z });
       rafPanRef.current = requestAnimationFrame(step);
     };
-
     rafPanRef.current = requestAnimationFrame(step);
   }, [commit]);
 
+  // Pinch-zoom inertia
   const startZoomInertia = useCallback(() => {
-    const FRICTION = 0.95; // same glide as pan
-    const MIN_DELTA = 0.0001;
-
+    const FRICTION = 0.95;
     const step = () => {
       zoomVelRef.current = 1 + (zoomVelRef.current - 1) * FRICTION;
-
-      if (Math.abs(zoomVelRef.current - 1) < MIN_DELTA) {
+      if (Math.abs(zoomVelRef.current - 1) < 0.0001) {
         rafZoomRef.current = null;
         return;
       }
-
       const { px, py, z } = viewRef.current;
       const newZ = clamp(z * zoomVelRef.current, ZOOM_MIN, ZOOM_MAX);
       const ratio = newZ / z;
@@ -647,62 +701,60 @@ export default function FriendsPage() {
       });
       rafZoomRef.current = requestAnimationFrame(step);
     };
-
     rafZoomRef.current = requestAnimationFrame(step);
   }, [commit]);
 
-  // Smooth wheel zoom — lerp actual zoom toward an accumulated target each frame.
-  // New wheel events just update the target; the loop is already running.
+  // Smooth wheel-zoom ease
   const startWheelEase = useCallback(() => {
     if (rafWheelRef.current !== null) return;
-    const EASE = 0.13; // fraction of remaining distance per frame → glidy feel
-    const MIN_DIFF = 0.0006;
-
+    const EASE = 0.13;
     const step = () => {
       const target = wheelTargetRef.current;
       if (target === null) {
         rafWheelRef.current = null;
         return;
       }
-
       const { z, px, py } = viewRef.current;
       const { x: cx, y: cy } = wheelCursorRef.current;
       const diff = target - z;
-
-      if (Math.abs(diff) < MIN_DIFF) {
-        // snap to exact target, anchored to cursor
+      if (Math.abs(diff) < 0.0006) {
         const r = target / z;
         commit({ z: target, px: cx - (cx - px) * r, py: cy - (cy - py) * r });
         wheelTargetRef.current = null;
         rafWheelRef.current = null;
         return;
       }
-
       const newZ = z + diff * EASE;
       const r = newZ / z;
       commit({ z: newZ, px: cx - (cx - px) * r, py: cy - (cy - py) * r });
       rafWheelRef.current = requestAnimationFrame(step);
     };
-
     rafWheelRef.current = requestAnimationFrame(step);
   }, [commit]);
 
-  // ── wheel zoom — non-passive, smooth ease-to-target ───────────────────────
+  // Wheel events — non-passive so we can preventDefault
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      // Kill pan + pinch inertia, but leave the wheel ease loop running
-      if (rafPanRef.current) { cancelAnimationFrame(rafPanRef.current); rafPanRef.current = null; velRef.current = { x: 0, y: 0 }; }
-      if (rafZoomRef.current) { cancelAnimationFrame(rafZoomRef.current); rafZoomRef.current = null; zoomVelRef.current = 1; }
-
-      const { z } = viewRef.current;
+      if (rafPanRef.current) {
+        cancelAnimationFrame(rafPanRef.current);
+        rafPanRef.current = null;
+        velRef.current = { x: 0, y: 0 };
+      }
+      if (rafZoomRef.current) {
+        cancelAnimationFrame(rafZoomRef.current);
+        rafZoomRef.current = null;
+        zoomVelRef.current = 1;
+      }
       const factor = e.ctrlKey ? 0.012 : 0.0008;
-      const scaleFactor = 1 + (-e.deltaY * factor);
-      // Stack onto the current target so rapid events accumulate smoothly
-      const prev = wheelTargetRef.current ?? z;
-      wheelTargetRef.current = clamp(prev * scaleFactor, ZOOM_MIN, ZOOM_MAX);
+      const prev = wheelTargetRef.current ?? viewRef.current.z;
+      wheelTargetRef.current = clamp(
+        prev * (1 + -e.deltaY * factor),
+        ZOOM_MIN,
+        ZOOM_MAX
+      );
       wheelCursorRef.current = { x: e.clientX, y: e.clientY };
       startWheelEase();
     };
@@ -710,12 +762,13 @@ export default function FriendsPage() {
     return () => el.removeEventListener("wheel", onWheel);
   }, [startWheelEase]);
 
-  // ── pointer events ─────────────────────────────────────────────────────────
+  // ── Pointer handlers ──────────────────────────────────────────────────────
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
       stopInertia();
       ptrHistory.current = [];
       pinchHistory.current = [];
+      didDragRef.current = false;
       ptrs.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
       if (ptrs.current.size === 2) {
@@ -731,37 +784,31 @@ export default function FriendsPage() {
       const prev = ptrs.current.get(e.pointerId);
       if (!prev) return;
       ptrs.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
       const { px, py, z } = viewRef.current;
 
       if (ptrs.current.size === 1) {
         const dx = e.clientX - prev.x;
         const dy = e.clientY - prev.y;
+        if (Math.abs(dx) + Math.abs(dy) > 4) didDragRef.current = true;
 
         const now = performance.now();
         ptrHistory.current.push({ x: e.clientX, y: e.clientY, t: now });
         ptrHistory.current = ptrHistory.current.filter((p) => now - p.t < 80);
-
         commit({ px: px + dx, py: py + dy, z });
       } else if (ptrs.current.size === 2) {
         const [a, b] = Array.from(ptrs.current.values());
         const newDist = Math.hypot(b.x - a.x, b.y - a.y);
         const midX = (a.x + b.x) / 2;
         const midY = (a.y + b.y) / 2;
-        const scale =
-          prevPinchDist.current > 0 ? newDist / prevPinchDist.current : 1;
+        const scale = prevPinchDist.current > 0 ? newDist / prevPinchDist.current : 1;
         const newZ = clamp(z * scale, ZOOM_MIN, ZOOM_MAX);
         const ratio = newZ / z;
         prevPinchDist.current = newDist;
+        zoomMidRef.current = { x: midX, y: midY };
 
-        // record pinch distance history for zoom inertia
         const now = performance.now();
         pinchHistory.current.push({ dist: newDist, t: now });
-        pinchHistory.current = pinchHistory.current.filter(
-          (p) => now - p.t < 80
-        );
-        // keep the midpoint fresh — we'll use the last one on release
-        zoomMidRef.current = { x: midX, y: midY };
+        pinchHistory.current = pinchHistory.current.filter((p) => now - p.t < 80);
 
         commit({
           px: midX - (midX - px) * ratio,
@@ -779,21 +826,18 @@ export default function FriendsPage() {
       ptrs.current.delete(e.pointerId);
       if (ptrs.current.size < 2) prevPinchDist.current = 0;
 
+      // Pinch zoom inertia on finger lift
       if (prevSize === 2 && ptrs.current.size === 1) {
-        // one pinch finger lifted — launch zoom inertia, keep remaining finger fresh
         const h = pinchHistory.current;
         if (h.length >= 2) {
           const last = h[h.length - 1];
-          const cutoff = last.t - 40;
-          const recent = h.filter((p) => p.t >= cutoff);
-          const base = recent.length >= 2 ? recent[0] : h[h.length - 2];
+          const base =
+            h.filter((p) => p.t >= last.t - 40)[0] ?? h[h.length - 2];
           const dt = last.t - base.t;
           if (dt > 0 && base.dist > 0) {
-            // log-space velocity → multiplicative scale per frame
-            const logVel = (Math.log(last.dist) - Math.log(base.dist)) / dt * (1000 / 60);
-            const frameScale = Math.exp(logVel);
-            // only launch if the gesture had meaningful speed; cap so it can't fly away
-            const clamped = clamp(frameScale, 0.88, 1.12);
+            const logVel =
+              ((Math.log(last.dist) - Math.log(base.dist)) / dt) * (1000 / 60);
+            const clamped = clamp(Math.exp(logVel), 0.88, 1.12);
             if (Math.abs(clamped - 1) > 0.002) {
               zoomVelRef.current = clamped;
               startZoomInertia();
@@ -801,18 +845,17 @@ export default function FriendsPage() {
           }
         }
         pinchHistory.current = [];
-        // let the remaining finger start a fresh pan arc
         ptrHistory.current = [];
       }
 
-      // launch pan inertia on last-finger-up
+      // Pan inertia on last finger up
       if (ptrs.current.size === 0) {
         const history = ptrHistory.current;
         if (history.length >= 2) {
           const last = history[history.length - 1];
-          const cutoff = last.t - 30;
-          const recent = history.filter((p) => p.t >= cutoff);
-          const base = recent.length >= 2 ? recent[0] : history[history.length - 2];
+          const base =
+            history.filter((p) => p.t >= last.t - 30)[0] ??
+            history[history.length - 2];
           const dt = last.t - base.t;
           if (dt > 0) {
             const FRAME_MS = 1000 / 60;
@@ -838,8 +881,6 @@ export default function FriendsPage() {
     [router]
   );
 
-  const positions = useMemo(() => friends.map((_, i) => nodePos(i)), [friends]);
-
   const { px, py, z } = view;
 
   return (
@@ -851,7 +892,20 @@ export default function FriendsPage() {
         background: "var(--background)",
       }}
     >
-      {/* ── canvas ──────────────────────────────────────────────────────────── */}
+      {/* ── dot grid ──────────────────────────────────────────────────────── */}
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          inset: 0,
+          backgroundImage:
+            "radial-gradient(circle, rgba(255,255,255,0.028) 1px, transparent 1px)",
+          backgroundSize: "52px 52px",
+          pointerEvents: "none",
+        }}
+      />
+
+      {/* ── infinite canvas ────────────────────────────────────────────────── */}
       <div
         ref={containerRef}
         onPointerDown={onPointerDown}
@@ -874,35 +928,84 @@ export default function FriendsPage() {
             willChange: "transform",
           }}
         >
-          {/* dot grid */}
-          <div
+          {/* Connection lines: YOU → followed athletes */}
+          <svg
             aria-hidden
             style={{
               position: "absolute",
-              inset: 0,
-              backgroundImage:
-                "radial-gradient(circle, rgba(255,255,255,0.028) 1px, transparent 1px)",
-              backgroundSize: "52px 52px",
+              left: 0,
+              top: 0,
+              width: VWIDTH,
+              height: VHEIGHT,
               pointerEvents: "none",
+              overflow: "visible",
             }}
-          />
+          >
+            {friends.map((f, i) =>
+              f.following ? (
+                <line
+                  key={f.id}
+                  x1={CX}
+                  y1={CY}
+                  x2={canvasPositions[i].x}
+                  y2={canvasPositions[i].y}
+                  stroke="var(--accent)"
+                  strokeWidth={1.5}
+                  strokeOpacity={0.18}
+                  strokeDasharray="4 8"
+                />
+              ) : null
+            )}
+          </svg>
 
+          {/* Friend cards */}
           {friends.map((f, i) => (
-            <AvatarNode
+            <PersonCard
               key={f.id}
-              friend={f}
-              x={positions[i].x}
-              y={positions[i].y}
+              person={{ ...f, isYou: false }}
+              x={canvasPositions[i].x}
+              y={canvasPositions[i].y}
+              tilt={cardTilt(i)}
               zoom={z}
-              onClick={() => handleSelect(f.id)}
+              onClick={() => {
+                if (didDragRef.current) return;
+                handleSelect(f.id);
+              }}
             />
           ))}
 
-          <YouNode user={user} zoom={z} />
+          {/* YOU card — centred at CX, CY */}
+          <YouCard
+            person={{
+              id: user.id,
+              name: user.name,
+              handle: user.handle,
+              avatarUrl: user.avatarUrl,
+              following: false,
+              isYou: true,
+            }}
+            x={CX}
+            y={CY}
+            zoom={z}
+          />
         </div>
       </div>
 
-      {/* ── loading ──────────────────────────────────────────────────────────── */}
+      {/* ── edge vignette — cards fade toward screen edges for spatial depth ── */}
+      <div
+        aria-hidden
+        style={{
+          position: "fixed",
+          inset: 0,
+          background:
+            "radial-gradient(ellipse 85% 85% at 50% 50%, transparent 38%, var(--background) 100%)",
+          opacity: 0.62,
+          pointerEvents: "none",
+          zIndex: 8,
+        }}
+      />
+
+      {/* ── loading skeleton ─────────────────────────────────────────────── */}
       {!hydrated && (
         <div
           style={{
@@ -922,7 +1025,7 @@ export default function FriendsPage() {
         </div>
       )}
 
-      {/* ── title ────────────────────────────────────────────────────────────── */}
+      {/* ── title / counter ──────────────────────────────────────────────── */}
       <div
         aria-hidden
         style={{
@@ -939,11 +1042,11 @@ export default function FriendsPage() {
         }}
       >
         <div style={{ pointerEvents: "auto" }}>
-          <AthletesCounter count={friends.length + 1} />
+          <AthletesCounter count={N + 1} />
         </div>
       </div>
 
-      {/* ── search button — matches liquid-glass-nav ────────────────────────── */}
+      {/* ── search button ────────────────────────────────────────────────── */}
       <button
         type="button"
         onClick={() => setSearchOpen(true)}
@@ -957,8 +1060,8 @@ export default function FriendsPage() {
           borderRadius: "100px",
           backdropFilter: "blur(24px) saturate(1.8)",
           WebkitBackdropFilter: "blur(24px) saturate(1.8)",
-          background: "rgba(255, 255, 255, 0.58)",
-          border: "1px solid rgba(255, 255, 255, 0.55)",
+          background: "rgba(255,255,255,0.58)",
+          border: "1px solid rgba(255,255,255,0.55)",
           boxShadow:
             "0 0 0 0.5px rgba(0,0,0,0.09), inset 0 1px 0 rgba(255,255,255,0.85), 0 4px 20px rgba(0,0,0,0.07)",
           display: "flex",
@@ -984,7 +1087,7 @@ export default function FriendsPage() {
         </svg>
       </button>
 
-      {/* ── search overlay ────────────────────────────────────────────────────── */}
+      {/* ── search overlay ───────────────────────────────────────────────── */}
       {searchOpen && (
         <SearchOverlay
           friends={friends}
