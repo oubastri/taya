@@ -12,7 +12,6 @@ import { FeedPost } from "@/components/FeedPost";
 import { ProfileStatNumber } from "@/components/ProfileStatNumber";
 import type { FeedItem } from "@/hooks/use-friends";
 import { UserAvatar } from "@/components/UserAvatar";
-import { BackButton } from "@/components/BackButton";
 import { IconButton } from "@/components/IconButton";
 import { shareUrl } from "@/lib/share";
 import { isRealMode } from "@/lib/data-adapter";
@@ -168,7 +167,6 @@ export default function ProfilePage() {
             marginBottom: 24,
           }}
         >
-          <BackButton href="/" label="Back to feed" />
           <div style={{ display: "flex", gap: 8 }}>
             <IconButton href="/settings" label="Settings">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>

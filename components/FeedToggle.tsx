@@ -1,8 +1,11 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
-
 export type FeedMode = "team" | "stadium";
+
+const LABELS: Record<FeedMode, string> = {
+  team: "FRIENDS",
+  stadium: "WORLD",
+};
 
 interface FeedToggleProps {
   value: FeedMode;
@@ -10,131 +13,35 @@ interface FeedToggleProps {
 }
 
 export function FeedToggle({ value, onChange }: FeedToggleProps) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  const isTeam = value === "team";
-
-  const handleSelect = useCallback(
-    (mode: FeedMode) => {
-      if (mode !== value) onChange(mode);
-    },
-    [value, onChange]
-  );
+  const toggle = () => onChange(value === "team" ? "stadium" : "team");
 
   return (
-    <div
-      role="tablist"
-      aria-label="Feed filter"
-      className="feed-toggle-track"
+    <span
+      role="button"
+      tabIndex={0}
+      aria-label={`Viewing ${LABELS[value]} — tap to switch`}
+      onClick={toggle}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") toggle();
+      }}
       style={{
-        position: "relative",
         display: "inline-flex",
-        alignItems: "stretch",
-        borderRadius: 12,
-        padding: 4,
-        minHeight: 38,
+        alignItems: "center",
+        padding: "4px 8px",
+        borderRadius: 4,
+        border: "1px dashed #919191",
         cursor: "pointer",
         WebkitTapHighlightColor: "transparent",
         userSelect: "none",
-        border: "1px solid rgba(0,0,0,0.08)",
-        background: "rgba(0,0,0,0.03)",
-        isolation: "isolate",
+        fontFamily: '"B612 Mono", ui-monospace, monospace',
+        fontSize: 12,
+        fontWeight: 400,
+        letterSpacing: "-0.48px",
+        lineHeight: "normal",
+        color: "#000",
       }}
     >
-      {/* Sliding pill */}
-      <div
-        className="feed-toggle-pill"
-        style={{
-          position: "absolute",
-          top: 4,
-          bottom: 4,
-          left: 4,
-          width: "calc(50% - 4px)",
-          borderRadius: 8,
-          transform: isTeam ? "translateX(0)" : "translateX(100%)",
-          transition: mounted
-            ? "transform 0.45s cubic-bezier(0.32, 0.72, 0, 1)"
-            : "none",
-          zIndex: 1,
-          pointerEvents: "none",
-          background: "rgba(255,255,255,0.85)",
-          backdropFilter: "blur(20px) saturate(1.4)",
-          WebkitBackdropFilter: "blur(20px) saturate(1.4)",
-          border: "0.5px solid rgba(255,255,255,0.7)",
-          boxShadow:
-            "0 0.5px 1px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.06)",
-        }}
-      />
-
-      {/* Team tab */}
-      <button
-        type="button"
-        role="tab"
-        aria-selected={isTeam}
-        onClick={() => handleSelect("team")}
-        className="active:scale-[0.97]"
-        style={{
-          position: "relative",
-          zIndex: 2,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "6px 24px",
-          borderRadius: 8,
-          border: "none",
-          backgroundColor: "transparent",
-          color: isTeam ? "var(--foreground)" : "var(--foreground-muted)",
-          cursor: "pointer",
-          fontFamily: "inherit",
-          fontSize: 14,
-          fontWeight: isTeam ? 600 : 400,
-          flex: 1,
-          minWidth: 72,
-          WebkitTapHighlightColor: "transparent",
-          transition:
-            "color 0.3s cubic-bezier(0.32, 0.72, 0, 1), font-weight 0.3s cubic-bezier(0.32, 0.72, 0, 1)",
-          letterSpacing: "-0.01em",
-        }}
-      >
-        Team
-      </button>
-
-      {/* Stadium tab */}
-      <button
-        type="button"
-        role="tab"
-        aria-selected={!isTeam}
-        onClick={() => handleSelect("stadium")}
-        className="active:scale-[0.97]"
-        style={{
-          position: "relative",
-          zIndex: 2,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "6px 24px",
-          borderRadius: 8,
-          border: "none",
-          backgroundColor: "transparent",
-          color: !isTeam ? "var(--foreground)" : "var(--foreground-muted)",
-          cursor: "pointer",
-          fontFamily: "inherit",
-          fontSize: 14,
-          fontWeight: !isTeam ? 600 : 400,
-          flex: 1,
-          minWidth: 72,
-          WebkitTapHighlightColor: "transparent",
-          transition:
-            "color 0.3s cubic-bezier(0.32, 0.72, 0, 1), font-weight 0.3s cubic-bezier(0.32, 0.72, 0, 1)",
-          letterSpacing: "-0.01em",
-        }}
-      >
-        Stadium
-      </button>
-    </div>
+      {LABELS[value]}
+    </span>
   );
 }

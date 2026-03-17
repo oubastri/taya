@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 import { useFriends } from "@/hooks/use-friends";
 import type { FriendData } from "@/types/user";
-import { BackButton } from "@/components/BackButton";
 import { shareUrl } from "@/lib/share";
 
 function Avatar({ name }: { name: string }) {
@@ -205,10 +204,8 @@ export default function FriendsPage() {
           boxSizing: "border-box",
         }}
       >
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <BackButton href="/" label="Back to feed" />
+      <div style={{ marginBottom: 20 }}>
         <span style={{ fontSize: 18, fontWeight: 700, color: "var(--foreground)" }}>Friends</span>
-        <div style={{ width: 44 }} />
       </div>
       <p
         style={{

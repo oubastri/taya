@@ -14,6 +14,33 @@ import { UserAvatar } from "@/components/UserAvatar";
 import type { Workout } from "@/types/workout";
 import { shareUrl } from "@/lib/share";
 
+function BackArrow() {
+  return (
+    <Link
+      href="/"
+      aria-label="Back to feed"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 44,
+        height: 44,
+        borderRadius: 12,
+        color: "var(--foreground)",
+        textDecoration: "none",
+        WebkitTapHighlightColor: "transparent",
+        backgroundColor: "var(--surface)",
+        border: "1px solid var(--border)",
+      }}
+    >
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square" strokeLinejoin="miter" aria-hidden>
+        <path d="M21 12H3" />
+        <path d="M10 19L3 12l7-7" />
+      </svg>
+    </Link>
+  );
+}
+
 function getStats(workouts: Workout[]) {
   const now = new Date();
   const year = now.getFullYear();
@@ -156,39 +183,8 @@ export default function UserProfilePage() {
           padding: "max(env(safe-area-inset-top), 20px) 20px",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", marginBottom: 24 }}>
-          <Link
-            href="/"
-            aria-label="Back to feed"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: 44,
-              height: 44,
-              borderRadius: 12,
-              color: "var(--foreground)",
-              textDecoration: "none",
-              WebkitTapHighlightColor: "transparent",
-              backgroundColor: "var(--surface)",
-              border: "1px solid var(--border)",
-            }}
-          >
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="square"
-              strokeLinejoin="miter"
-              aria-hidden
-            >
-              <path d="M21 12H3" />
-              <path d="M10 19L3 12l7-7" />
-            </svg>
-          </Link>
+        <div style={{ marginBottom: 24 }}>
+          <BackArrow />
         </div>
         <p style={{ fontSize: 18, color: "var(--foreground-muted)", letterSpacing: "-0.02em" }}>
           User not found.
@@ -234,39 +230,7 @@ export default function UserProfilePage() {
           }}
         >
           <div style={{ flex: 1, display: "flex", justifyContent: "flex-start", minWidth: 0 }}>
-            <Link
-              href="/"
-              aria-label="Back to feed"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 44,
-                height: 44,
-                borderRadius: 12,
-                color: "var(--foreground)",
-                textDecoration: "none",
-                WebkitTapHighlightColor: "transparent",
-                backgroundColor: "var(--surface)",
-                border: "1px solid var(--border)",
-              }}
-              className="active:opacity-80"
-            >
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="square"
-                strokeLinejoin="miter"
-                aria-hidden
-              >
-                <path d="M21 12H3" />
-                <path d="M10 19L3 12l7-7" />
-              </svg>
-            </Link>
+            <BackArrow />
           </div>
           <p
             style={{

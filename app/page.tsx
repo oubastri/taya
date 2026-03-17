@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState, useCallback } from "react";
 import { useUser } from "@/hooks/use-user";
 import { useWorkouts } from "@/hooks/use-workouts";
@@ -8,7 +7,6 @@ import { useFriends } from "@/hooks/use-friends";
 import { useLikes } from "@/hooks/use-likes";
 import { FeedPost } from "@/components/FeedPost";
 import { MovesCounter } from "@/components/MovesCounter";
-import { UserAvatar } from "@/components/UserAvatar";
 import { FeedToggle, type FeedMode } from "@/components/FeedToggle";
 
 function FeedSkeleton() {
@@ -66,6 +64,41 @@ export default function FeedPage() {
   );
   const { getLike, toggleLike } = useLikes(workoutIds);
 
+  const today = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }, []);
+
+  const yesterday = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }, []);
+
+  function dateLabel(dateStr: string): string {
+    if (dateStr === today) return "Today";
+    if (dateStr === yesterday) return "Yesterday";
+    const [y, m, day] = dateStr.split("-").map(Number);
+    return new Date(y, m - 1, day).toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+    });
+  }
+
+  const groupedFeedItems = useMemo(() => {
+    const groups: { date: string; items: typeof sortedFeedItems }[] = [];
+    for (const item of sortedFeedItems) {
+      const last = groups[groups.length - 1];
+      if (last && last.date === item.date) {
+        last.items.push(item);
+      } else {
+        groups.push({ date: item.date, items: [item] });
+      }
+    }
+    return groups;
+  }, [sortedFeedItems]);
+
   const handleFeedModeChange = useCallback((mode: FeedMode) => {
     setFeedMode(mode);
   }, []);
@@ -77,81 +110,29 @@ export default function FeedPage() {
       style={{
         minHeight: "100vh",
         background: "var(--background)",
-        paddingBottom: 96,
+        paddingBottom: 112,
       }}
     >
       {/* Header — full bleed */}
       <header
         style={{
-          padding: "max(env(safe-area-inset-top), 20px) 20px 24px",
-          display: "flex",
-          flexDirection: "column",
-          gap: 16,
+          padding: "max(env(safe-area-inset-top), 20px) 20px 56px",
         }}
       >
-        <div
+        <h1
           style={{
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: 12,
+            margin: 0,
+            color: "#000",
+            fontFamily: '"Lexend Deca", var(--font-sans), sans-serif',
+            fontSize: "clamp(26px, 8vw, 36px)",
+            fontWeight: 500,
+            lineHeight: 1.1,
+            letterSpacing: "-0.08em",
+            whiteSpace: "nowrap",
           }}
         >
-          <h1
-            style={{
-              margin: 0,
-              color: "#000",
-              fontFamily: '"Lexend Deca", var(--font-sans), sans-serif',
-              fontSize: "50.848px",
-              fontStyle: "normal",
-              fontWeight: 500,
-              lineHeight: "44px",
-              letterSpacing: "-5.085px",
-            }}
-          >
-            To All You
-            <br />
-            <span style={{ color: "#01EF54" }}>Athletes</span>
-          </h1>
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 10, flexShrink: 0 }}>
-            <FeedToggle value={feedMode} onChange={handleFeedModeChange} />
-            <Link
-              href="/friends"
-              style={{
-                padding: "10px 16px",
-                borderRadius: 12,
-                backgroundColor: "var(--surface)",
-                border: "1px solid var(--border)",
-                fontSize: 14,
-                fontWeight: 600,
-                color: "var(--foreground)",
-                textDecoration: "none",
-              }}
-              className="active:opacity-80"
-            >
-              Friends
-            </Link>
-            <Link
-              href="/profile"
-              style={{
-                width: 48,
-                height: 48,
-                borderRadius: 16,
-                overflow: "hidden",
-                display: "block",
-                textDecoration: "none",
-                color: "inherit",
-              }}
-              aria-label="View your profile"
-            >
-              <UserAvatar
-                avatarUrl={user.avatarUrl}
-                name={user.name}
-                fillParent
-              />
-            </Link>
-          </div>
-        </div>
+          To All You <span style={{ color: "#01EF54" }}>Athletes</span>
+        </h1>
       </header>
 
       {/* Content — constrained column */}
@@ -163,12 +144,23 @@ export default function FeedPage() {
           boxSizing: "border-box",
         }}
       >
-        {/* Live counter: total moves ever logged */}
-        {hydrated && (
-          <div style={{ padding: "0 16px" }}>
+        {/* Counter + feed toggle row */}
+        <div
+          style={{
+            padding: "0 16px 28px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+          }}
+        >
+          {hydrated ? (
             <MovesCounter count={feedItems.length} />
-          </div>
-        )}
+          ) : (
+            <div className="skeleton" style={{ width: 200, height: 28, borderRadius: 4 }} />
+          )}
+          <FeedToggle value={feedMode} onChange={handleFeedModeChange} />
+        </div>
 
         {/* Loading skeleton */}
         {!hydrated && <FeedSkeleton />}
@@ -206,22 +198,47 @@ export default function FeedPage() {
 
         {/* Feed */}
         {hydrated && (
-          <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 14 }}>
-            {sortedFeedItems.map((item, i) => {
-              const like = getLike(item.id);
+          <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 0 }}>
+            {groupedFeedItems.map((group, gi) => {
+              let cardIndex = groupedFeedItems
+                .slice(0, gi)
+                .reduce((sum, g) => sum + g.items.length, 0);
               return (
-                <div
-                  key={`${item.userId}-${item.id}-${feedMode}`}
-                  style={{ animationDelay: `${i * 40}ms` }}
-                  className="animate-fade-in-up"
-                >
-                  <FeedPost
-                    workout={item}
-                    currentUserId={user.id}
-                    liked={like.likedByMe}
-                    likeCount={like.count}
-                    onToggleLike={() => toggleLike(item.id)}
-                  />
+                <div key={group.date}>
+                  <p
+                    style={{
+                      margin: 0,
+                      padding: gi === 0 ? "0 0 10px" : "24px 0 10px",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      color: "#919191",
+                    }}
+                  >
+                    {dateLabel(group.date)}
+                  </p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                    {group.items.map((item) => {
+                      const like = getLike(item.id);
+                      const i = cardIndex++;
+                      return (
+                        <div
+                          key={`${item.userId}-${item.id}-${feedMode}`}
+                          style={{ animationDelay: `${i * 40}ms` }}
+                          className="animate-fade-in-up"
+                        >
+                          <FeedPost
+                            workout={item}
+                            currentUserId={user.id}
+                            liked={like.likedByMe}
+                            likeCount={like.count}
+                            onToggleLike={() => toggleLike(item.id)}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               );
             })}
