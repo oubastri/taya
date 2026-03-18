@@ -203,8 +203,8 @@ function drawUserBowl(
   ctx.restore();
 }
 
-// ─── SearchOverlay ────────────────────────────────────────────────────────────
-function SearchOverlay({
+// ─── SearchSheet ──────────────────────────────────────────────────────────────
+function SearchSheet({
   friends,
   onClose,
   onSelect,
@@ -214,49 +214,203 @@ function SearchOverlay({
   onSelect: (id: string) => void;
 }) {
   const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const scrimRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef({ active: false, startY: 0, dy: 0 });
+  const SPRING = "0.38s cubic-bezier(0.32, 0.72, 0, 1)";
 
+  // Trigger enter animation on next paint
   useEffect(() => {
-    const t = setTimeout(() => inputRef.current?.focus(), 60);
+    const raf = requestAnimationFrame(() =>
+      requestAnimationFrame(() => setOpen(true)),
+    );
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  // Focus input after sheet settles
+  useEffect(() => {
+    const t = setTimeout(() => inputRef.current?.focus(), 420);
     return () => clearTimeout(t);
   }, []);
 
+  const close = useCallback(() => {
+    setOpen(false);
+    setTimeout(onClose, 380);
+  }, [onClose]);
+
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [close]);
+
+  // ── Drag-to-dismiss on the handle ────────────────────────────────────────
+  const onHandleDown = (e: React.PointerEvent) => {
+    dragRef.current = { active: true, startY: e.clientY, dy: 0 };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    if (sheetRef.current) sheetRef.current.style.transition = "none";
+  };
+
+  const onHandleMove = (e: React.PointerEvent) => {
+    if (!dragRef.current.active) return;
+    const dy = Math.max(0, e.clientY - dragRef.current.startY);
+    dragRef.current.dy = dy;
+    if (sheetRef.current) sheetRef.current.style.transform = `translateX(-50%) translateY(${dy}px)`;
+  };
+
+  const onHandleUp = () => {
+    if (!dragRef.current.active) return;
+    dragRef.current.active = false;
+    const { dy } = dragRef.current;
+
+    if (dy > 90) {
+      // Dismiss: animate sheet and scrim out in px so units match
+      const vh = window.innerHeight;
+      if (sheetRef.current) {
+        sheetRef.current.style.transition = `transform ${SPRING}`;
+        sheetRef.current.style.transform = `translateX(-50%) translateY(${vh}px)`;
+      }
+      if (scrimRef.current) {
+        scrimRef.current.style.transition = `opacity 0.38s ease`;
+        scrimRef.current.style.opacity = "0";
+      }
+      setTimeout(onClose, 380);
+    } else {
+      // Snap back
+      if (sheetRef.current) {
+        sheetRef.current.style.transition = `transform ${SPRING}`;
+        sheetRef.current.style.transform = "translateX(-50%) translateY(0)";
+        setTimeout(() => {
+          if (sheetRef.current) {
+            sheetRef.current.style.transition = "";
+            sheetRef.current.style.transform = "";
+          }
+        }, 380);
+      }
+    }
+  };
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return friends;
     return friends.filter(
-      (f) =>
-        f.name.toLowerCase().includes(q) || f.handle.toLowerCase().includes(q),
+      (f) => f.name.toLowerCase().includes(q) || f.handle.toLowerCase().includes(q),
     );
   }, [friends, query]);
 
   return (
     <>
       <style>{`#taya-search-input::placeholder { color: rgba(0,0,0,0.28); }`}</style>
+
+      {/* Scrim */}
       <div
+        ref={scrimRef}
+        onClick={close}
         style={{
           position: "fixed",
           inset: 0,
+          zIndex: 99,
+          background: "rgba(0,0,0,0.32)",
+          opacity: open ? 1 : 0,
+          transition: `opacity ${SPRING}`,
+        }}
+      />
+
+      {/* Sheet */}
+      <div
+        ref={sheetRef}
+        style={{
+          position: "fixed",
+          bottom: 0,
+          left: "50%",
+          width: "100%",
+          maxWidth: 428,
+          height: "85svh",
           zIndex: 100,
-          background: "#fff",
+          background: "rgba(255,255,255,0.82)",
+          backdropFilter: "blur(40px) saturate(1.8)",
+          WebkitBackdropFilter: "blur(40px) saturate(1.8)",
+          borderRadius: "32px 32px 0 0",
+          boxShadow: "0 -1px 0 rgba(0,0,0,0.07), 0 -12px 48px rgba(0,0,0,0.13)",
           display: "flex",
           flexDirection: "column",
+          overflow: "hidden",
+          transform: open ? "translateX(-50%)" : "translateX(-50%) translateY(100%)",
+          transition: `transform ${SPRING}`,
         }}
       >
+        {/* Drag handle */}
         <div
+          onPointerDown={onHandleDown}
+          onPointerMove={onHandleMove}
+          onPointerUp={onHandleUp}
+          onPointerCancel={onHandleUp}
           style={{
-            padding: "max(env(safe-area-inset-top), 20px) 20px 0",
+            padding: "18px 24px 0",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            flexShrink: 0,
+            cursor: "grab",
+            touchAction: "none",
+            userSelect: "none",
+          }}
+        >
+          <div
+            style={{
+              width: 36,
+              height: 4,
+              borderRadius: 2,
+              background: "rgba(0,0,0,0.16)",
+            }}
+          />
+        </div>
+
+        {/* Close button — anchored to top-right of sheet */}
+        <button
+          type="button"
+          onClick={close}
+          style={{
+            position: "absolute",
+            top: 16,
+            right: 16,
+            zIndex: 1,
+            width: NAV_HEIGHT,
+            height: NAV_HEIGHT,
+            borderRadius: "100px",
+            background: "rgba(0,0,0,0.06)",
+            border: "1px solid rgba(0,0,0,0.07)",
             display: "flex",
             alignItems: "center",
-            gap: 16,
+            justifyContent: "center",
+            cursor: "pointer",
+            WebkitTapHighlightColor: "transparent",
+            flexShrink: 0,
+          }}
+          aria-label="Close search"
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="rgba(0,0,0,0.55)"
+            strokeWidth="2.6"
+            strokeLinecap="round"
+            aria-hidden
+          >
+            <line x1="6" y1="6" x2="18" y2="18" />
+            <line x1="18" y1="6" x2="6" y2="18" />
+          </svg>
+        </button>
+
+        {/* Input row */}
+        <div
+          style={{
+            padding: "16px 84px 18px 24px",
+            flexShrink: 0,
           }}
         >
           <input
@@ -267,13 +421,13 @@ function SearchOverlay({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             style={{
-              flex: 1,
+              width: "100%",
               padding: 0,
               border: "none",
               outline: "none",
               background: "transparent",
               fontFamily: FONT,
-              fontSize: "clamp(26px, 8vw, 34px)",
+              fontSize: "clamp(28px, 8vw, 36px)",
               fontWeight: 500,
               letterSpacing: "-0.07em",
               color: "#000",
@@ -285,49 +439,17 @@ function SearchOverlay({
             autoCapitalize="off"
             spellCheck={false}
           />
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              flexShrink: 0,
-              width: NAV_HEIGHT,
-              height: NAV_HEIGHT,
-              borderRadius: "100px",
-              backdropFilter: "blur(24px) saturate(1.8)",
-              WebkitBackdropFilter: "blur(24px) saturate(1.8)",
-              background: "rgba(255,255,255,0.58)",
-              border: "1px solid rgba(0,0,0,0.1)",
-              boxShadow: "0 0 0 0.5px rgba(0,0,0,0.09), 0 4px 20px rgba(0,0,0,0.07)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              WebkitTapHighlightColor: "transparent",
-            }}
-            aria-label="Close search"
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="rgba(0,0,0,0.7)"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              aria-hidden
-            >
-              <line x1="6" y1="6" x2="18" y2="18" />
-              <line x1="18" y1="6" x2="6" y2="18" />
-            </svg>
-          </button>
         </div>
 
+        {/* Separator */}
+        <div style={{ height: "0.5px", background: "rgba(0,0,0,0.08)", flexShrink: 0 }} />
+
+        {/* Results */}
         <div
           style={{
             flex: 1,
             overflowY: "auto",
             overflowX: "hidden",
-            marginTop: 24,
             touchAction: "pan-y",
           }}
         >
@@ -341,13 +463,11 @@ function SearchOverlay({
                 alignItems: "center",
                 gap: 14,
                 width: "100%",
-                padding: "11px 20px",
+                padding: "13px 24px",
                 background: "none",
                 border: "none",
                 borderBottom:
-                  i < results.length - 1
-                    ? "0.5px solid rgba(0,0,0,0.08)"
-                    : "none",
+                  i < results.length - 1 ? "0.5px solid rgba(0,0,0,0.07)" : "none",
                 cursor: "pointer",
                 fontFamily: "inherit",
                 textAlign: "left",
@@ -356,12 +476,12 @@ function SearchOverlay({
             >
               <div
                 style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: "50%",
+                  width: 48,
+                  height: 48,
+                  borderRadius: 14,
                   overflow: "hidden",
                   flexShrink: 0,
-                  background: "#eee",
+                  background: "#e8e8ef",
                 }}
               >
                 {f.avatarUrl ? (
@@ -378,13 +498,13 @@ function SearchOverlay({
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      fontSize: 14,
-                      fontWeight: 800,
-                      color: "#888",
+                      fontSize: 15,
+                      fontWeight: 700,
+                      color: "#999",
                       fontFamily: FONT,
                     }}
                   >
-                    {f.name.slice(0, 2).toUpperCase()}
+                    {getInitials(f.name)}
                   </div>
                 )}
               </div>
@@ -393,10 +513,10 @@ function SearchOverlay({
                   style={{
                     margin: 0,
                     fontFamily: FONT,
-                    fontSize: 15,
+                    fontSize: 16,
                     fontWeight: 600,
                     color: "#000",
-                    letterSpacing: "-0.02em",
+                    letterSpacing: "-0.025em",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
@@ -409,7 +529,7 @@ function SearchOverlay({
                     margin: "1px 0 0",
                     fontFamily: FONT,
                     fontSize: 13,
-                    color: "rgba(0,0,0,0.4)",
+                    color: "rgba(0,0,0,0.38)",
                     fontWeight: 400,
                     letterSpacing: "-0.01em",
                   }}
@@ -423,7 +543,7 @@ function SearchOverlay({
                     fontFamily: FONT,
                     fontSize: 12,
                     fontWeight: 600,
-                    color: "#000",
+                    color: "rgba(0,0,0,0.32)",
                     letterSpacing: "-0.01em",
                     flexShrink: 0,
                   }}
@@ -437,7 +557,7 @@ function SearchOverlay({
           {results.length === 0 && (
             <p
               style={{
-                margin: "32px 20px 0",
+                margin: "36px 24px 0",
                 fontFamily: FONT,
                 fontSize: 15,
                 color: "rgba(0,0,0,0.3)",
@@ -448,6 +568,8 @@ function SearchOverlay({
               No one found
             </p>
           )}
+
+          <div style={{ height: "max(env(safe-area-inset-bottom), 24px)" }} />
         </div>
       </div>
     </>
@@ -460,6 +582,12 @@ export default function FriendsPage() {
   const { friends, hydrated } = useFriends();
   const { user } = useUser();
   const [searchOpen, setSearchOpen] = useState(false);
+
+  // Hide bottom nav while search sheet is open
+  useEffect(() => {
+    document.body.classList.toggle("search-open", searchOpen);
+    return () => document.body.classList.remove("search-open");
+  }, [searchOpen]);
 
   // ── All users: YOU first, then friends ──────────────────────────────────
   const allUsers = useMemo(
@@ -504,15 +632,10 @@ export default function FriendsPage() {
   );
 
   // ── Core refs ────────────────────────────────────────────────────────────
-  const canvasRef     = useRef<HTMLCanvasElement>(null);
-  const viewRef       = useRef({ px: 0, py: 90, z: 1 });
-  const imagesRef     = useRef(new Map<string, HTMLImageElement>());
-  const rafDrawRef    = useRef<number | null>(null);
-  // Offscreen canvases for motion-blur compositing
-  const offCanvasRef  = useRef<HTMLCanvasElement | null>(null);
-  const offCtxRef     = useRef<CanvasRenderingContext2D | null>(null);
-  const blurCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const blurCtxRef    = useRef<CanvasRenderingContext2D | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const viewRef = useRef({ px: 0, py: 90, z: 1 });
+  const imagesRef = useRef(new Map<string, HTMLImageElement>());
+  const rafDrawRef = useRef<number | null>(null);
 
   // Live grid data — always up to date for the draw loop and pointer handlers
   const gridRef = useRef({ TILE_W, TILE_H, basePositions, allUsers: displayGrid });
@@ -535,7 +658,8 @@ export default function FriendsPage() {
   useEffect(() => {
     if (!hydrated) return;
     const vw = window.innerWidth;
-    const z = clamp((vw * 0.62) / TILE_W, ZOOM_MIN, ZOOM_MAX);
+    // Cap at 0.82 so the grid doesn't appear zoomed in on wide desktop screens
+    const z = clamp(Math.min((vw * 0.62) / TILE_W, 0.82), ZOOM_MIN, ZOOM_MAX);
     viewRef.current = {
       px: (vw - TILE_W * z) / 2,
       py: 90,
@@ -550,21 +674,11 @@ export default function FriendsPage() {
 
     function resize() {
       if (!canvas) return;
-      const dpr   = window.devicePixelRatio || 1;
-      const physW = window.innerWidth  * dpr;
-      const physH = window.innerHeight * dpr;
-      canvas.width  = physW;
-      canvas.height = physH;
-      canvas.style.width  = `${window.innerWidth}px`;
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = window.innerWidth * dpr;
+      canvas.height = window.innerHeight * dpr;
+      canvas.style.width = `${window.innerWidth}px`;
       canvas.style.height = `${window.innerHeight}px`;
-      if (!offCanvasRef.current)  offCanvasRef.current  = document.createElement("canvas");
-      if (!blurCanvasRef.current) blurCanvasRef.current = document.createElement("canvas");
-      offCanvasRef.current.width   = physW;
-      offCanvasRef.current.height  = physH;
-      blurCanvasRef.current.width  = physW;
-      blurCanvasRef.current.height = physH;
-      offCtxRef.current  = offCanvasRef.current.getContext("2d");
-      blurCtxRef.current = blurCanvasRef.current.getContext("2d");
     }
 
     resize();
@@ -574,18 +688,11 @@ export default function FriendsPage() {
 
     function draw() {
       if (!running || !canvas) return;
-      const mainCtx    = canvas.getContext("2d");
-      const offCanvas  = offCanvasRef.current;
-      const offCtx     = offCtxRef.current;
-      const blurCanvas = blurCanvasRef.current;
-      const blurCtx    = blurCtxRef.current;
-      if (!mainCtx || !offCanvas || !offCtx || !blurCanvas || !blurCtx) {
-        rafDrawRef.current = requestAnimationFrame(draw);
-        return;
-      }
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
 
-      const dpr  = window.devicePixelRatio || 1;
-      const cssW = canvas.width  / dpr;
+      const dpr = window.devicePixelRatio || 1;
+      const cssW = canvas.width / dpr;
       const cssH = canvas.height / dpr;
       const { px, py, z } = viewRef.current;
       const {
@@ -595,139 +702,80 @@ export default function FriendsPage() {
         allUsers: users,
       } = gridRef.current;
 
+      // Clear to white
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
       // Visible world range (extra margin so bowl-warp can't hide edge tiles)
-      const margin    = AVATAR_SIZE * 2;
+      const margin = AVATAR_SIZE * 2;
       const visLeft   = (-px / z) - margin;
       const visRight  = ((cssW - px) / z) + margin;
       const visTop    = (-py / z) - margin;
       const visBottom = ((cssH - py) / z) + margin;
-      const txMin = Math.floor(visLeft  / tw) - 1;
-      const txMax = Math.ceil(visRight  / tw) + 1;
-      const tyMin = Math.floor(visTop   / th) - 1;
+      const txMin = Math.floor(visLeft / tw) - 1;
+      const txMax = Math.ceil(visRight / tw) + 1;
+      const tyMin = Math.floor(visTop / th) - 1;
       const tyMax = Math.ceil(visBottom / th) + 1;
 
-      const scx  = cssW / 2;
-      const scy  = cssH / 2;
+      // Bowl warp is screen-space — only DPR scaling applied globally
+      const scx = cssW / 2;
+      const scy = cssH / 2;
       const maxR = Math.hypot(cssW, cssH) * 0.5;
 
-      // ── Render current frame to offscreen canvas (transparent bg) ─────────
-      offCtx.clearRect(0, 0, offCanvas.width, offCanvas.height);
-      offCtx.save();
-      offCtx.scale(dpr, dpr);
+      ctx.save();
+      ctx.scale(dpr, dpr);
 
+      // Draw each visible tile
       for (let ty = tyMin; ty <= tyMax; ty++) {
         for (let tx = txMin; tx <= txMax; tx++) {
           const offX = tx * tw;
           const offY = ty * th;
           for (let i = 0; i < users.length; i++) {
-            const wx  = bpos[i].x + offX + AVATAR_SIZE / 2;
-            const wy  = bpos[i].y + offY + AVATAR_SIZE / 2;
+            // World-space center of this avatar
+            const wx = bpos[i].x + offX + AVATAR_SIZE / 2;
+            const wy = bpos[i].y + offY + AVATAR_SIZE / 2;
+
+            // Raw screen position (before bowl warp)
             const sx0 = px + wx * z;
             const sy0 = py + wy * z;
+
+            // Distance from screen center (normalized)
             const dvx = sx0 - scx;
             const dvy = sy0 - scy;
             const dist = Math.hypot(dvx, dvy);
-            const r    = dist / maxR;
+            const r = dist / maxR; // 0 at center, ~1 at corners
+
+            // Bowl: push outward (edges are the raised lip of the dish)
             const warp = 1 + BOWL_K * r * r;
-            const sx   = scx + dvx * warp;
-            const sy   = scy + dvy * warp;
+            const sx = scx + dvx * warp;
+            const sy = scy + dvy * warp;
+
+            // Depth scale: edge avatars slightly larger (closer to viewer)
             const depthScale = 1 + BOWL_SCALE * r * r;
             const S = AVATAR_SIZE * z * depthScale;
+
+            // Cull avatars that are fully off-screen after warp
             if (sx + S < 0 || sx - S > cssW || sy + S < 0 || sy - S > cssH) continue;
-            const tiltAngle     = BOWL_TILT * Math.min(r, 1);
+
+            // Tilt: compress avatar radially (surface curves away from viewer)
+            const tiltAngle = BOWL_TILT * Math.min(r, 1);
             const radialCompress = Math.cos(tiltAngle);
-            const radialAngle   = dist > 0.5 ? Math.atan2(dvy, dvx) : 0;
+            const radialAngle = dist > 0.5 ? Math.atan2(dvy, dvx) : 0;
+
             drawUserBowl(
-              offCtx, sx, sy, S,
+              ctx, sx, sy, S,
               users[i],
               imagesRef.current.get(users[i].id),
-              z, radialCompress, radialAngle,
+              z,
+              radialCompress,
+              radialAngle,
             );
           }
         }
       }
 
-      offCtx.restore();
-
-      // ── Composite: white bg + sharp current frame ─────────────────────────
-      mainCtx.clearRect(0, 0, canvas.width, canvas.height);
-      mainCtx.fillStyle = "#ffffff";
-      mainCtx.fillRect(0, 0, canvas.width, canvas.height);
-      mainCtx.drawImage(offCanvas, 0, 0);
-
-      // ── Motion blur: ghost copies → blurCanvas → edge-mask → composite ────
-      const isDragging = ptrs.current.size > 0;
-      const bvx    = isDragging ? instantVelRef.current.x : velRef.current.x;
-      const bvy    = isDragging ? instantVelRef.current.y : velRef.current.y;
-      const bSpeed = Math.hypot(bvx, bvy);
-      const BLUR_MAX = 40;
-      const speedT   = Math.min(bSpeed / BLUR_MAX, 1);
-
-      if (speedT > 0.03) {
-        const STEPS = 12;
-        const dirX  = bvx / bSpeed;
-        const dirY  = bvy / bSpeed;
-
-        blurCtx.clearRect(0, 0, blurCanvas.width, blurCanvas.height);
-        blurCtx.save();
-        blurCtx.scale(dpr, dpr);
-
-        // Leading-direction ghosts (primary smear at leading edge)
-        for (let i = STEPS; i >= 1; i--) {
-          const t     = i / STEPS;
-          const alpha = speedT * 0.13 * (1 - t * 0.55);
-          if (alpha < 0.003) continue;
-          // Offset in direction of motion + radial zoom outward from center
-          const ox    = dirX * bSpeed * 3.0 * t;
-          const oy    = dirY * bSpeed * 3.0 * t;
-          const scale = 1 + speedT * 0.35 * t;
-          blurCtx.globalAlpha = alpha;
-          blurCtx.save();
-          blurCtx.translate(cssW / 2 + ox, cssH / 2 + oy);
-          blurCtx.scale(scale, scale);
-          blurCtx.translate(-cssW / 2, -cssH / 2);
-          blurCtx.drawImage(offCanvas, 0, 0, cssW, cssH);
-          blurCtx.restore();
-        }
-
-        // Trailing-direction ghosts (lighter smear at trailing edge)
-        for (let i = STEPS; i >= 1; i--) {
-          const t     = i / STEPS;
-          const alpha = speedT * 0.06 * (1 - t * 0.55);
-          if (alpha < 0.003) continue;
-          const ox    = -dirX * bSpeed * 1.5 * t;
-          const oy    = -dirY * bSpeed * 1.5 * t;
-          const scale = 1 + speedT * 0.18 * t;
-          blurCtx.globalAlpha = alpha;
-          blurCtx.save();
-          blurCtx.translate(cssW / 2 + ox, cssH / 2 + oy);
-          blurCtx.scale(scale, scale);
-          blurCtx.translate(-cssW / 2, -cssH / 2);
-          blurCtx.drawImage(offCanvas, 0, 0, cssW, cssH);
-          blurCtx.restore();
-        }
-
-        blurCtx.globalAlpha = 1;
-        blurCtx.restore();
-
-        // Apply radial edge-only mask: erase ghost from the center, keep periphery
-        const hw     = blurCanvas.width  / 2;
-        const hh     = blurCanvas.height / 2;
-        const innerR = Math.min(hw, hh) * 0.22;
-        const outerR = Math.hypot(hw, hh) * 0.62;
-        const mask = blurCtx.createRadialGradient(hw, hh, innerR, hw, hh, outerR);
-        mask.addColorStop(0,    "rgba(0,0,0,0)");
-        mask.addColorStop(0.42, "rgba(0,0,0,0)");
-        mask.addColorStop(1,    "rgba(0,0,0,1)");
-        blurCtx.globalCompositeOperation = "destination-in";
-        blurCtx.fillStyle = mask;
-        blurCtx.fillRect(0, 0, blurCanvas.width, blurCanvas.height);
-        blurCtx.globalCompositeOperation = "source-over";
-
-        // Overlay edge-smear layer on top of the sharp current frame
-        mainCtx.drawImage(blurCanvas, 0, 0);
-      }
-
+      ctx.restore();
       rafDrawRef.current = requestAnimationFrame(draw);
     }
 
@@ -762,7 +810,6 @@ export default function FriendsPage() {
   const wheelTargetRef = useRef<number | null>(null);
   const wheelCursorRef = useRef({ x: 0, y: 0 });
   const didDragRef = useRef(false);
-  const instantVelRef = useRef({ x: 0, y: 0 }); // live per-frame drag velocity for blur effect
 
   const stopInertia = useCallback(() => {
     if (rafPanRef.current !== null) {
@@ -954,8 +1001,6 @@ export default function FriendsPage() {
         const dy = e.clientY - prev.y;
         if (Math.abs(dx) + Math.abs(dy) > 4) didDragRef.current = true;
 
-        instantVelRef.current = { x: dx, y: dy };
-
         const now = performance.now();
         ptrHistory.current.push({ x: e.clientX, y: e.clientY, t: now });
         ptrHistory.current = ptrHistory.current.filter((p) => now - p.t < 80);
@@ -1135,9 +1180,9 @@ export default function FriendsPage() {
         </svg>
       </button>
 
-      {/* ── search overlay ───────────────────────────────────────────────── */}
+      {/* ── search sheet ─────────────────────────────────────────────────── */}
       {searchOpen && (
-        <SearchOverlay
+        <SearchSheet
           friends={friends}
           onClose={() => setSearchOpen(false)}
           onSelect={(id) => {

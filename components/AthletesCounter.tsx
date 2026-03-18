@@ -123,6 +123,9 @@ export function AthletesCounter({ count, className = "" }: AthletesCounterProps)
           gap: 6,
           borderRadius: 4,
           border: "1px dashed #919191",
+          background: "rgba(255,255,255,0.58)",
+          backdropFilter: "blur(24px) saturate(1.8)",
+          WebkitBackdropFilter: "blur(24px) saturate(1.8)",
         }}
       >
         <Image

@@ -185,6 +185,13 @@ textarea:focus-visible {
   justify-content: space-between;
   padding: 0 16px max(20px, env(safe-area-inset-bottom));
   pointer-events: none;
+  transition: opacity 0.28s ease, transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+body.search-open .bottom-nav-wrapper {
+  opacity: 0;
+  transform: translateY(16px);
+  pointer-events: none !important;
 }
 
 .liquid-glass-nav {
