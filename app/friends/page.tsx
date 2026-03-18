@@ -11,13 +11,23 @@ import type { FriendData } from "@/types/user";
 const NAV_HEIGHT = 54;
 const FONT = '"Lexend Deca", -apple-system, sans-serif';
 
-const COLS = 3;
 const AVATAR_SIZE = 110;   // rounded-square side length
 const AVATAR_RADIUS = 32;  // corner radius
-const COL_SPACING = 136;   // left-edge to left-edge of adjacent columns (= avatar + 26px gap)
-const ROW_SPACING = 170;   // top-edge to top-edge of adjacent rows (avatar + text + bottom margin)
+const WORLD_W = 2800;      // globe world-space period width  — wide enough to give desktop room to zoom out
+const WORLD_H = 3600;      // globe world-space period height — tall enough to exceed any phone screen
+// Reference cluster size in world-units at the landing zoom.
+// Using a square reference (geometric mean of portrait viewport dims) so
+// avatars spread in a circular/2-D pattern rather than stacking vertically.
+const LANDING_Z      = 68 / AVATAR_SIZE;                      // landing zoom (must match TARGET_Z below)
+const REF_VP_W       = 390  / LANDING_Z;                      // ≈ 549 world units
+const REF_VP_H       = 844  / LANDING_Z;                      // ≈ 1365 world units
+const REF_VP_SIZE    = Math.sqrt(REF_VP_W * REF_VP_H);        // geometric mean ≈ 866 (square reference)
+const TARGET_IN_VIEW = 4;                                      // desired avatars visible on first load
+const DOT_SPACING = 42;    // distance between dot-grid points in world units
+const DOT_RADIUS  = 1.8;   // dot radius in CSS px at z=1, before depth scaling
 
-const ZOOM_MIN = 0.55;
+// ZOOM_MIN is computed dynamically from the viewport so the world always fills
+// the screen (no seam ever visible).  See zoomMinRef below.
 const ZOOM_MAX = 4;
 
 // ── Bowl warp ── screen-space distortion that makes the grid look like a dish
@@ -26,6 +36,46 @@ const BOWL_SCALE = 0.35;  // edge avatars are (1 + BOWL_SCALE × r²) times larg
 const BOWL_TILT  = 1.05;  // max radial-compression angle in radians (~60° at the lip)
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+// Push overlapping avatar positions apart so neither the image nor the text
+// label below clips a neighbour.  Uses an axis-aligned bounding box (AABB):
+// each slot is SLOT_W wide (image only) and SLOT_H tall (image + name + handle).
+const SLOT_W = AVATAR_SIZE + 16;   // horizontal clearance
+const SLOT_H = AVATAR_SIZE + 56;   // vertical clearance — extra 56 for text below
+
+function resolveOverlaps(
+  positions: { x: number; y: number }[],
+  bx0: number, by0: number, bx1: number, by1: number,
+): { x: number; y: number }[] {
+  if (positions.length < 2) return positions;
+  const res = positions.map((p) => ({ x: p.x, y: p.y }));
+  for (let pass = 0; pass < 120; pass++) {
+    let moved = false;
+    for (let i = 0; i < res.length; i++) {
+      for (let j = i + 1; j < res.length; j++) {
+        const dx = res[j].x - res[i].x;
+        const dy = res[j].y - res[i].y;
+        const overlapX = SLOT_W - Math.abs(dx);
+        const overlapY = SLOT_H - Math.abs(dy);
+        if (overlapX <= 0 || overlapY <= 0) continue;
+        moved = true;
+        if (overlapX < overlapY) {
+          const push = overlapX / 2 + 0.5;
+          const sign = dx >= 0 ? 1 : -1;
+          res[i].x = clamp(res[i].x - sign * push, bx0, bx1 - AVATAR_SIZE);
+          res[j].x = clamp(res[j].x + sign * push, bx0, bx1 - AVATAR_SIZE);
+        } else {
+          const push = overlapY / 2 + 0.5;
+          const sign = dy >= 0 ? 1 : -1;
+          res[i].y = clamp(res[i].y - sign * push, by0, by1 - AVATAR_SIZE);
+          res[j].y = clamp(res[j].y + sign * push, by0, by1 - AVATAR_SIZE);
+        }
+      }
+    }
+    if (!moved) break;
+  }
+  return res;
+}
 
 // ─── types ────────────────────────────────────────────────────────────────────
 type UserEntry = {
@@ -38,66 +88,14 @@ type UserEntry = {
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-// Deterministic Fisher-Yates shuffle seeded with a 32-bit integer
-function seededShuffle<T>(arr: T[], seed: number): T[] {
-  const result = [...arr];
-  let s = seed >>> 0;
-  for (let i = result.length - 1; i > 0; i--) {
-    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
-    const j = s % (i + 1);
-    [result[i], result[j]] = [result[j], result[i]];
+// Stable seeded hash for a user ID (used to derive a deterministic position).
+function seedHash(userId: string): number {
+  let h = 0xdeadbeef;
+  for (let i = 0; i < userId.length; i++) {
+    h = Math.imul(h ^ userId.charCodeAt(i), 0x9e3779b9);
+    h = (h ^ (h >>> 16)) >>> 0;
   }
-  return result;
-}
-
-// Build a display grid padded to ROWS×COLS:
-//   - shuffles users deterministically so the order looks organic
-//   - fills any remainder slots by repeating users, but never places a user
-//     adjacent (H or V) to a duplicate of itself, and respects the tile
-//     wrap-around seam so tiling looks seamless
-function buildDisplayGrid(users: UserEntry[], cols: number): UserEntry[] {
-  if (users.length === 0) return [];
-  const n = users.length;
-  const rows = Math.ceil(n / cols);
-  const target = rows * cols;
-
-  // Derive a stable seed from user IDs so the layout is the same every render
-  const seed = users.reduce((acc, u, i) => {
-    const h = u.id
-      .split("")
-      .reduce((a, c) => (Math.imul(a, 31) + c.charCodeAt(0)) | 0, 0);
-    return acc ^ Math.imul(h, (i + 1) * 2654435761);
-  }, 0x9e3779b9);
-
-  const shuffled = seededShuffle([...users], seed >>> 0);
-  if (n >= target) return shuffled;
-
-  const grid: UserEntry[] = [...shuffled];
-
-  for (let i = n; i < target; i++) {
-    const col = i % cols;
-    const row = Math.floor(i / cols);
-    const excluded = new Set<string>();
-
-    // Orthogonal neighbors already placed
-    if (row > 0) excluded.add(grid[(row - 1) * cols + col].id); // above
-    if (col > 0) excluded.add(grid[i - 1].id);                   // left
-
-    // Vertical tile-seam: bottom row will tile onto top row
-    if (rows > 1 && row === rows - 1) excluded.add(grid[col].id);
-    // Horizontal tile-seam: last col will tile onto first col
-    if (col === cols - 1) excluded.add(grid[row * cols].id);
-
-    const startOffset = ((seed >>> 0) * (i + 1)) % n;
-    let chosen = shuffled[0];
-    for (let k = 0; k < n; k++) {
-      const c = shuffled[(startOffset + k) % n];
-      if (!excluded.has(c.id)) { chosen = c; break; }
-    }
-    grid.push(chosen);
-  }
-
-  return grid;
+  return h;
 }
 
 // Draw a rounded rectangle path using arcTo (universally supported)
@@ -329,6 +327,7 @@ function SearchSheet({
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
+          fontFamily: "var(--font-sans), sans-serif",
           transform: open ? "translateX(-50%)" : "translateX(-50%) translateY(100%)",
           transition: `transform ${SPRING}`,
         }}
@@ -418,10 +417,10 @@ function SearchSheet({
               border: "none",
               outline: "none",
               background: "transparent",
-              fontFamily: FONT,
-              fontSize: "clamp(28px, 8vw, 36px)",
+              fontFamily: "var(--font-sans), sans-serif",
+              fontSize: "clamp(26px, 7vw, 32px)",
               fontWeight: 500,
-              letterSpacing: "-0.07em",
+              letterSpacing: "-0.04em",
               color: "#000",
               caretColor: "#000",
               minWidth: 0,
@@ -461,7 +460,7 @@ function SearchSheet({
                 borderBottom:
                   i < results.length - 1 ? "0.5px solid rgba(0,0,0,0.07)" : "none",
                 cursor: "pointer",
-                fontFamily: "inherit",
+                fontFamily: "var(--font-sans), sans-serif",
                 textAlign: "left",
                 WebkitTapHighlightColor: "transparent",
               }}
@@ -493,7 +492,7 @@ function SearchSheet({
                       fontSize: 15,
                       fontWeight: 700,
                       color: "#999",
-                      fontFamily: FONT,
+                      fontFamily: "var(--font-sans), sans-serif",
                     }}
                   >
                     {getInitials(f.name)}
@@ -504,7 +503,7 @@ function SearchSheet({
                 <p
                   style={{
                     margin: 0,
-                    fontFamily: FONT,
+                    fontFamily: "var(--font-sans), sans-serif",
                     fontSize: 16,
                     fontWeight: 600,
                     color: "#000",
@@ -519,7 +518,7 @@ function SearchSheet({
                 <p
                   style={{
                     margin: "1px 0 0",
-                    fontFamily: FONT,
+                    fontFamily: "var(--font-sans), sans-serif",
                     fontSize: 13,
                     color: "rgba(0,0,0,0.38)",
                     fontWeight: 400,
@@ -532,7 +531,7 @@ function SearchSheet({
               {f.following && (
                 <span
                   style={{
-                    fontFamily: FONT,
+                    fontFamily: "var(--font-sans), sans-serif",
                     fontSize: 12,
                     fontWeight: 600,
                     color: "rgba(0,0,0,0.32)",
@@ -550,7 +549,7 @@ function SearchSheet({
             <p
               style={{
                 margin: "36px 24px 0",
-                fontFamily: FONT,
+                fontFamily: "var(--font-sans), sans-serif",
                 fontSize: 15,
                 color: "rgba(0,0,0,0.3)",
                 fontWeight: 500,
@@ -603,36 +602,43 @@ export default function FriendsPage() {
     [user.id, user.name, user.handle, user.avatarUrl, friends],
   );
 
-  // ── Display grid: shuffled + last-row padded, no adjacent duplicates ────
-  const displayGrid = useMemo(
-    () => buildDisplayGrid(allUsers, COLS),
-    [allUsers],
-  );
+  // ── Avatar positions: dynamic cluster scaled to user count ───────────────
+  const basePositions = useMemo(() => {
+    const n = allUsers.length;
+    if (n === 0) return [];
 
-  const GRID_N = displayGrid.length;
-  const ROWS = Math.max(Math.ceil(GRID_N / COLS), 1);
-  const TILE_W = COLS * COL_SPACING;
-  const TILE_H = ROWS * ROW_SPACING;
+    // Cluster grows as √(n / TARGET_IN_VIEW) × a square reference size so
+    // avatars spread in all directions equally (circular scatter, not vertical stack).
+    const k    = Math.sqrt(n / TARGET_IN_VIEW);
+    const clW  = clamp(k * REF_VP_SIZE, REF_VP_SIZE * 0.85, WORLD_W * 0.92);
+    const clH  = clamp(k * REF_VP_SIZE, REF_VP_SIZE * 0.85, WORLD_H * 0.92);
+    const clX  = (WORLD_W - clW) / 2;
+    const clY  = (WORLD_H - clH) / 2;
 
-  const basePositions = useMemo(
-    () =>
-      Array.from({ length: GRID_N }, (_, i) => ({
-        x: (i % COLS) * COL_SPACING,
-        y: Math.floor(i / COLS) * ROW_SPACING,
-      })),
-    [GRID_N],
-  );
+    const raw = allUsers.map((u) => {
+      let h = seedHash(u.id);
+      const x = clX + (h % Math.max(1, Math.floor(clW - AVATAR_SIZE)));
+      h = Math.imul(h ^ 0x5f3759df, 2246822519) >>> 0;
+      const y = clY + (h % Math.max(1, Math.floor(clH - AVATAR_SIZE)));
+      return { x, y };
+    });
+
+    return resolveOverlaps(raw, clX, clY, clX + clW, clY + clH);
+  }, [allUsers]);
 
   // ── Core refs ────────────────────────────────────────────────────────────
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewRef = useRef({ px: 0, py: 90, z: 1 });
+  // Minimum zoom is the level at which the world exactly fills the screen —
+  // guarantees the tiling seam is never visible.
+  const zoomMinRef = useRef(0.5);
   const imagesRef = useRef(new Map<string, HTMLImageElement>());
   const rafDrawRef = useRef<number | null>(null);
 
   // Live grid data — always up to date for the draw loop and pointer handlers
-  const gridRef = useRef({ TILE_W, TILE_H, basePositions, allUsers: displayGrid });
+  const gridRef = useRef({ TILE_W: WORLD_W, TILE_H: WORLD_H, basePositions, allUsers });
   useEffect(() => {
-    gridRef.current = { TILE_W, TILE_H, basePositions, allUsers: displayGrid };
+    gridRef.current = { TILE_W: WORLD_W, TILE_H: WORLD_H, basePositions, allUsers };
   });
 
   // ── Image preloading — only unique users need a load ─────────────────────
@@ -646,18 +652,33 @@ export default function FriendsPage() {
     });
   }, [allUsers]);
 
-  // ── Initial view: fit tile width to screen, start just below counter ────
+  // ── Initial view: world fills screen, zoom in 30 % so edges bleed ───────
   useEffect(() => {
     if (!hydrated) return;
     const vw = window.innerWidth;
-    // Cap at 0.82 so the grid doesn't appear zoomed in on wide desktop screens
-    const z = clamp(Math.min((vw * 0.62) / TILE_W, 0.82), ZOOM_MIN, ZOOM_MAX);
+    const vh = window.innerHeight;
+    // zoomMin = the level at which the world exactly covers the screen (no seam visible).
+    const zoomMin = Math.max(vw / WORLD_W, vh / WORLD_H);
+    zoomMinRef.current = zoomMin;
+    // Fixed target avatar size on landing (~84 px) consistent across devices.
+    const TARGET_Z = 68 / AVATAR_SIZE; // z ≈ 0.62
+    const z = clamp(TARGET_Z, zoomMin, ZOOM_MAX);
+
+    // Center on the centroid of all avatar positions so avatars are always
+    // in view on landing rather than the geometric center of an empty world.
+    const bpos = gridRef.current.basePositions;
+    let worldCx = WORLD_W / 2;
+    let worldCy = WORLD_H / 2;
+    if (bpos.length > 0) {
+      worldCx = bpos.reduce((s, p) => s + p.x + AVATAR_SIZE / 2, 0) / bpos.length;
+      worldCy = bpos.reduce((s, p) => s + p.y + AVATAR_SIZE / 2, 0) / bpos.length;
+    }
     viewRef.current = {
-      px: (vw - TILE_W * z) / 2,
-      py: 90,
+      px: vw / 2 - worldCx * z,
+      py: vh / 2 - worldCy * z,
       z,
     };
-  }, [hydrated, TILE_W]);
+  }, [hydrated]);
 
   // ── Canvas DPR resize + perpetual draw loop ──────────────────────────────
   useEffect(() => {
@@ -671,6 +692,11 @@ export default function FriendsPage() {
       canvas.height = window.innerHeight * dpr;
       canvas.style.width = `${window.innerWidth}px`;
       canvas.style.height = `${window.innerHeight}px`;
+      // Keep zoomMin in sync so the seam is never visible after orientation change
+      zoomMinRef.current = Math.max(window.innerWidth / WORLD_W, window.innerHeight / WORLD_H);
+      if (viewRef.current.z < zoomMinRef.current) {
+        viewRef.current = { ...viewRef.current, z: zoomMinRef.current };
+      }
     }
 
     resize();
@@ -699,16 +725,12 @@ export default function FriendsPage() {
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Visible world range (extra margin so bowl-warp can't hide edge tiles)
+      // Visible world range (extra margin so bowl-warp can't clip edge tiles)
       const margin = AVATAR_SIZE * 2;
       const visLeft   = (-px / z) - margin;
       const visRight  = ((cssW - px) / z) + margin;
       const visTop    = (-py / z) - margin;
       const visBottom = ((cssH - py) / z) + margin;
-      const txMin = Math.floor(visLeft / tw) - 1;
-      const txMax = Math.ceil(visRight / tw) + 1;
-      const tyMin = Math.floor(visTop / th) - 1;
-      const tyMax = Math.ceil(visBottom / th) + 1;
 
       // Bowl warp is screen-space — only DPR scaling applied globally
       const scx = cssW / 2;
@@ -718,39 +740,78 @@ export default function FriendsPage() {
       ctx.save();
       ctx.scale(dpr, dpr);
 
-      // Draw each visible tile
-      for (let ty = tyMin; ty <= tyMax; ty++) {
-        for (let tx = txMin; tx <= txMax; tx++) {
-          const offX = tx * tw;
-          const offY = ty * th;
+      // ── Dot-grid pass ─────────────────────────────────────────────────────
+      // Dots tile at DOT_SPACING (independent of the avatar world period).
+      // All dots share one path; a radial gradient fill fades them at the
+      // globe horizon, matching the bowl-warp curvature.
+      // Gradient reaches the screen corners so dots are visible edge-to-edge
+      const globeR    = Math.hypot(cssW, cssH) * 0.55;
+      const dotGrad   = ctx.createRadialGradient(scx, scy, 0, scx, scy, globeR);
+      dotGrad.addColorStop(0.0,  "rgba(0,0,0,0.22)");
+      dotGrad.addColorStop(0.55, "rgba(0,0,0,0.18)");
+      dotGrad.addColorStop(0.85, "rgba(0,0,0,0.10)");
+      dotGrad.addColorStop(1.0,  "rgba(0,0,0,0.04)");
+
+      const gcMin = Math.floor(visLeft  / DOT_SPACING) - 1;
+      const gcMax = Math.ceil(visRight  / DOT_SPACING) + 1;
+      const grMin = Math.floor(visTop   / DOT_SPACING) - 1;
+      const grMax = Math.ceil(visBottom / DOT_SPACING) + 1;
+
+      ctx.beginPath();
+      for (let gr = grMin; gr <= grMax; gr++) {
+        for (let gc = gcMin; gc <= gcMax; gc++) {
+          const wx  = gc * DOT_SPACING;
+          const wy  = gr * DOT_SPACING;
+          const sx0 = px + wx * z;
+          const sy0 = py + wy * z;
+          const dvx = sx0 - scx;
+          const dvy = sy0 - scy;
+          const dist = Math.hypot(dvx, dvy);
+          const r = dist / maxR;
+          if (r > 1.05) continue; // trim only what's well off-screen
+          const warp       = 1 + BOWL_K * r * r;
+          const sx         = scx + dvx * warp;
+          const sy         = scy + dvy * warp;
+          if (sx < -8 || sx > cssW + 8 || sy < -8 || sy > cssH + 8) continue;
+          const depthScale = 1 + BOWL_SCALE * r * r;
+          const dR         = Math.max(DOT_RADIUS * z * depthScale, 0.6);
+          ctx.moveTo(sx + dR, sy);
+          ctx.arc(sx, sy, dR, 0, Math.PI * 2);
+        }
+      }
+      ctx.fillStyle = dotGrad;
+      ctx.fill();
+
+      // ── Avatar pass ───────────────────────────────────────────────────────
+      // Normalise px/py into one world period so the viewport is always
+      // "inside" the first tile.  A 2×2 neighbourhood covers the seam at
+      // the edges; because ZOOM_MIN ensures WORLD_W*z >= cssW and
+      // WORLD_H*z >= cssH, each avatar is visible at most once at a time.
+      const periodX = tw * z;
+      const periodY = th * z;
+      const normPx = -(((-px % periodX) + periodX) % periodX);
+      const normPy = -(((-py % periodY) + periodY) % periodY);
+
+      for (let ty = 0; ty <= 1; ty++) {
+        for (let tx = 0; tx <= 1; tx++) {
           for (let i = 0; i < users.length; i++) {
-            // World-space center of this avatar
-            const wx = bpos[i].x + offX + AVATAR_SIZE / 2;
-            const wy = bpos[i].y + offY + AVATAR_SIZE / 2;
+            const wx = bpos[i].x + AVATAR_SIZE / 2 + tx * tw;
+            const wy = bpos[i].y + AVATAR_SIZE / 2 + ty * th;
 
-            // Raw screen position (before bowl warp)
-            const sx0 = px + wx * z;
-            const sy0 = py + wy * z;
-
-            // Distance from screen center (normalized)
+            const sx0 = normPx + wx * z;
+            const sy0 = normPy + wy * z;
             const dvx = sx0 - scx;
             const dvy = sy0 - scy;
             const dist = Math.hypot(dvx, dvy);
-            const r = dist / maxR; // 0 at center, ~1 at corners
-
-            // Bowl: push outward (edges are the raised lip of the dish)
+            const r = dist / maxR;
             const warp = 1 + BOWL_K * r * r;
             const sx = scx + dvx * warp;
             const sy = scy + dvy * warp;
-
-            // Depth scale: edge avatars slightly larger (closer to viewer)
             const depthScale = 1 + BOWL_SCALE * r * r;
             const S = AVATAR_SIZE * z * depthScale;
 
-            // Cull avatars that are fully off-screen after warp
             if (sx + S < 0 || sx - S > cssW || sy + S < 0 || sy - S > cssH) continue;
 
-            // Tilt: compress avatar radially (surface curves away from viewer)
             const tiltAngle = BOWL_TILT * Math.min(r, 1);
             const radialCompress = Math.cos(tiltAngle);
             const radialAngle = dist > 0.5 ? Math.atan2(dvy, dvx) : 0;
@@ -763,9 +824,9 @@ export default function FriendsPage() {
               radialCompress,
               radialAngle,
             );
-          }
-        }
-      }
+          } // users
+        } // tx
+      } // ty
 
       ctx.restore();
       rafDrawRef.current = requestAnimationFrame(draw);
@@ -846,7 +907,7 @@ export default function FriendsPage() {
         return;
       }
       const { px, py, z } = viewRef.current;
-      const newZ = clamp(z * zoomVelRef.current, ZOOM_MIN, ZOOM_MAX);
+      const newZ = clamp(z * zoomVelRef.current, zoomMinRef.current, ZOOM_MAX);
       const ratio = newZ / z;
       const { x: mx, y: my } = zoomMidRef.current;
       commit({
@@ -904,7 +965,7 @@ export default function FriendsPage() {
       }
       const factor = e.ctrlKey ? 0.012 : 0.0008;
       const prev = wheelTargetRef.current ?? viewRef.current.z;
-      wheelTargetRef.current = clamp(prev * (1 + -e.deltaY * factor), ZOOM_MIN, ZOOM_MAX);
+      wheelTargetRef.current = clamp(prev * (1 + -e.deltaY * factor), zoomMinRef.current, ZOOM_MAX);
       wheelCursorRef.current = { x: e.clientX, y: e.clientY };
       startWheelEase();
     };
@@ -928,19 +989,21 @@ export default function FriendsPage() {
       const scy = vh / 2;
       const maxR = Math.hypot(vw, vh) * 0.5;
 
-      const margin = AVATAR_SIZE * 2;
-      const txMin = Math.floor((-px / z - margin) / tw) - 1;
-      const txMax = Math.ceil(((vw - px) / z + margin) / tw) + 1;
-      const tyMin = Math.floor((-py / z - margin) / th) - 1;
-      const tyMax = Math.ceil(((vh - py) / z + margin) / th) + 1;
+      // Same normalised-viewport math as the draw loop
+      const periodX = tw * z;
+      const periodY = th * z;
+      const normPx = -(((-px % periodX) + periodX) % periodX);
+      const normPy = -(((-py % periodY) + periodY) % periodY);
 
-      for (let ty = tyMin; ty <= tyMax; ty++) {
-        for (let tx = txMin; tx <= txMax; tx++) {
+      // Forward-project each avatar using the same 2×2 tile seam approach
+      // and check whether the tap lands inside its warped bounds.
+      for (let tty = 0; tty <= 1; tty++) {
+        for (let ttx = 0; ttx <= 1; ttx++) {
           for (let i = 0; i < users.length; i++) {
-            const wx = bpos[i].x + tx * tw + AVATAR_SIZE / 2;
-            const wy = bpos[i].y + ty * th + AVATAR_SIZE / 2;
-            const sx0 = px + wx * z;
-            const sy0 = py + wy * z;
+            const wx = bpos[i].x + AVATAR_SIZE / 2 + ttx * tw;
+            const wy = bpos[i].y + AVATAR_SIZE / 2 + tty * th;
+            const sx0 = normPx + wx * z;
+            const sy0 = normPy + wy * z;
             const dvx = sx0 - scx;
             const dvy = sy0 - scy;
             const dist = Math.hypot(dvx, dvy);
@@ -1003,7 +1066,7 @@ export default function FriendsPage() {
         const midX = (a.x + b.x) / 2;
         const midY = (a.y + b.y) / 2;
         const scale = prevPinchDist.current > 0 ? newDist / prevPinchDist.current : 1;
-        const newZ = clamp(z * scale, ZOOM_MIN, ZOOM_MAX);
+        const newZ = clamp(z * scale, zoomMinRef.current, ZOOM_MAX);
         const ratio = newZ / z;
         prevPinchDist.current = newDist;
         zoomMidRef.current = { x: midX, y: midY };

@@ -123,7 +123,7 @@ export default function FeedPage() {
           style={{
             margin: 0,
             color: "#000",
-            fontFamily: '"Lexend Deca", var(--font-sans), sans-serif',
+            fontFamily: "var(--font-sans), sans-serif",
             fontSize: "clamp(26px, 8vw, 36px)",
             fontWeight: 500,
             lineHeight: 1.1,
@@ -209,7 +209,7 @@ export default function FeedPage() {
                     style={{
                       margin: 0,
                       padding: gi === 0 ? "0 0 10px" : "24px 0 10px",
-                      fontFamily: '"Lexend Deca", var(--font-sans), sans-serif',
+                      fontFamily: "var(--font-sans), sans-serif",
                       fontSize: 11,
                       fontWeight: 600,
                       letterSpacing: "-0.02em",

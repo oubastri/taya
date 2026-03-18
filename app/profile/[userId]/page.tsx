@@ -333,7 +333,7 @@ export default function UserProfilePage() {
           </div>
           <h1
             style={{
-              fontFamily: '"Lexend Deca", var(--font-sans), sans-serif',
+              fontFamily: "var(--font-sans), sans-serif",
               fontSize: 32,
               fontStyle: "normal",
               fontWeight: 400,
@@ -354,7 +354,7 @@ export default function UserProfilePage() {
 
         <p
           style={{
-            fontFamily: '"Lexend Deca", var(--font-sans), sans-serif',
+            fontFamily: "var(--font-sans), sans-serif",
             fontSize: 32,
             fontStyle: "normal",
             fontWeight: 400,

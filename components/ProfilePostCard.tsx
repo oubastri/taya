@@ -111,7 +111,7 @@ export function ProfilePostCard({
 
       <div
         style={{
-          fontFamily: '"Lexend Deca", var(--font-sans), sans-serif',
+          fontFamily: "var(--font-sans), sans-serif",
           color: "var(--foreground)",
           fontSize: 24,
           fontWeight: 400,

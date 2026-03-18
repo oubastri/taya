@@ -13,7 +13,7 @@ export function StatsBlock({ stats }: Props) {
       className="mx-auto max-w-[254px] font-sans text-center font-normal md:max-w-none"
       style={{
         color: black,
-        fontFamily: '"Lexend Deca", var(--font-sans), sans-serif',
+        fontFamily: "var(--font-sans), sans-serif",
         fontStyle: "normal",
         fontWeight: 400,
         fontSize: "clamp(24px, 4vw, 40px)",

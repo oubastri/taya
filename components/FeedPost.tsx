@@ -182,7 +182,7 @@ export function FeedPost({
           display: "flex",
           flexDirection: "column",
           gap: 8,
-          fontFamily: '"Lexend Deca", var(--font-sans), sans-serif',
+          fontFamily: "var(--font-sans), sans-serif",
           fontSize: 16,
           fontWeight: 400,
           letterSpacing: "-0.64px",
@@ -275,7 +275,7 @@ function LikeButton({
       </span>
       <span
         style={{
-          fontFamily: '"Lexend Deca", var(--font-sans), sans-serif',
+          fontFamily: "var(--font-sans), sans-serif",
           fontSize: 14,
           fontWeight: 500,
           color: liked ? HEART_COLOR : HEART_GRAY,
