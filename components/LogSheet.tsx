@@ -244,6 +244,173 @@ export function LogSheet() {
   const sheetRef = useRef<HTMLDivElement>(null);
   const scrimRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef({ active: false, startY: 0, dy: 0 });
+  const chipsRef = useRef<HTMLDivElement>(null);
+  const chipsInnerRef = useRef<HTMLDivElement>(null);
+  const chipsDragRef = useRef({
+    active: false,
+    startX: 0,
+    scrollLeft: 0,
+    moved: false,
+    lastX: 0,
+    lastTime: 0,
+    velocity: 0,
+    rafId: 0,
+  });
+
+  useEffect(() => {
+    const el = chipsRef.current;
+    const inner = chipsInnerRef.current;
+    if (!el || !inner) return;
+    const drag = chipsDragRef.current;
+
+    // Rolling velocity sample buffer — last 100ms of pointer events
+    const velSamples: { x: number; t: number }[] = [];
+
+    let overscroll = 0;
+    let springRafId = 0;
+
+    // c=0.55 matches the iOS rubber-band coefficient; dim=240 gives progressive
+    // resistance that tracks closely at first then gently stiffens — not a hard wall
+    function rubberBand(x: number): number {
+      const c = 0.55;
+      const dim = 240;
+      return (dim * c * x) / (dim * c + x);
+    }
+
+    function setTranslate(px: number) {
+      overscroll = px;
+      inner.style.transform = px === 0 ? "" : `translateX(${px}px)`;
+    }
+
+    // Exponential decay settling in ~300ms — matches iOS edge-bounce duration
+    function springBack() {
+      cancelAnimationFrame(springRafId);
+      const animate = () => {
+        overscroll *= 0.80;
+        if (Math.abs(overscroll) < 0.2) {
+          inner.style.transform = "";
+          overscroll = 0;
+          return;
+        }
+        inner.style.transform = `translateX(${overscroll}px)`;
+        springRafId = requestAnimationFrame(animate);
+      };
+      springRafId = requestAnimationFrame(animate);
+    }
+
+    function getFlickVelocity(): number {
+      const now = performance.now();
+      // Use samples from the last 100ms for a stable, noise-free velocity
+      const recent = velSamples.filter((s) => now - s.t < 100);
+      if (recent.length < 2) return 0;
+      const oldest = recent[0];
+      const newest = recent[recent.length - 1];
+      const dt = newest.t - oldest.t;
+      return dt > 0 ? (oldest.x - newest.x) / dt : 0;
+    }
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.pointerType === "touch" || e.button !== 0) return;
+      cancelAnimationFrame(drag.rafId);
+      cancelAnimationFrame(springRafId);
+      overscroll = 0;
+      inner.style.transform = "";
+      velSamples.length = 0;
+      drag.active = true;
+      drag.moved = false;
+      drag.startX = e.clientX;
+      drag.lastX = e.clientX;
+      drag.lastTime = performance.now();
+      drag.velocity = 0;
+      drag.scrollLeft = el.scrollLeft;
+      el.style.cursor = "grabbing";
+      document.body.style.cursor = "grabbing";
+      window.addEventListener("pointermove", onPointerMove);
+      window.addEventListener("pointerup", onPointerUp);
+      window.addEventListener("pointercancel", onPointerUp);
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (!drag.active) return;
+      const dx = e.clientX - drag.startX;
+      if (Math.abs(dx) > 5) drag.moved = true;
+      if (!drag.moved) return;
+
+      const now = performance.now();
+      velSamples.push({ x: e.clientX, t: now });
+      // Keep buffer lean — only last 20 samples needed
+      if (velSamples.length > 20) velSamples.shift();
+
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      const raw = drag.scrollLeft - dx;
+      if (raw < 0) {
+        el.scrollLeft = 0;
+        setTranslate(rubberBand(-raw));
+      } else if (raw > maxScroll) {
+        el.scrollLeft = maxScroll;
+        setTranslate(-rubberBand(raw - maxScroll));
+      } else {
+        el.scrollLeft = raw;
+        setTranslate(0);
+      }
+    };
+
+    const onPointerUp = () => {
+      if (!drag.active) return;
+      drag.active = false;
+      el.style.cursor = "grab";
+      document.body.style.cursor = "";
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
+
+      if (overscroll !== 0) {
+        springBack();
+        return;
+      }
+
+      const flickV = getFlickVelocity();
+      if (Math.abs(flickV) < 0.05) return;
+
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      // Clamp initial velocity so extreme flicks don't feel uncontrolled
+      let v = Math.max(-30, Math.min(30, flickV * 16));
+      const step = () => {
+        if (Math.abs(v) < 0.4) return;
+        const next = el.scrollLeft + v;
+        if (next <= 0 || next >= maxScroll) {
+          el.scrollLeft = Math.max(0, Math.min(maxScroll, next));
+          return;
+        }
+        el.scrollLeft = next;
+        v *= 0.93;
+        drag.rafId = requestAnimationFrame(step);
+      };
+      drag.rafId = requestAnimationFrame(step);
+    };
+
+    const onClickCapture = (e: MouseEvent) => {
+      if (drag.moved) {
+        e.stopPropagation();
+        e.preventDefault();
+        drag.moved = false;
+      }
+    };
+
+    el.addEventListener("pointerdown", onPointerDown);
+    el.addEventListener("click", onClickCapture, true);
+
+    return () => {
+      cancelAnimationFrame(drag.rafId);
+      cancelAnimationFrame(springRafId);
+      document.body.style.cursor = "";
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
+      el.removeEventListener("pointerdown", onPointerDown);
+      el.removeEventListener("click", onClickCapture, true);
+    };
+  }, []);
 
   const orderedActivities = useMemo(
     () => getOrderedActivities(workouts),
@@ -290,6 +457,7 @@ export function LogSheet() {
     }
     handleClose();
   };
+
 
   const onHandleDown = (e: React.PointerEvent) => {
     dragRef.current = { active: true, startY: e.clientY, dy: 0 };
@@ -551,20 +719,25 @@ export function LogSheet() {
         {/* Activity chips — horizontal scroll */}
         <div
           id="log-sheet-chips"
+          ref={chipsRef}
           style={{
             overflowX: "auto",
             overflowY: "hidden",
             scrollbarWidth: "none",
             flexShrink: 0,
             touchAction: "pan-x",
+            cursor: "grab",
+            userSelect: "none",
           }}
         >
           <div
+            ref={chipsInnerRef}
             style={{
               display: "flex",
               gap: 8,
               padding: "18px 24px 20px",
               width: "max-content",
+              willChange: "transform",
             }}
           >
             {(showAll ? orderedActivities : top5).map((activity) => {

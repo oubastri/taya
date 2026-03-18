@@ -71,10 +71,12 @@ export function ActivityIcon({
       width={iconSize}
       height={iconSize}
       aria-hidden
+      draggable={false}
       style={{
         width: iconSize,
         height: iconSize,
         objectFit: "contain",
+        pointerEvents: "none",
         ...(showWhite ? { filter: "brightness(0) invert(1)" } : {}),
       }}
     />
