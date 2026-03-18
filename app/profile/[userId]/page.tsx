@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useFriends } from "@/hooks/use-friends";
@@ -15,10 +14,12 @@ import type { Workout } from "@/types/workout";
 import { shareUrl } from "@/lib/share";
 
 function BackArrow() {
+  const router = useRouter();
   return (
-    <Link
-      href="/"
-      aria-label="Back to feed"
+    <button
+      type="button"
+      onClick={() => router.back()}
+      aria-label="Go back"
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -27,17 +28,17 @@ function BackArrow() {
         height: 44,
         borderRadius: 12,
         color: "var(--foreground)",
-        textDecoration: "none",
-        WebkitTapHighlightColor: "transparent",
-        backgroundColor: "var(--surface)",
+        background: "var(--surface)",
         border: "1px solid var(--border)",
+        cursor: "pointer",
+        WebkitTapHighlightColor: "transparent",
       }}
     >
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square" strokeLinejoin="miter" aria-hidden>
         <path d="M21 12H3" />
         <path d="M10 19L3 12l7-7" />
       </svg>
-    </Link>
+    </button>
   );
 }
 

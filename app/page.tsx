@@ -16,7 +16,7 @@ function FeedSkeleton() {
         <div
           key={i}
           className="skeleton"
-          style={{ height: 120, borderRadius: 8 }}
+          style={{ height: 120, borderRadius: 32 }}
         />
       ))}
     </div>
@@ -209,9 +209,10 @@ export default function FeedPage() {
                     style={{
                       margin: 0,
                       padding: gi === 0 ? "0 0 10px" : "24px 0 10px",
+                      fontFamily: '"Lexend Deca", var(--font-sans), sans-serif',
                       fontSize: 11,
                       fontWeight: 600,
-                      letterSpacing: "0.08em",
+                      letterSpacing: "-0.02em",
                       textTransform: "uppercase",
                       color: "#919191",
                     }}

@@ -175,14 +175,6 @@ function drawUserBowl(
   }
   ctx.restore();
 
-  // ── YOU: thin border ───────────────────────────────────────────────────
-  if (user.isYou) {
-    roundedRectPath(ctx, -half, -half, S, S, R);
-    ctx.strokeStyle = "#111";
-    ctx.lineWidth = 2.5;
-    ctx.stroke();
-  }
-
   // ── text labels ────────────────────────────────────────────────────────
   if (zoom >= 0.3) {
     const alpha = Math.min(1, (zoom - 0.3) / 0.15);
@@ -348,7 +340,7 @@ function SearchSheet({
           onPointerUp={onHandleUp}
           onPointerCancel={onHandleUp}
           style={{
-            padding: "18px 24px 0",
+            padding: "12px 24px 0",
             display: "flex",
             flexDirection: "column",
             alignItems: "center",

@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLogSheet } from "@/contexts/log-sheet";
 import { useWorkouts } from "@/hooks/use-workouts";
 import { ActivityIcon } from "./ActivityIcon";
@@ -13,142 +12,30 @@ import {
 } from "@/types/workout";
 import type { ActivityType } from "@/types/workout";
 
-/** Default 8 for new users (FTUX) — 2×4 grid. */
-const DEFAULT_TOP_8: ActivityType[] = [
+const DEFAULT_TOP_5: ActivityType[] = [
   "run",
   "walk",
   "cycle",
   "yoga",
   "lift",
-  "hiit",
-  "pilates",
-  "swim",
 ];
 
 const MAX_DESCRIPTION_LENGTH = 150;
+const SPRING = "0.38s cubic-bezier(0.32, 0.72, 0, 1)";
+const CLOSE_BTN = 54;
 
 function formatSheetDate(dateKey: string): string {
+  const today = toDateKey(new Date());
+  if (dateKey === today) return "TODAY";
   const d = fromDateKey(dateKey);
-  const weekday = d.toLocaleDateString("en-US", { weekday: "long" });
-  const month = d.toLocaleDateString("en-US", { month: "long" });
+  const weekday = d.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase();
+  const month = d.toLocaleDateString("en-US", { month: "short" }).toUpperCase();
   const day = d.getDate();
-  const year = d.getFullYear();
-  return `${weekday} ${month} ${day}, ${year}`;
+  return `${weekday} ${month} ${day}`;
 }
 
-const iconButtonStyle: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  width: 44,
-  height: 44,
-  borderRadius: "50%",
-  border: "none",
-  background: "transparent",
-  color: "#000",
-  cursor: "pointer",
-  flexShrink: 0,
-  WebkitTapHighlightColor: "transparent",
-};
-
-function CloseButton({ onClick, ariaLabel = "Close" }: { onClick: () => void; ariaLabel?: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={ariaLabel}
-      style={iconButtonStyle}
-    >
-      <img src="/icons/nav/close.svg" alt="" width={24} height={24} aria-hidden />
-    </button>
-  );
-}
-
-function BackButton({
-  onClick,
-  ariaLabel,
-}: {
-  onClick: () => void;
-  ariaLabel: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={ariaLabel}
-      style={iconButtonStyle}
-    >
-      <svg
-        width={24}
-        height={24}
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden
-      >
-        <path d="M19 12H5M12 19l-7-7 7-7" />
-      </svg>
-    </button>
-  );
-}
-
-function ActivityCard({
-  activity,
-  onSelect,
-}: {
-  activity: ActivityType;
-  onSelect: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-label={ACTIVITY_LABELS[activity]}
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 8,
-        padding: "16px 12px",
-        borderRadius: 14,
-        border: "1px solid #e7e7e7",
-        backgroundColor: "#fff",
-        cursor: "pointer",
-        fontFamily: "inherit",
-        fontSize: 14,
-        fontWeight: 500,
-        color: "#919191",
-        letterSpacing: "-0.02em",
-        lineHeight: 1.2,
-        WebkitTapHighlightColor: "transparent",
-        transition: "border-color 0.2s, background-color 0.2s, color 0.2s",
-        minHeight: 88,
-      }}
-      className="active:opacity-90"
-    >
-      <div
-        style={{
-          width: 44,
-          height: 44,
-          flexShrink: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <ActivityIcon type={activity} size={44} invert={false} />
-      </div>
-      <span style={{ textAlign: "center" }}>{ACTIVITY_LABELS[activity]}</span>
-    </button>
-  );
-}
-
-function getTop8FromWorkouts(workouts: { activityType?: ActivityType }[]): ActivityType[] {
-  if (workouts.length === 0) return [...DEFAULT_TOP_8];
+function getTop5(workouts: { activityType?: ActivityType }[]): ActivityType[] {
+  if (workouts.length === 0) return [...DEFAULT_TOP_5];
   const count = new Map<ActivityType, number>();
   for (const w of workouts) {
     const t = (w.activityType ?? "other") as ActivityType;
@@ -157,37 +44,213 @@ function getTop8FromWorkouts(workouts: { activityType?: ActivityType }[]): Activ
   const sorted = Array.from(count.entries())
     .sort((a, b) => b[1] - a[1])
     .map(([a]) => a);
-  const top8: ActivityType[] = [];
+  const top5: ActivityType[] = [];
   for (const a of sorted) {
-    if (top8.length >= 8) break;
-    top8.push(a);
+    if (top5.length >= 5) break;
+    top5.push(a);
   }
-  for (const a of DEFAULT_TOP_8) {
-    if (top8.length >= 8) break;
-    if (!top8.includes(a)) top8.push(a);
+  for (const a of DEFAULT_TOP_5) {
+    if (top5.length >= 5) break;
+    if (!top5.includes(a)) top5.push(a);
   }
-  return top8;
+  return top5;
+}
+
+function getOrderedActivities(
+  workouts: { activityType?: ActivityType }[]
+): ActivityType[] {
+  const top5 = getTop5(workouts);
+  const rest = ACTIVITY_TYPES.filter((a) => !top5.includes(a));
+  return [...top5, ...rest];
+}
+
+// ── Inline calendar ────────────────────────────────────────────────────────
+
+const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
+const MONTH_NAMES = [
+  "January","February","March","April","May","June",
+  "July","August","September","October","November","December",
+];
+
+function buildCalendarDays(year: number, month: number) {
+  const firstDow = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const daysInPrev = new Date(year, month, 0).getDate();
+  const cells: { date: Date; current: boolean }[] = [];
+
+  for (let i = firstDow - 1; i >= 0; i--) {
+    cells.push({ date: new Date(year, month - 1, daysInPrev - i), current: false });
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    cells.push({ date: new Date(year, month, d), current: true });
+  }
+  const trailing = 42 - cells.length;
+  for (let d = 1; d <= trailing; d++) {
+    cells.push({ date: new Date(year, month + 1, d), current: false });
+  }
+  return cells;
+}
+
+function CalendarPicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (dk: string) => void;
+}) {
+  const today = toDateKey(new Date());
+  const initYear = parseInt(value.slice(0, 4));
+  const initMonth = parseInt(value.slice(5, 7)) - 1;
+  const [vy, setVy] = useState(initYear);
+  const [vm, setVm] = useState(initMonth);
+
+  useEffect(() => {
+    setVy(parseInt(value.slice(0, 4)));
+    setVm(parseInt(value.slice(5, 7)) - 1);
+  }, [value]);
+
+  const cells = useMemo(() => buildCalendarDays(vy, vm), [vy, vm]);
+
+  const prev = () => {
+    if (vm === 0) { setVm(11); setVy(y => y - 1); }
+    else setVm(m => m - 1);
+  };
+  const next = () => {
+    if (vm === 11) { setVm(0); setVy(y => y + 1); }
+    else setVm(m => m + 1);
+  };
+
+  return (
+    <div style={{ padding: "12px 0 4px" }}>
+      {/* Month / year nav */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 10,
+        }}
+      >
+        <button
+          type="button"
+          onClick={prev}
+          aria-label="Previous month"
+          style={{
+            width: 32, height: 32, borderRadius: "50%",
+            border: "none", background: "rgba(0,0,0,0.06)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            cursor: "pointer", WebkitTapHighlightColor: "transparent",
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+            stroke="rgba(0,0,0,0.6)" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+        <span
+          style={{
+            fontFamily: "var(--font-sans), sans-serif",
+            fontSize: 14, fontWeight: 600,
+            letterSpacing: "-0.025em", color: "#000",
+          }}
+        >
+          {MONTH_NAMES[vm]} {vy}
+        </span>
+        <button
+          type="button"
+          onClick={next}
+          aria-label="Next month"
+          style={{
+            width: 32, height: 32, borderRadius: "50%",
+            border: "none", background: "rgba(0,0,0,0.06)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            cursor: "pointer", WebkitTapHighlightColor: "transparent",
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+            stroke="rgba(0,0,0,0.6)" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
+            <path d="M9 18l6-6-6-6" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Day-of-week labels */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", marginBottom: 4 }}>
+        {DAY_LABELS.map((l, i) => (
+          <div
+            key={i}
+            style={{
+              textAlign: "center",
+              fontFamily: "var(--font-sans), sans-serif",
+              fontSize: 11, fontWeight: 500,
+              color: "rgba(0,0,0,0.3)",
+              paddingBottom: 6,
+            }}
+          >
+            {l}
+          </div>
+        ))}
+      </div>
+
+      {/* Day cells */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
+        {cells.map((cell, i) => {
+          const dk = toDateKey(cell.date);
+          const isSelected = dk === value;
+          const isToday = dk === today;
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => { if (cell.current) onChange(dk); }}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                aspectRatio: "1",
+                borderRadius: "50%",
+                border: isToday && !isSelected ? "1.5px solid rgba(0,0,0,0.25)" : "none",
+                background: isSelected ? "#000" : "transparent",
+                color: isSelected
+                  ? "#fff"
+                  : cell.current
+                    ? isToday ? "#000" : "rgba(0,0,0,0.85)"
+                    : "rgba(0,0,0,0.18)",
+                fontFamily: "var(--font-sans), sans-serif",
+                fontSize: 13,
+                fontWeight: isSelected || isToday ? 600 : 400,
+                cursor: cell.current ? "pointer" : "default",
+                WebkitTapHighlightColor: "transparent",
+                transition: "background 0.15s",
+              }}
+            >
+              {cell.date.getDate()}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 export function LogSheet() {
   const { isOpen, close, initialDateKey, workoutToEdit } = useLogSheet();
   const { workouts, addWorkout, updateWorkout } = useWorkouts();
 
-  const [step, setStep] = useState<1 | 2>(1);
   const [selected, setSelected] = useState<ActivityType | null>(null);
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(() => toDateKey(new Date()));
-  const [dragOffset, setDragOffset] = useState(0);
-  const [showAllActivities, setShowAllActivities] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
 
-  const top8 = useMemo(
-    () => getTop8FromWorkouts(workouts),
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const scrimRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef({ active: false, startY: 0, dy: 0 });
+
+  const orderedActivities = useMemo(
+    () => getOrderedActivities(workouts),
     [workouts]
   );
-  const remainingActivities = useMemo(
-    () => ACTIVITY_TYPES.filter((a) => !top8.includes(a)),
-    [top8]
-  );
+  const top5 = useMemo(() => orderedActivities.slice(0, 5), [orderedActivities]);
+  const remaining = useMemo(() => orderedActivities.slice(5), [orderedActivities]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -195,30 +258,24 @@ export function LogSheet() {
       setDate(workoutToEdit.date);
       setDescription(workoutToEdit.description ?? "");
       setSelected((workoutToEdit.activityType ?? "other") as ActivityType);
-      setStep(2);
     } else {
       setDate(initialDateKey ?? toDateKey(new Date()));
       setDescription("");
       setSelected(null);
-      setStep(1);
     }
   }, [isOpen, initialDateKey, workoutToEdit]);
 
-  const startYRef = useRef(0);
-  const dragging = useRef(false);
-
-  const reset = () => {
-    setStep(1);
+  const reset = useCallback(() => {
     setSelected(null);
     setDescription("");
-    setDragOffset(0);
-    setShowAllActivities(false);
-  };
+    setShowAll(false);
+    setDatePickerOpen(false);
+  }, []);
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     close();
     setTimeout(reset, 400);
-  };
+  }, [close, reset]);
 
   const handleSubmit = () => {
     if (!selected) return;
@@ -234,396 +291,431 @@ export function LogSheet() {
     handleClose();
   };
 
-  const onTouchStart = (e: React.TouchEvent) => {
-    startYRef.current = e.touches[0].clientY;
-    dragging.current = true;
+  const onHandleDown = (e: React.PointerEvent) => {
+    dragRef.current = { active: true, startY: e.clientY, dy: 0 };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    if (sheetRef.current) sheetRef.current.style.transition = "none";
   };
 
-  const onTouchMove = (e: React.TouchEvent) => {
-    if (!dragging.current) return;
-    const dy = e.touches[0].clientY - startYRef.current;
-    if (dy > 0) setDragOffset(dy);
+  const onHandleMove = (e: React.PointerEvent) => {
+    if (!dragRef.current.active) return;
+    const dy = Math.max(0, e.clientY - dragRef.current.startY);
+    dragRef.current.dy = dy;
+    if (sheetRef.current) {
+      sheetRef.current.style.transform = `translateX(-50%) translateY(${dy}px)`;
+    }
   };
 
-  const onTouchEnd = () => {
-    dragging.current = false;
-    if (dragOffset > 90) {
-      handleClose();
+  const onHandleUp = () => {
+    if (!dragRef.current.active) return;
+    dragRef.current.active = false;
+    const { dy } = dragRef.current;
+
+    if (dy > 90) {
+      const vh = window.innerHeight;
+      if (sheetRef.current) {
+        sheetRef.current.style.transition = `transform ${SPRING}`;
+        sheetRef.current.style.transform = `translateX(-50%) translateY(${vh}px)`;
+      }
+      if (scrimRef.current) {
+        scrimRef.current.style.transition = `opacity 0.38s ease`;
+        scrimRef.current.style.opacity = "0";
+      }
+      setTimeout(() => {
+        close();
+        setTimeout(reset, 50);
+      }, 380);
     } else {
-      setDragOffset(0);
+      if (sheetRef.current) {
+        sheetRef.current.style.transition = `transform ${SPRING}`;
+        sheetRef.current.style.transform = "translateX(-50%) translateY(0)";
+        setTimeout(() => {
+          if (sheetRef.current) {
+            sheetRef.current.style.transition = "";
+            sheetRef.current.style.transform = "";
+          }
+        }, 380);
+      }
     }
   };
 
   const isEditing = !!workoutToEdit;
 
   return (
-    <div style={{ display: "contents" }}>
-      {/* Backdrop */}
+    <>
+      <style>{`
+        #log-sheet-chips::-webkit-scrollbar { display: none; }
+        #log-sheet-note::placeholder { color: rgba(0,0,0,0.28); }
+      `}</style>
+
+      {/* Scrim */}
       <div
+        ref={scrimRef}
         onClick={handleClose}
         aria-hidden
         style={{
           position: "fixed",
           inset: 0,
-          backgroundColor: "var(--overlay)",
           zIndex: 100,
+          background: "rgba(0,0,0,0.32)",
           opacity: isOpen ? 1 : 0,
           pointerEvents: isOpen ? "auto" : "none",
-          transition: "opacity 0.25s ease",
-          backdropFilter: "blur(4px)",
-          WebkitBackdropFilter: "blur(4px)",
+          transition: `opacity ${SPRING}`,
         }}
       />
 
-      {/* Sheet — fixed height; on desktop constrained to site max-width (428px) and centered */}
+      {/* Sheet */}
       <div
+        ref={sheetRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={isEditing ? "Edit workout" : "Log a workout"}
         style={{
           position: "fixed",
           bottom: 0,
-          left: 0,
-          right: 0,
-          display: "flex",
-          justifyContent: "center",
+          left: "50%",
+          width: "100%",
+          maxWidth: 428,
           zIndex: 101,
+          background: "rgba(255,255,255,0.82)",
+          backdropFilter: "blur(40px) saturate(1.8)",
+          WebkitBackdropFilter: "blur(40px) saturate(1.8)",
+          borderRadius: "32px 32px 0 0",
+          boxShadow:
+            "0 -1px 0 rgba(0,0,0,0.07), 0 -12px 48px rgba(0,0,0,0.13)",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          maxHeight: "90svh",
+          transform: isOpen
+            ? "translateX(-50%)"
+            : "translateX(-50%) translateY(100%)",
+          transition: `transform ${SPRING}`,
           pointerEvents: isOpen ? "auto" : "none",
         }}
       >
+        {/* Drag handle */}
         <div
-          onTouchStart={onTouchStart}
-          onTouchMove={onTouchMove}
-          onTouchEnd={onTouchEnd}
-          role="dialog"
-          aria-modal="true"
-          aria-label={isEditing ? "Edit workout" : "Log a workout"}
+          onPointerDown={onHandleDown}
+          onPointerMove={onHandleMove}
+          onPointerUp={onHandleUp}
+          onPointerCancel={onHandleUp}
           style={{
-            width: "100%",
-            maxWidth: 428,
-            height: "88vh",
-            maxHeight: "88vh",
-            backgroundColor: "var(--surface)",
-            borderRadius: "var(--radius-xl) var(--radius-xl) 0 0",
-            transform: isOpen ? `translateY(${dragOffset}px)` : "translateY(105%)",
-            transition:
-              dragOffset === 0
-                ? `transform ${isOpen ? "0.42s" : "0.32s"} cubic-bezier(0.32, 0.72, 0, 1)`
-                : "none",
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            boxShadow: "0 -4px 24px rgba(0,0,0,0.12)",
+          padding: "12px 24px 0",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          flexShrink: 0,
+          cursor: "grab",
+          touchAction: "none",
+          userSelect: "none",
           }}
         >
-        {/* Drag handle */}
-        <div style={{ display: "flex", justifyContent: "center", paddingTop: 10, paddingBottom: 16, flexShrink: 0 }}>
           <div
             style={{
-              width: 32,
-              height: 3,
+              width: 36,
+              height: 4,
               borderRadius: 2,
-              backgroundColor: "rgba(0,0,0,0.12)",
+              background: "rgba(0,0,0,0.16)",
             }}
           />
         </div>
 
-        {/* Step panes — both rendered, slide horizontally so height never changes */}
-        <div
+        {/* Close button */}
+        <button
+          type="button"
+          onClick={handleClose}
+          aria-label="Close"
           style={{
-            flex: 1,
-            minHeight: 0,
-            position: "relative",
-            overflow: "hidden",
+            position: "absolute",
+            top: 16,
+            right: 16,
+            zIndex: 1,
+            width: CLOSE_BTN,
+            height: CLOSE_BTN,
+            borderRadius: "100px",
+            background: "rgba(0,0,0,0.06)",
+            border: "1px solid rgba(0,0,0,0.07)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            WebkitTapHighlightColor: "transparent",
+            flexShrink: 0,
           }}
         >
-          {/* Step 1 pane — flex column so title stays fixed, only activities scroll */}
-          <div
-            aria-hidden={step !== 1}
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="rgba(0,0,0,0.55)"
+            strokeWidth="2.6"
+            strokeLinecap="round"
+            aria-hidden
+          >
+            <line x1="6" y1="6" x2="18" y2="18" />
+            <line x1="18" y1="6" x2="6" y2="18" />
+          </svg>
+        </button>
+
+        {/* Heading + date */}
+        <div style={{ padding: "20px 24px 0" }}>
+          <h2
             style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              display: "flex",
-              flexDirection: "column",
-              overflow: "hidden",
-              transform: step === 1 ? "translateX(0)" : "translateX(-100%)",
-              transition: "transform 0.35s cubic-bezier(0.32, 0.72, 0, 1)",
-              pointerEvents: step === 1 ? "auto" : "none",
+              fontFamily: "var(--font-sans), sans-serif",
+              fontSize: "clamp(26px, 7vw, 32px)",
+              fontWeight: 500,
+              lineHeight: 1.15,
+              letterSpacing: "-0.04em",
+              color: "#000",
+              margin: 0,
             }}
           >
-            {/* Same left padding (16px) for all elements for equal left alignment */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                paddingLeft: 16,
-                paddingRight: 16,
-                paddingBottom: 4,
-                flexShrink: 0,
-              }}
-            >
-              <CloseButton onClick={handleClose} ariaLabel="Close" />
-              <div style={{ width: 44 }} aria-hidden />
-            </div>
-            <h2
-              style={{
-                fontFamily: "var(--font-sans), sans-serif",
-                fontSize: "clamp(22px, 5.5vw, 28px)",
-                fontWeight: 500,
-                lineHeight: 1.25,
-                letterSpacing: "-0.02em",
-                color: "#000",
-                margin: 0,
-                marginLeft: 16,
-                marginRight: 16,
-                marginBottom: 12,
-                flexShrink: 0,
-              }}
-            >
-              What activity did you do?
-            </h2>
-            <div
-              style={{
-                flex: "1 1 0",
-                minHeight: 0,
-                paddingLeft: 16,
-                paddingRight: 16,
-                paddingBottom: "max(24px, env(safe-area-inset-bottom))",
-                overflowY: "auto",
-                WebkitOverflowScrolling: "touch" as React.CSSProperties["WebkitOverflowScrolling"],
-                scrollbarWidth: "none" as React.CSSProperties["scrollbarWidth"],
-              }}
-            >
-              {/* 4×2 grid: top 8 activities (4 per row, 2 rows) */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-                  gap: 12,
-                }}
-              >
-                {top8.map((activity) => (
-                  <ActivityCard
-                    key={activity}
-                    activity={activity}
-                    onSelect={() => {
-                      setSelected(activity);
-                      setStep(2);
-                    }}
-                  />
-                ))}
-              </div>
+            What did you do?
+          </h2>
 
-              {!showAllActivities ? (
+          {/* Date badge */}
+          <button
+            type="button"
+            onClick={() => setDatePickerOpen((o) => !o)}
+            aria-expanded={datePickerOpen}
+            style={{
+              marginTop: 14,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              padding: "4px 8px",
+              borderRadius: 4,
+              border: "1px dashed #919191",
+              background: "none",
+              cursor: "pointer",
+              fontFamily: '"B612 Mono", ui-monospace, monospace',
+              fontSize: 12,
+              fontWeight: 400,
+              color: "#000",
+              letterSpacing: "-0.48px",
+              WebkitTapHighlightColor: "transparent",
+              lineHeight: "normal",
+            }}
+          >
+            {formatSheetDate(date)}
+            <svg
+              width="9"
+              height="9"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+              style={{
+                transition: "transform 0.22s ease",
+                transform: datePickerOpen ? "rotate(180deg)" : "rotate(0deg)",
+              }}
+            >
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </button>
+
+          {/* Inline calendar — expands below the badge */}
+          <div
+            style={{
+              overflow: "hidden",
+              maxHeight: datePickerOpen ? 320 : 0,
+              opacity: datePickerOpen ? 1 : 0,
+              transition: "max-height 0.3s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.22s ease",
+            }}
+          >
+            <CalendarPicker
+              value={date}
+              onChange={(dk) => {
+                setDate(dk);
+                setDatePickerOpen(false);
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Separator */}
+        <div
+          style={{
+            height: "0.5px",
+            background: "rgba(0,0,0,0.08)",
+            margin: "24px 0 0",
+            flexShrink: 0,
+          }}
+        />
+
+        {/* Activity chips — horizontal scroll */}
+        <div
+          id="log-sheet-chips"
+          style={{
+            overflowX: "auto",
+            overflowY: "hidden",
+            scrollbarWidth: "none",
+            flexShrink: 0,
+            touchAction: "pan-x",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              padding: "18px 24px 20px",
+              width: "max-content",
+            }}
+          >
+            {(showAll ? orderedActivities : top5).map((activity) => {
+              const isSelected = selected === activity;
+              return (
                 <button
+                  key={activity}
                   type="button"
-                  onClick={() => setShowAllActivities(true)}
+                  onClick={() => setSelected(isSelected ? null : activity)}
+                  aria-pressed={isSelected}
                   style={{
-                    width: "100%",
-                    marginTop: 20,
-                    padding: "16px 20px",
-                    borderRadius: 14,
-                    border: "1px solid #e7e7e7",
-                    backgroundColor: "#fff",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 7,
+                    padding: "0 14px 0 10px",
+                    height: 40,
+                    borderRadius: 100,
+                    border: "none",
+                    background: isSelected ? "#000" : "rgba(0,0,0,0.06)",
                     cursor: "pointer",
                     fontFamily: "var(--font-sans), sans-serif",
-                    fontSize: 15,
+                    fontSize: 14,
                     fontWeight: 500,
-                    color: "#919191",
                     letterSpacing: "-0.02em",
+                    color: isSelected ? "#fff" : "rgba(0,0,0,0.75)",
                     WebkitTapHighlightColor: "transparent",
-                    transition: "border-color 0.2s, background-color 0.2s, color 0.2s",
-                    minHeight: 52,
-                  }}
-                  className="active:opacity-90"
-                >
-                  View more
-                </button>
-              ) : (
-                <>
-                  <p
-                    style={{
-                      margin: "24px 0 12px",
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: "var(--foreground-subtle)",
-                      letterSpacing: "0.02em",
-                    }}
-                  >
-                    All activities
-                  </p>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-                      gap: 12,
-                    }}
-                  >
-                    {remainingActivities.map((activity) => (
-                      <ActivityCard
-                        key={activity}
-                        activity={activity}
-                        onSelect={() => {
-                          setSelected(activity);
-                          setStep(2);
-                        }}
-                      />
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Step 2 pane */}
-          <div
-            aria-hidden={step !== 2}
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              overflowY: "auto",
-              overflowX: "hidden",
-              paddingBottom: "max(28px, env(safe-area-inset-bottom))",
-              WebkitOverflowScrolling: "touch" as React.CSSProperties["WebkitOverflowScrolling"],
-              scrollbarWidth: "none" as React.CSSProperties["scrollbarWidth"],
-              transform: step === 2 ? "translateX(0)" : "translateX(100%)",
-              transition: "transform 0.35s cubic-bezier(0.32, 0.72, 0, 1)",
-              pointerEvents: step === 2 ? "auto" : "none",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "0 16px 8px",
-              }}
-            >
-              <BackButton
-                onClick={() => setStep(1)}
-                ariaLabel="Back to activity selection"
-              />
-              <div style={{ width: 44 }} aria-hidden />
-            </div>
-            <p
-              style={{
-                fontFamily: "var(--font-sans), sans-serif",
-                fontSize: 32,
-                fontWeight: 400,
-                lineHeight: 1.2,
-                letterSpacing: "-0.04em",
-                color: "#000",
-                margin: "0 16px 24px",
-              }}
-            >
-              {formatSheetDate(date)}
-            </p>
-            {selected && (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 16,
-                  margin: "0 16px 24px",
-                  padding: 16,
-                  borderRadius: 8,
-                  backgroundColor: "#f3f3f3",
-                }}
-              >
-                <div
-                  style={{
-                    width: 56,
-                    height: 56,
+                    transition: "background 0.18s, color 0.18s",
                     flexShrink: 0,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
+                    whiteSpace: "nowrap",
                   }}
                 >
-                  <ActivityIcon type={selected} size={56} invert={false} />
-                </div>
-                <span
-                  style={{
-                    fontFamily: "var(--font-sans), sans-serif",
-                    fontSize: 24,
-                    fontWeight: 400,
-                    letterSpacing: "-0.04em",
-                    color: "#000",
-                  }}
-                >
-                  {ACTIVITY_LABELS[selected]}
-                </span>
-              </div>
-            )}
-            <div style={{ padding: "0 16px 24px" }}>
-              <textarea
-                placeholder="Tell us about it (optional)"
-                value={description}
-                onChange={(e) =>
-                  setDescription(e.target.value.slice(0, MAX_DESCRIPTION_LENGTH))
-                }
-                maxLength={MAX_DESCRIPTION_LENGTH}
-                rows={3}
-                style={{
-                  width: "100%",
-                  boxSizing: "border-box",
-                  resize: "none",
-                  padding: 15,
-                  borderRadius: 8,
-                  border: "1px solid #e7e7e7",
-                  backgroundColor: "#fff",
-                  fontFamily: "var(--font-sans), sans-serif",
-                  fontSize: 16,
-                  fontWeight: 400,
-                  color: "#000",
-                  letterSpacing: "-0.04em",
-                  outline: "none",
-                  display: "block",
-                  marginBottom: 8,
-                }}
-              />
-              <span
-                style={{
-                  display: "block",
-                  textAlign: "right",
-                  fontSize: 12,
-                  color: "rgba(0,0,0,0.4)",
-                  marginBottom: 24,
-                }}
-              >
-                {description.length}/{MAX_DESCRIPTION_LENGTH}
-              </span>
-            </div>
-            <div style={{ padding: "0 16px max(20px, env(safe-area-inset-bottom))" }}>
+                  <ActivityIcon type={activity} size={22} invert={isSelected} />
+                  {ACTIVITY_LABELS[activity]}
+                </button>
+              );
+            })}
+
+            {/* View more pill */}
+            {!showAll && remaining.length > 0 && (
               <button
                 type="button"
-                onClick={handleSubmit}
+                onClick={() => setShowAll(true)}
                 style={{
-                  width: "100%",
-                  height: 54,
-                  borderRadius: 50,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                  padding: "0 14px",
+                  height: 40,
+                  borderRadius: 100,
                   border: "none",
-                  backgroundColor: "#000",
-                  color: "#fff",
-                  fontFamily: "var(--font-sans), sans-serif",
-                  fontSize: 16,
-                  fontWeight: 400,
-                  letterSpacing: "-0.04em",
+                  background: "rgba(0,0,0,0.06)",
                   cursor: "pointer",
+                  fontFamily: "var(--font-sans), sans-serif",
+                  fontSize: 14,
+                  fontWeight: 500,
+                  letterSpacing: "-0.02em",
+                  color: "rgba(0,0,0,0.75)",
                   WebkitTapHighlightColor: "transparent",
-                  transition: "opacity 0.2s",
+                  flexShrink: 0,
+                  whiteSpace: "nowrap",
                 }}
               >
-                {isEditing ? "Save" : "Log move"}
+                View more
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <path d="M9 18l6-6-6-6" />
+                </svg>
               </button>
-            </div>
+            )}
           </div>
         </div>
+
+        {/* Separator */}
+        <div
+          style={{
+            height: "0.5px",
+            background: "rgba(0,0,0,0.08)",
+            flexShrink: 0,
+          }}
+        />
+
+        {/* Notes */}
+        <div style={{ padding: "22px 24px 0" }}>
+          <textarea
+            id="log-sheet-note"
+            placeholder="Add a note (optional)"
+            value={description}
+            onChange={(e) =>
+              setDescription(e.target.value.slice(0, MAX_DESCRIPTION_LENGTH))
+            }
+            maxLength={MAX_DESCRIPTION_LENGTH}
+            rows={4}
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              resize: "none",
+              padding: 0,
+              border: "none",
+              outline: "none",
+              background: "transparent",
+              fontFamily: "var(--font-sans), sans-serif",
+              fontSize: 16,
+              fontWeight: 400,
+              color: "#000",
+              letterSpacing: "-0.025em",
+              lineHeight: 1.55,
+              display: "block",
+            }}
+          />
+        </div>
+
+        {/* CTA */}
+        <div
+          style={{
+            padding: "20px 24px",
+            paddingBottom: "max(28px, env(safe-area-inset-bottom))",
+          }}
+        >
+          <button
+            type="button"
+            onClick={handleSubmit}
+            style={{
+              width: "100%",
+              height: 54,
+              borderRadius: 50,
+              border: "none",
+              backgroundColor: "#000",
+              color: "#fff",
+              fontFamily: "var(--font-sans), sans-serif",
+              fontSize: 16,
+              fontWeight: 500,
+              letterSpacing: "-0.03em",
+              cursor: selected ? "pointer" : "default",
+              WebkitTapHighlightColor: "transparent",
+              transition: "opacity 0.2s",
+              opacity: selected ? 1 : 0.3,
+            }}
+          >
+            {isEditing ? "Save" : "Log move"}
+          </button>
         </div>
       </div>
-    </div>
+    </>
   );
 }

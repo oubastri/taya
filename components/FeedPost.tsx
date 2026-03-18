@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { FeedItem } from "@/hooks/use-friends";
 import { ACTIVITY_FEED_PHRASE, ACTIVITY_FEED_HIGHLIGHT } from "@/types/workout";
@@ -8,31 +9,12 @@ import type { ActivityType } from "@/types/workout";
 import { ActivityIcon } from "./ActivityIcon";
 import { UserAvatar } from "./UserAvatar";
 
-const ACTIVITY_BLUE = "#0174ef";
+const ACTIVITY_GREEN = "#01EF54";
 
 const AVATAR_SIZE = 44;
 const ICON_SIZE = 28;
 const OVERLAP = 10;
 
-function formatTime(isoString: string): string {
-  return new Date(isoString).toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
-}
-
-function formatDateLabel(isoString: string): string {
-  const d = new Date(isoString);
-  const today = new Date();
-  const sameDay = (a: Date, b: Date) =>
-    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-  if (sameDay(d, today)) return "today";
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  if (sameDay(d, yesterday)) return "yesterday";
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
 
 function getActivityPhrase(activityType: string): string {
   return ACTIVITY_FEED_PHRASE[activityType as ActivityType] ?? ACTIVITY_FEED_PHRASE.other;
@@ -58,10 +40,11 @@ export function FeedPost({
   const highlight = ACTIVITY_FEED_HIGHLIGHT[activityType] ?? ACTIVITY_FEED_HIGHLIGHT.other;
   const isMe = currentUserId ? workout.userId === currentUserId : workout.userId === "me";
   const hasDescription = Boolean(workout.description?.trim());
-  const timeStr = formatTime(workout.createdAt);
-  const dateLabel = formatDateLabel(workout.createdAt);
   const beforeHighlight = phrase.slice(0, phrase.indexOf(highlight));
   const afterHighlight = phrase.slice(phrase.indexOf(highlight) + highlight.length);
+
+  const router = useRouter();
+  const profileHref = isMe ? "/profile" : `/profile/${workout.userId}`;
 
   const managed = likedProp !== undefined && onToggleLike !== undefined;
   const [localLiked, setLocalLiked] = useState(false);
@@ -104,18 +87,26 @@ export function FeedPost({
     lastTapRef.current = now;
   };
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest?.("button") || target.closest?.("a")) return;
+    router.push(profileHref);
+  };
+
   return (
     <article
+      onClick={handleCardClick}
       onTouchEnd={handleDoubleTapLike}
       onDoubleClick={handleDoubleTapLike}
       style={{
         backgroundColor: "#fff",
-        borderRadius: 8,
-        padding: 16,
+        borderRadius: 32,
+        padding: "16px 16px 24px",
         display: "flex",
         flexDirection: "column",
         gap: 20,
         overflow: "hidden",
+        cursor: "pointer",
       }}
     >
       <div
@@ -218,8 +209,8 @@ export function FeedPost({
             </Link>
           )}
           <span> {beforeHighlight}</span>
-          <span style={{ color: ACTIVITY_BLUE }}>{highlight}</span>
-          <span>{afterHighlight} {dateLabel} at {timeStr}.</span>
+          <span style={{ color: ACTIVITY_GREEN }}>{highlight}</span>
+          <span>{afterHighlight}.</span>
         </p>
         {hasDescription && (
           <p
