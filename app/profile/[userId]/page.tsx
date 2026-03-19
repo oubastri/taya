@@ -1,45 +1,44 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { useFriends } from "@/hooks/use-friends";
 import { useLikes } from "@/hooks/use-likes";
 import { ProfileCalendar } from "@/components/ProfileCalendar";
 import { ProfileSegmentedControl, type ProfileSection } from "@/components/ProfileSegmentedControl";
 import { FeedPost } from "@/components/FeedPost";
 import { ProfileStatNumber } from "@/components/ProfileStatNumber";
+import { ProfileAboutSection } from "@/components/ProfileAboutSection";
 import type { FeedItem } from "@/hooks/use-friends";
 import { UserAvatar } from "@/components/UserAvatar";
 import type { Workout } from "@/types/workout";
 import { shareUrl } from "@/lib/share";
 
-function BackArrow() {
-  const router = useRouter();
-  return (
-    <button
-      type="button"
-      onClick={() => router.back()}
-      aria-label="Go back"
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: 44,
-        height: 44,
-        borderRadius: 12,
-        color: "var(--foreground)",
-        background: "var(--surface)",
-        border: "1px solid var(--border)",
-        cursor: "pointer",
-        WebkitTapHighlightColor: "transparent",
-      }}
-    >
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square" strokeLinejoin="miter" aria-hidden>
-        <path d="M21 12H3" />
-        <path d="M10 19L3 12l7-7" />
-      </svg>
-    </button>
-  );
+const NAV_BTN_SIZE = 54;
+const NAV_BTN_STYLE: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: NAV_BTN_SIZE,
+  height: NAV_BTN_SIZE,
+  borderRadius: "100px",
+  backdropFilter: "blur(24px) saturate(1.8)",
+  WebkitBackdropFilter: "blur(24px) saturate(1.8)",
+  background: "var(--glass-btn-bg)",
+  border: "1px solid var(--glass-btn-border)",
+  boxShadow: "var(--glass-btn-shadow)",
+  cursor: "pointer",
+  flexShrink: 0,
+  WebkitTapHighlightColor: "transparent",
+  padding: 0,
+};
+
+function formatDateLabel(dateStr: string): string {
+  const today = new Date().toISOString().slice(0, 10);
+  if (dateStr === today) return "Today";
+  const d = new Date(dateStr + "T12:00:00");
+  return d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
 }
 
 function getStats(workouts: Workout[]) {
@@ -53,10 +52,7 @@ function getStats(workouts: Workout[]) {
     now.getFullYear(),
     now.getMonth(),
     now.getDate(),
-    23,
-    59,
-    59,
-    999
+    23, 59, 59, 999
   );
   return {
     thisMonth: workouts.filter((w) => {
@@ -72,13 +68,15 @@ function getStats(workouts: Workout[]) {
 
 function UserProfileSkeleton() {
   return (
-    <div style={{ padding: "0 16px" }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 28 }}>
-        <div className="skeleton" style={{ width: 84, height: 84, borderRadius: 32 }} />
-        <div className="skeleton" style={{ width: 180, height: 32, borderRadius: 8 }} />
+    <div style={{ padding: "0 20px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
+        <div className="skeleton" style={{ width: 84, height: 84, borderRadius: 28 }} />
+        <div className="skeleton" style={{ width: 160, height: 28, borderRadius: 6 }} />
+        <div className="skeleton" style={{ width: 100, height: 14, borderRadius: 4 }} />
+        <div className="skeleton" style={{ width: 220, height: 14, borderRadius: 4 }} />
       </div>
-      <div className="skeleton" style={{ height: 40, borderRadius: 8, marginBottom: 28 }} />
-      <div className="skeleton" style={{ height: 300, borderRadius: 8 }} />
+      <div className="skeleton" style={{ height: 48, borderRadius: 9999, marginBottom: 20 }} />
+      <div className="skeleton" style={{ height: 300, borderRadius: 16 }} />
     </div>
   );
 }
@@ -88,10 +86,13 @@ export default function UserProfilePage() {
   const router = useRouter();
   const userId = typeof params.userId === "string" ? params.userId : "";
   const { friends, hydrated: fh, follow, unfollow } = useFriends();
-  const [section, setSection] = useState<ProfileSection>("calendar");
-  const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
-  const [calendarDisplayKey, setCalendarDisplayKey] = useState<string | null>(null);
-  const [calendarExiting, setCalendarExiting] = useState(false);
+  const [section, setSection] = useState<ProfileSection>("about");
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetDateKey, setSheetDateKey] = useState<string | null>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const scrimRef = useRef<HTMLDivElement>(null);
+  const sheetDragRef = useRef({ active: false, startY: 0, dy: 0 });
+  const SPRING = "0.38s cubic-bezier(0.32, 0.72, 0, 1)";
 
   const isMe = userId === "me";
   const friend = !isMe ? friends.find((f) => f.id === userId) : null;
@@ -126,7 +127,6 @@ export default function UserProfilePage() {
 
   const stats = friend ? getStats(workouts) : { thisMonth: 0, thisWeek: 0 };
   const isFollowing = friend?.following ?? false;
-  const contentMaxWidth = 428;
 
   const handleShareProfile = useCallback(async () => {
     if (!friend) return;
@@ -140,33 +140,68 @@ export default function UserProfilePage() {
     if (!fh) return;
     if (isMe) {
       router.replace("/profile");
-      return;
     }
   }, [isMe, fh, router]);
 
-  useEffect(() => {
-    if (selectedDateKey !== null) {
-      setCalendarDisplayKey(selectedDateKey);
-      setCalendarExiting(false);
-    } else if (calendarDisplayKey !== null) {
-      setCalendarExiting(true);
-    }
-  }, [selectedDateKey, calendarDisplayKey]);
+  const openSheet = useCallback((dk: string) => {
+    setSheetDateKey(dk);
+    setSheetOpen(false);
+    requestAnimationFrame(() => requestAnimationFrame(() => setSheetOpen(true)));
+  }, []);
 
-  useEffect(() => {
-    if (!calendarExiting) return;
-    const t = setTimeout(() => {
-      setCalendarDisplayKey(null);
-      setCalendarExiting(false);
-    }, 200);
-    return () => clearTimeout(t);
-  }, [calendarExiting]);
+  const closeSheet = useCallback(() => {
+    setSheetOpen(false);
+    setTimeout(() => setSheetDateKey(null), 420);
+  }, []);
+
+  const onHandleDown = (e: React.PointerEvent) => {
+    sheetDragRef.current = { active: true, startY: e.clientY, dy: 0 };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    if (sheetRef.current) sheetRef.current.style.transition = "none";
+  };
+
+  const onHandleMove = (e: React.PointerEvent) => {
+    if (!sheetDragRef.current.active) return;
+    const dy = Math.max(0, e.clientY - sheetDragRef.current.startY);
+    sheetDragRef.current.dy = dy;
+    if (sheetRef.current) sheetRef.current.style.transform = `translateX(-50%) translateY(${dy}px)`;
+  };
+
+  const onHandleUp = () => {
+    if (!sheetDragRef.current.active) return;
+    sheetDragRef.current.active = false;
+    const { dy } = sheetDragRef.current;
+    if (dy > 90) {
+      const vh = window.innerHeight;
+      if (sheetRef.current) {
+        sheetRef.current.style.transition = `transform ${SPRING}`;
+        sheetRef.current.style.transform = `translateX(-50%) translateY(${vh}px)`;
+      }
+      if (scrimRef.current) {
+        scrimRef.current.style.transition = `opacity 0.38s ease`;
+        scrimRef.current.style.opacity = "0";
+      }
+      setSheetOpen(false);
+      setTimeout(() => setSheetDateKey(null), 420);
+    } else {
+      if (sheetRef.current) {
+        sheetRef.current.style.transition = `transform ${SPRING}`;
+        sheetRef.current.style.transform = "translateX(-50%) translateY(0)";
+        setTimeout(() => {
+          if (sheetRef.current) {
+            sheetRef.current.style.transition = "";
+            sheetRef.current.style.transform = "";
+          }
+        }, 400);
+      }
+    }
+  };
 
   if (!fh || isMe) {
     return (
       <main style={{ minHeight: "100vh", background: "var(--background)", paddingBottom: 96 }}>
-        <div style={{ padding: "max(env(safe-area-inset-top), 20px) 16px 0" }}>
-          <div style={{ height: 44, marginBottom: 24 }} />
+        <div style={{ padding: "max(env(safe-area-inset-top), 20px) 20px 0" }}>
+          <div style={{ height: 44, marginBottom: 20 }} />
         </div>
         <div style={{ maxWidth: 428, margin: "0 auto" }}>
           <UserProfileSkeleton />
@@ -184,10 +219,25 @@ export default function UserProfilePage() {
           padding: "max(env(safe-area-inset-top), 20px) 20px",
         }}
       >
-        <div style={{ marginBottom: 24 }}>
-          <BackArrow />
+        <div style={{ marginBottom: 20 }}>
+          <button
+            type="button"
+            onClick={() => router.back()}
+            aria-label="Go back"
+            style={NAV_BTN_STYLE}
+            className="active:scale-95"
+          >
+            <Image
+              src="/icons/nav/arrow-left.svg"
+              alt=""
+              width={18}
+              height={18}
+              aria-hidden
+              className="nav-btn-icon"
+            />
+          </button>
         </div>
-        <p style={{ fontSize: 18, color: "var(--foreground-muted)", letterSpacing: "-0.02em" }}>
+        <p style={{ fontSize: 17, color: "var(--foreground-muted)", letterSpacing: "-0.3px" }}>
           User not found.
         </p>
       </main>
@@ -222,267 +272,436 @@ export default function UserProfilePage() {
         paddingBottom: 96,
       }}
     >
-      <div style={{ padding: "max(env(safe-area-inset-top), 20px) 16px 0" }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            marginBottom: 24,
-          }}
+      {/* Back button — fixed top-left */}
+      <button
+        type="button"
+        onClick={() => router.back()}
+        aria-label="Go back"
+        style={{
+          ...NAV_BTN_STYLE,
+          position: "fixed",
+          top: "max(env(safe-area-inset-top), 20px)",
+          left: 16,
+          zIndex: 50,
+        }}
+        className="active:scale-95"
+      >
+        <Image
+          src="/icons/nav/arrow-left.svg"
+          alt=""
+          width={20}
+          height={20}
+          aria-hidden
+          className="nav-btn-icon"
+        />
+      </button>
+
+      {/* Settings + Share — fixed top-right */}
+      <div
+        style={{
+          position: "fixed",
+          top: "max(env(safe-area-inset-top), 20px)",
+          right: 16,
+          zIndex: 50,
+          display: "flex",
+          gap: 8,
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => router.push("/settings")}
+          aria-label="Settings"
+          style={NAV_BTN_STYLE}
+          className="active:scale-95"
         >
-          <div style={{ flex: 1, display: "flex", justifyContent: "flex-start", minWidth: 0 }}>
-            <BackArrow />
-          </div>
-          <p
-            style={{
-              flex: 1,
-              fontSize: 14,
-              fontWeight: 500,
-              color: "var(--foreground)",
-              margin: 0,
-              textAlign: "center",
-              minWidth: 0,
-            }}
-          >
-            @{friend.handle}
-          </p>
-          <div style={{ flex: 1, display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8, minWidth: 0 }}>
-            <button
-              type="button"
-              onClick={handleShareProfile}
-              aria-label="Share profile"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 40,
-                height: 40,
-                borderRadius: 12,
-                color: "var(--foreground)",
-                backgroundColor: "var(--surface)",
-                border: "1px solid var(--border)",
-                cursor: "pointer",
-                flexShrink: 0,
-                WebkitTapHighlightColor: "transparent",
-              }}
-              className="active:opacity-80"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <circle cx="18" cy="5" r="3" />
-                <circle cx="6" cy="12" r="3" />
-                <circle cx="18" cy="19" r="3" />
-                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              onClick={() => (isFollowing ? unfollow(friend.id) : follow(friend.id))}
-              style={{
-                padding: "8px 12px",
-                borderRadius: 33,
-                border: "none",
-                backgroundColor: isFollowing ? "var(--chip-bg)" : "var(--accent)",
-                color: isFollowing ? "var(--foreground)" : "#000",
-                fontSize: 14,
-                fontWeight: 500,
-                cursor: "pointer",
-                flexShrink: 0,
-                WebkitTapHighlightColor: "transparent",
-              }}
-              className="active:opacity-90"
-            >
-              {isFollowing ? "Following" : "Follow"}
-            </button>
-          </div>
-        </div>
+          <Image
+            src="/icons/nav/settings.svg"
+            alt=""
+            width={20}
+            height={20}
+            aria-hidden
+            className="nav-btn-icon"
+          />
+        </button>
+        <button
+          type="button"
+          onClick={handleShareProfile}
+          aria-label="Share profile"
+          style={NAV_BTN_STYLE}
+          className="active:scale-95"
+        >
+          <Image
+            src="/icons/nav/share.svg"
+            alt=""
+            width={20}
+            height={20}
+            aria-hidden
+            className="nav-btn-icon"
+          />
+        </button>
       </div>
 
+      {/* Spacer to push content below fixed buttons */}
+      <div style={{ height: "calc(max(env(safe-area-inset-top), 20px) + 54px + 20px)" }} />
+
+      {/* Content */}
       <div
         style={{
           width: "100%",
-          maxWidth: contentMaxWidth,
+          maxWidth: 428,
           margin: "0 auto",
           padding: "0 16px",
           boxSizing: "border-box",
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "flex-start",
-            marginBottom: 20,
-          }}
-        >
+        {/* Identity block */}
+        <div style={{ marginBottom: 40 }}>
+          {/* Avatar */}
           <div
             style={{
               width: 84,
               height: 84,
-              borderRadius: 32,
+              borderRadius: 28,
               overflow: "hidden",
               flexShrink: 0,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: "var(--foreground)",
-              marginBottom: 12,
+              backgroundColor: "var(--foreground-subtle)",
+              marginBottom: 16,
             }}
           >
             <UserAvatar avatarUrl={friend.avatarUrl} name={friend.name} fillParent />
           </div>
-          <h1
+
+          {/* Name + Follow row */}
+          <div
             style={{
-              fontFamily: "var(--font-sans), sans-serif",
-              fontSize: 32,
-              fontStyle: "normal",
-              fontWeight: 400,
-              lineHeight: "normal",
-              letterSpacing: "-1.28px",
-              color: "var(--foreground)",
-              margin: 0,
-              textAlign: "left",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 4,
             }}
           >
-            {friend.name}
-          </h1>
+            <h1
+              style={{
+                fontFamily: "var(--font-sans), sans-serif",
+                fontSize: 32,
+                fontWeight: 500,
+                letterSpacing: "-1.2px",
+                color: "var(--foreground)",
+                margin: 0,
+                lineHeight: 1,
+              }}
+            >
+              {friend.name}
+            </h1>
+            <button
+              type="button"
+              onClick={() => (isFollowing ? unfollow(friend.id) : follow(friend.id))}
+              style={{
+                padding: "8px 12px",
+                height: 37,
+                borderRadius: 9999,
+                border: isFollowing ? "1px solid var(--border-strong)" : "none",
+                backgroundColor: isFollowing ? "transparent" : "var(--accent)",
+                color: isFollowing ? "var(--foreground)" : "#000",
+                fontSize: 14,
+                fontWeight: 500,
+                letterSpacing: "-0.2px",
+                cursor: "pointer",
+                flexShrink: 0,
+                WebkitTapHighlightColor: "transparent",
+                fontFamily: "inherit",
+                transition: "background-color 0.2s ease, color 0.2s ease",
+                backdropFilter: "blur(10px)",
+              }}
+              className="active:scale-95"
+            >
+              {isFollowing ? "Following" : "Follow"}
+            </button>
+          </div>
+
+          {/* Handle + location */}
+          <p
+            style={{
+              margin: "0 0 2px",
+              fontSize: 14,
+              fontWeight: 500,
+              letterSpacing: "-0.2px",
+              color: "var(--foreground-subtle)",
+            }}
+          >
+            @{friend.handle}{friend.location ? ` · ${friend.location}` : ""}
+          </p>
+
+          {/* Followers / following */}
+          <p
+            style={{
+              margin: 0,
+              fontSize: 14,
+              fontWeight: 500,
+              letterSpacing: "-0.2px",
+              color: "var(--foreground-subtle)",
+            }}
+          >
+            {friend.followersCount ?? 0} followers · {workouts.length} following
+          </p>
         </div>
 
-        <div style={{ marginBottom: 28 }}>
+        {/* Segmented control */}
+        <div style={{ marginBottom: 48 }}>
           <ProfileSegmentedControl value={section} onChange={setSection} />
         </div>
 
-        <p
+        {/* Section content */}
+        <div
+          key={section}
+          className="animate-fade-in-up"
           style={{
-            fontFamily: "var(--font-sans), sans-serif",
-            fontSize: 32,
-            fontStyle: "normal",
-            fontWeight: 400,
-            lineHeight: "normal",
-            letterSpacing: "-1.28px",
-            color: "var(--foreground)",
-            marginTop: 28,
-            marginBottom: 40,
-            overflow: "visible",
+            animationDuration: "0.3s",
+            animationTimingFunction: "var(--ease-out-expo)",
           }}
         >
-          <ProfileStatNumber variant={0}>{workouts.length}</ProfileStatNumber> total moves.{" "}
-          <ProfileStatNumber variant={1}>{stats.thisMonth}</ProfileStatNumber> this month.{" "}
-          <ProfileStatNumber variant={2}>{stats.thisWeek}</ProfileStatNumber> this week.
-        </p>
-      </div>
-
-      <div
-        key={section}
-        className="animate-fade-in-up"
-        style={{
-          width: "100%",
-          maxWidth: contentMaxWidth,
-          margin: "0 auto",
-          padding: "0 16px",
-          boxSizing: "border-box",
-          animationDuration: "0.35s",
-          animationTimingFunction: "var(--ease-out-expo)",
-        }}
-      >
-        {section === "calendar" && (
-          <div
-            style={{
-              backgroundColor: "var(--surface)",
-              borderRadius: 8,
-              border: "1px solid var(--border)",
-              padding: "22px 20px",
-              overflow: "hidden",
-            }}
-          >
-            <ProfileCalendar
-              workouts={workouts}
-              readOnly
-              selectedDateKey={selectedDateKey}
-              onSelectDate={(dk) => setSelectedDateKey((prev) => (prev === dk ? null : dk))}
+          {section === "about" && (
+            <ProfileAboutSection
+              tagline={friend.tagline}
+              prompts={friend.prompts}
             />
-            <div
-              style={{
-                display: "grid",
-                gridTemplateRows:
-                  calendarDisplayKey !== null && !calendarExiting ? "1fr" : "0fr",
-                transition: `grid-template-rows ${calendarExiting ? "0.2" : "0.3"}s var(--ease-out-expo)`,
-                minHeight: 0,
-              }}
-            >
-              <div style={{ minHeight: 0, overflow: "hidden" }}>
-                {calendarDisplayKey && (
-                  <>
-                    <div
-                      style={{
-                        borderTop: "1px solid var(--border)",
-                        marginTop: 40,
-                        paddingTop: 20,
-                        paddingBottom: 20,
-                      }}
-                    />
-                    <div
-                      key={calendarDisplayKey}
-                      className={calendarExiting ? "calendar-post-exit" : "animate-fade-in-up"}
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 14,
-                        marginTop: -20,
-                        animationDuration: calendarExiting ? undefined : "0.3s",
-                        animationTimingFunction: "var(--ease-out-expo)",
-                        paddingBottom: 10,
-                      }}
-                    >
-                      {workouts
-                        .filter((w) => w.date === calendarDisplayKey)
-                        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-                        .map(renderFeedPost)}
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
+          )}
 
-        {section === "posts" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-            {movesByMonth.length === 0 ? (
+          {section === "moves" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+              {/* Stats sentence */}
               <p
                 style={{
-                  fontSize: 16,
-                  color: "var(--foreground-muted)",
-                  textAlign: "center",
-                  padding: "32px 0",
+                  fontFamily: "var(--font-sans), sans-serif",
+                  fontSize: 32,
+                  fontWeight: 400,
+                  lineHeight: "32px",
+                  letterSpacing: "-1.28px",
+                  color: "var(--foreground)",
+                  margin: 0,
                 }}
               >
-                No posts yet.
+                <ProfileStatNumber variant={0}>{workouts.length}</ProfileStatNumber> total moves.{" "}
+                <ProfileStatNumber variant={1}>{stats.thisMonth}</ProfileStatNumber> this month.{" "}
+                <ProfileStatNumber variant={2}>{stats.thisWeek}</ProfileStatNumber> this week.
               </p>
-            ) : (
-              movesByMonth.map(({ key, label, workouts: monthWorkouts }) => (
-                <section key={key}>
+
+              {/* Calendar */}
+              <div
+                style={{
+                  backgroundColor: "var(--surface)",
+                  borderRadius: 32,
+                  padding: "20px 18px",
+                }}
+              >
+                <ProfileCalendar
+                  workouts={workouts}
+                  readOnly
+                  onSelectDate={openSheet}
+                />
+              </div>
+
+              {/* Posts */}
+              {movesByMonth.length === 0 ? (
+                <p
+                  style={{
+                    fontSize: 15,
+                    color: "var(--foreground-muted)",
+                    textAlign: "center",
+                    padding: "40px 0",
+                    letterSpacing: "-0.2px",
+                    margin: 0,
+                  }}
+                >
+                  No moves yet.
+                </p>
+              ) : (
+                movesByMonth.map(({ key, label, workouts: monthWorkouts }) => (
+                  <section key={key}>
+                    <h2
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: "var(--foreground-subtle)",
+                        letterSpacing: "0.06em",
+                        textTransform: "uppercase",
+                        margin: "0 0 10px",
+                      }}
+                    >
+                      {label}
+                    </h2>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      {monthWorkouts.map(renderFeedPost)}
+                    </div>
+                  </section>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Day detail sheet */}
+      {sheetDateKey !== null && (() => {
+        const sheetWorkouts = workouts
+          .filter((w) => w.date === sheetDateKey)
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        return (
+          <>
+            <div
+              ref={scrimRef}
+              onClick={closeSheet}
+              aria-hidden
+              style={{
+                position: "fixed",
+                inset: 0,
+                zIndex: 99,
+                background: "var(--overlay)",
+                opacity: sheetOpen ? 1 : 0,
+                transition: `opacity ${SPRING}`,
+              }}
+            />
+            <div
+              ref={sheetRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Moves on ${sheetDateKey}`}
+              style={{
+                position: "fixed",
+                bottom: 0,
+                left: "50%",
+                width: "100%",
+                maxWidth: 428,
+                zIndex: 100,
+                background: "var(--sheet-bg)",
+                backdropFilter: "blur(40px) saturate(1.8)",
+                WebkitBackdropFilter: "blur(40px) saturate(1.8)",
+                borderRadius: "32px 32px 0 0",
+                boxShadow: "var(--sheet-shadow)",
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
+                maxHeight: "82svh",
+                transform: sheetOpen ? "translateX(-50%)" : "translateX(-50%) translateY(100%)",
+                transition: `transform ${SPRING}`,
+              }}
+            >
+              <div
+                onPointerDown={onHandleDown}
+                onPointerMove={onHandleMove}
+                onPointerUp={onHandleUp}
+                onPointerCancel={onHandleUp}
+                style={{
+                  padding: "12px 24px 0",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  flexShrink: 0,
+                  cursor: "grab",
+                  touchAction: "none",
+                  userSelect: "none",
+                }}
+              >
+                <div
+                  style={{
+                    width: 36,
+                    height: 4,
+                    borderRadius: 2,
+                    background: "var(--drag-handle)",
+                  }}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={closeSheet}
+                aria-label="Close"
+                style={{
+                  position: "absolute",
+                  top: 16,
+                  right: 16,
+                  zIndex: 1,
+                  width: 54,
+                  height: 54,
+                  borderRadius: "100px",
+                  background: "var(--close-btn-bg)",
+                  border: "1px solid var(--close-btn-border)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  WebkitTapHighlightColor: "transparent",
+                  flexShrink: 0,
+                }}
+                className="active:scale-95"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="var(--close-btn-icon)"
+                  strokeWidth="2.6"
+                  strokeLinecap="round"
+                  aria-hidden
+                >
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                </svg>
+              </button>
+              <div
+                style={{
+                  overflowY: "auto",
+                  flex: 1,
+                  WebkitOverflowScrolling: "touch" as React.CSSProperties["WebkitOverflowScrolling"],
+                  scrollbarWidth: "none" as React.CSSProperties["scrollbarWidth"],
+                }}
+              >
+                <div style={{ padding: "20px 20px 0" }}>
                   <h2
                     style={{
-                      fontSize: 13,
+                      fontFamily: "var(--font-sans), sans-serif",
+                      fontSize: "clamp(26px, 7vw, 32px)",
+                      fontWeight: 500,
+                      lineHeight: 1.15,
+                      letterSpacing: "-0.04em",
+                      color: "var(--foreground)",
+                      margin: "0 0 4px",
+                    }}
+                  >
+                    {formatDateLabel(sheetDateKey)}
+                  </h2>
+                  <p
+                    style={{
+                      margin: "0 0 20px",
+                      fontSize: 12,
                       fontWeight: 600,
                       color: "var(--foreground-subtle)",
-                      letterSpacing: "0.02em",
-                      margin: "0 0 12px",
+                      letterSpacing: "0.06em",
                       textTransform: "uppercase",
                     }}
                   >
-                    {label}
-                  </h2>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                    {monthWorkouts.map(renderFeedPost)}
-                  </div>
-                </section>
-              ))
-            )}
-          </div>
-        )}
-      </div>
+                    {sheetWorkouts.length} {sheetWorkouts.length === 1 ? "move" : "moves"}
+                  </p>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 12,
+                    padding: "0 20px",
+                    paddingBottom: "max(28px, env(safe-area-inset-bottom))",
+                  }}
+                >
+                  {sheetWorkouts.map(renderFeedPost)}
+                </div>
+              </div>
+            </div>
+          </>
+        );
+      })()}
     </main>
   );
 }

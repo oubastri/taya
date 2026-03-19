@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Lexend_Deca } from "next/font/google";
+import { Lexend_Deca, B612_Mono } from "next/font/google";
 import "./globals.css";
 import { DayDetailSheetProvider } from "@/contexts/day-detail-sheet";
 import { LogSheetProvider } from "@/contexts/log-sheet";
@@ -13,6 +13,13 @@ const lexendDeca = Lexend_Deca({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-sans",
+});
+
+const b612Mono = B612_Mono({
+  weight: "400",
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-mono",
 });
 
 export const metadata: Metadata = {
@@ -42,7 +49,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={lexendDeca.variable} suppressHydrationWarning>
+    <html lang="en" className={`${lexendDeca.variable} ${b612Mono.variable}`} suppressHydrationWarning>
       {/* Apply saved theme before first paint to avoid flash */}
       <script
         dangerouslySetInnerHTML={{

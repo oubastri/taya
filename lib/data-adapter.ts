@@ -141,6 +141,10 @@ export async function fetchUserProfile(): Promise<User | null> {
     avatarUrl: data.avatar_url ?? undefined,
     email: data.email ?? undefined,
     phone: data.phone ?? undefined,
+    location: data.location ?? undefined,
+    tagline: data.tagline ?? undefined,
+    bio: data.bio ?? undefined,
+    prompts: data.prompts ?? undefined,
   };
   supabaseCache.user = user;
   return user;
@@ -156,6 +160,10 @@ export async function updateUserProfile(updates: Partial<User>): Promise<void> {
   if (updates.avatarUrl !== undefined) dbUpdates.avatar_url = updates.avatarUrl;
   if (updates.phone !== undefined) dbUpdates.phone = updates.phone;
   if (updates.email !== undefined) dbUpdates.email = updates.email;
+  if (updates.location !== undefined) dbUpdates.location = updates.location;
+  if (updates.tagline !== undefined) dbUpdates.tagline = updates.tagline;
+  if (updates.bio !== undefined) dbUpdates.bio = updates.bio;
+  if (updates.prompts !== undefined) dbUpdates.prompts = updates.prompts;
 
   await supabase().from("profiles").update(dbUpdates).eq("id", uid);
 }
@@ -274,6 +282,10 @@ export async function fetchFriends(): Promise<FriendData[]> {
     avatarUrl: p.avatar_url ?? undefined,
     email: p.email ?? undefined,
     phone: p.phone ?? undefined,
+    location: p.location ?? undefined,
+    tagline: p.tagline ?? undefined,
+    bio: p.bio ?? undefined,
+    prompts: p.prompts ?? undefined,
     following: followingIds.has(p.id),
     workouts: workoutsByUser[p.id] ?? [],
   }));

@@ -7,6 +7,7 @@ import { UserAvatar } from "@/components/UserAvatar";
 import { BackButton } from "@/components/BackButton";
 import { createClient } from "@/lib/supabase/client";
 import { isRealMode, clearAuthCache } from "@/lib/data-adapter";
+import { PROMPT_OPTIONS, type ProfilePrompt } from "@/types/user";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -14,16 +15,26 @@ export default function SettingsPage() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [nameInput, setNameInput] = useState("");
-  const [nameReady, setNameReady] = useState(false);
+  const [locationInput, setLocationInput] = useState("");
+  const [taglineInput, setTaglineInput] = useState("");
+  const [promptAnswers, setPromptAnswers] = useState<string[]>(["", "", "", ""]);
+  const [fieldsReady, setFieldsReady] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
-  if (!nameReady && hydrated) {
+  if (!fieldsReady && hydrated) {
     setNameInput(user.name);
-    setNameReady(true);
+    setLocationInput(user.location ?? "");
+    setTaglineInput(user.tagline ?? "");
+    const answers = PROMPT_OPTIONS.map((q) => {
+      const existing = user.prompts?.find((p) => p.question === q);
+      return existing?.answer ?? "";
+    });
+    setPromptAnswers(answers);
+    setFieldsReady(true);
   }
 
   function showToast(msg: string) {
@@ -62,11 +73,35 @@ export default function SettingsPage() {
     }
   }
 
-  async function handleSaveName() {
+  function handleSaveName() {
     const trimmed = nameInput.trim();
     if (!trimmed || trimmed === user.name) return;
     updateUser({ name: trimmed });
     showToast("Name saved!");
+  }
+
+  function handleSaveLocation() {
+    const trimmed = locationInput.trim();
+    if (trimmed === (user.location ?? "")) return;
+    updateUser({ location: trimmed || undefined });
+    showToast("Location saved!");
+  }
+
+  function handleSaveTagline() {
+    const trimmed = taglineInput.trim();
+    if (trimmed === (user.tagline ?? "")) return;
+    updateUser({ tagline: trimmed || undefined });
+    showToast("Tagline saved!");
+  }
+
+  function handleSavePrompt(index: number) {
+    const answer = promptAnswers[index].trim();
+    const prompts: ProfilePrompt[] = PROMPT_OPTIONS.map((q, i) => ({
+      question: q,
+      answer: i === index ? answer : (promptAnswers[i]?.trim() ?? ""),
+    })).filter((p) => p.answer);
+    updateUser({ prompts: prompts.length > 0 ? prompts : undefined });
+    showToast("Prompt saved!");
   }
 
   async function handleSignOut() {
@@ -204,16 +239,14 @@ export default function SettingsPage() {
           {/* Name */}
           <div>
             <label style={labelStyle}>Name</label>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input
-                type="text"
-                value={nameInput}
-                onChange={(e) => setNameInput(e.target.value)}
-                onBlur={handleSaveName}
-                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                style={inputStyle}
-              />
-            </div>
+            <input
+              type="text"
+              value={nameInput}
+              onChange={(e) => setNameInput(e.target.value)}
+              onBlur={handleSaveName}
+              onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+              style={inputStyle}
+            />
           </div>
 
           {/* Handle (read-only) */}
@@ -229,6 +262,35 @@ export default function SettingsPage() {
             >
               @{user.handle}
             </div>
+          </div>
+
+          {/* Location */}
+          <div>
+            <label style={labelStyle}>Location</label>
+            <input
+              type="text"
+              value={locationInput}
+              onChange={(e) => setLocationInput(e.target.value)}
+              onBlur={handleSaveLocation}
+              onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+              placeholder="e.g. Los Angeles"
+              style={inputStyle}
+            />
+          </div>
+
+          {/* Tagline */}
+          <div>
+            <label style={labelStyle}>Tagline</label>
+            <input
+              type="text"
+              value={taglineInput}
+              onChange={(e) => setTaglineInput(e.target.value)}
+              onBlur={handleSaveTagline}
+              onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+              placeholder="Your motto or tagline"
+              maxLength={120}
+              style={inputStyle}
+            />
           </div>
 
           {/* Email (read-only) */}
@@ -247,6 +309,45 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Prompts Section */}
+        <div style={{ marginBottom: 40 }}>
+          <h2
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              color: "var(--foreground-subtle)",
+              margin: "0 0 16px",
+            }}
+          >
+            Profile Prompts
+          </h2>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {PROMPT_OPTIONS.map((question, i) => (
+              <div key={question}>
+                <label style={{ ...labelStyle, textTransform: "none", letterSpacing: "-0.2px", fontSize: 13 }}>
+                  {question}
+                </label>
+                <input
+                  type="text"
+                  value={promptAnswers[i]}
+                  onChange={(e) => {
+                    const next = [...promptAnswers];
+                    next[i] = e.target.value;
+                    setPromptAnswers(next);
+                  }}
+                  onBlur={() => handleSavePrompt(i)}
+                  onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                  placeholder="Your answer..."
+                  maxLength={200}
+                  style={inputStyle}
+                />
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Actions */}

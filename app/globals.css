@@ -544,6 +544,14 @@ body.search-open .bottom-nav-wrapper {
   filter: brightness(0) invert(1);
 }
 
+/* Nav button icons — black in light mode, white in dark mode */
+.nav-btn-icon {
+  filter: brightness(0);
+}
+[data-theme="dark"] .nav-btn-icon {
+  filter: brightness(0) invert(1);
+}
+
 /* Input placeholder color via CSS variable */
 input::placeholder,
 textarea::placeholder {

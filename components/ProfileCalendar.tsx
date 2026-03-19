@@ -41,11 +41,6 @@ export function ProfileCalendar({
     [workouts]
   );
 
-  const monthCount = useMemo(() => {
-    const prefix = `${year}-${String(month + 1).padStart(2, "0")}`;
-    return workouts.filter((w) => w.date.startsWith(prefix)).length;
-  }, [workouts, year, month]);
-
   const goBack = () => {
     if (month === 0) { setYear((y) => y - 1); setMonth(11); }
     else setMonth((m) => m - 1);
@@ -115,8 +110,8 @@ export function ProfileCalendar({
         <div style={{ textAlign: "center" }}>
           <div
             style={{
-              fontSize: 16,
-              fontWeight: 400,
+              fontSize: 14,
+              fontWeight: 500,
               letterSpacing: "-0.03em",
               color: "var(--foreground)",
               lineHeight: 1,
@@ -124,19 +119,6 @@ export function ProfileCalendar({
           >
             {MONTHS[month]} {year}
           </div>
-          {monthCount > 0 && (
-            <div
-              style={{
-                marginTop: 4,
-                fontSize: 11,
-                fontWeight: 700,
-                color: "var(--accent)",
-                letterSpacing: "0.02em",
-              }}
-            >
-              {monthCount} {monthCount === 1 ? "move" : "moves"}
-            </div>
-          )}
         </div>
 
         <button
@@ -204,23 +186,21 @@ export function ProfileCalendar({
 
               let bg: string;
               let border: string;
-              let scale = 1;
 
               if (isToday && hasWorkout) {
-                bg = "var(--accent)";
-                border = "2.5px solid var(--foreground)";
-                scale = 1;
+                bg = "var(--foreground)";
+                border = "2px solid var(--foreground)";
               } else if (isToday) {
-                bg = "transparent";
-                border = "2px solid var(--accent)";
+                bg = "rgba(0,0,0,0.05)";
+                border = "2px solid var(--foreground)";
               } else if (hasWorkout) {
-                bg = "var(--accent)";
+                bg = "var(--foreground)";
                 border = "none";
               } else if (isFuture) {
                 bg = "var(--border)";
                 border = "none";
               } else {
-                bg = "var(--border-strong)";
+                bg = "rgba(0,0,0,0.05)";
                 border = "none";
               }
 
@@ -236,9 +216,8 @@ export function ProfileCalendar({
 
               const isSelected = selectedDateKey === dk;
               const dayNum = date.getDate();
-              const isGreenCircle = hasWorkout || (isToday && hasWorkout);
               const dayLabelColor =
-                isGreenCircle ? "#000" : isToday ? "var(--accent)" : "var(--foreground)";
+                hasWorkout ? "#fff" : isToday ? "var(--foreground)" : isFuture ? "var(--foreground-faint)" : "rgba(0,0,0,0.2)";
 
               return (
                 <div
@@ -272,7 +251,6 @@ export function ProfileCalendar({
                       backgroundColor: bg,
                       border: isSelected ? "1.5px solid var(--foreground)" : border,
                       boxSizing: "border-box",
-                      transform: `scale(${scale})`,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",

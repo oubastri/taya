@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { getAdapter } from "@/lib/data-adapter";
 import { UserAvatar } from "@/components/UserAvatar";
+import { PROMPT_OPTIONS, type ProfilePrompt } from "@/types/user";
 
 function toHandle(name: string): string {
   return name
@@ -14,8 +15,9 @@ function toHandle(name: string): string {
     .slice(0, 20);
 }
 
-type Step = "name" | "handle" | "photo";
+type Step = "name" | "handle" | "photo" | "location" | "tagline" | "prompts";
 
+const TOTAL_STEPS = 6;
 const isMockMode = process.env.NEXT_PUBLIC_DATA_MODE !== "real";
 
 export default function OnboardingPage() {
@@ -28,6 +30,9 @@ export default function OnboardingPage() {
   const [handleError, setHandleError] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [location, setLocation] = useState("");
+  const [tagline, setTagline] = useState("");
+  const [promptAnswers, setPromptAnswers] = useState<string[]>(["", "", "", ""]);
   const [loading, setLoading] = useState(false);
 
   function handleNameNext(e: React.FormEvent) {
@@ -89,6 +94,10 @@ export default function OnboardingPage() {
   async function handleFinish() {
     setLoading(true);
     try {
+      const prompts: ProfilePrompt[] = PROMPT_OPTIONS
+        .map((q, i) => ({ question: q, answer: promptAnswers[i]?.trim() ?? "" }))
+        .filter((p) => p.answer);
+
       if (isMockMode) {
         const adapter = getAdapter();
         adapter.setUser({
@@ -96,6 +105,9 @@ export default function OnboardingPage() {
           name: name.trim(),
           handle: cleanHandle,
           avatarUrl: photoPreview ?? undefined,
+          location: location.trim() || undefined,
+          tagline: tagline.trim() || undefined,
+          prompts: prompts.length > 0 ? prompts : undefined,
         });
         router.push("/");
         return;
@@ -129,6 +141,9 @@ export default function OnboardingPage() {
         onboarding_completed: true,
       };
       if (avatarUrl) updates.avatar_url = avatarUrl;
+      if (location.trim()) updates.location = location.trim();
+      if (tagline.trim()) updates.tagline = tagline.trim();
+      if (prompts.length > 0) updates.prompts = prompts;
 
       const { error } = await supabase
         .from("profiles")
@@ -147,7 +162,7 @@ export default function OnboardingPage() {
     }
   }
 
-  // ── Step 1: Name ──
+  // Step 1: Name
   if (step === "name") {
     return (
       <OnboardingShell step={1}>
@@ -173,7 +188,7 @@ export default function OnboardingPage() {
     );
   }
 
-  // ── Step 2: Handle ──
+  // Step 2: Handle
   if (step === "handle") {
     return (
       <OnboardingShell step={2}>
@@ -237,72 +252,184 @@ export default function OnboardingPage() {
     );
   }
 
-  // ── Step 3: Photo (optional) ──
+  // Step 3: Photo (optional)
+  if (step === "photo") {
+    return (
+      <OnboardingShell step={3}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          <div>
+            <p style={titleStyle}>Add a photo</p>
+            <p style={subtitleStyle}>Optional — helps friends recognize you in the feed.</p>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
+            <div
+              onClick={() => fileRef.current?.click()}
+              style={{
+                width: 120,
+                height: 120,
+                borderRadius: 44,
+                overflow: "hidden",
+                cursor: "pointer",
+                border: "2px dashed var(--border-strong)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "var(--surface)",
+                transition: "border-color 0.2s",
+              }}
+            >
+              {photoPreview ? (
+                <img
+                  src={photoPreview}
+                  alt="Preview"
+                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                />
+              ) : (
+                <UserAvatar name={name} size="lg" />
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              style={{
+                background: "none",
+                border: "none",
+                color: "var(--accent)",
+                fontSize: 15,
+                fontWeight: 700,
+                fontFamily: "inherit",
+                cursor: "pointer",
+                padding: "4px 8px",
+              }}
+            >
+              {photoPreview ? "Change photo" : "Choose photo"}
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              onChange={handlePhotoSelect}
+              style={{ display: "none" }}
+            />
+          </div>
+
+          <button type="button" onClick={() => setStep("location")} style={primaryBtn(false)}>
+            Continue
+          </button>
+
+          <button type="button" onClick={() => setStep("handle")} style={backBtnStyle}>
+            ← Back
+          </button>
+        </div>
+      </OnboardingShell>
+    );
+  }
+
+  // Step 4: Location (optional)
+  if (step === "location") {
+    return (
+      <OnboardingShell step={4}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          <div>
+            <p style={titleStyle}>Where are you based?</p>
+            <p style={subtitleStyle}>Optional — shows on your profile so others can find local athletes.</p>
+          </div>
+          <input
+            type="text"
+            autoFocus
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            placeholder="e.g. Los Angeles"
+            style={textInputStyle}
+          />
+          <button type="button" onClick={() => setStep("tagline")} style={primaryBtn(false)}>
+            Continue
+          </button>
+          <button type="button" onClick={() => setStep("photo")} style={backBtnStyle}>
+            ← Back
+          </button>
+        </div>
+      </OnboardingShell>
+    );
+  }
+
+  // Step 5: Tagline (optional)
+  if (step === "tagline") {
+    return (
+      <OnboardingShell step={5}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          <div>
+            <p style={titleStyle}>Add a tagline</p>
+            <p style={subtitleStyle}>Optional — a motto or phrase that represents your athletic journey.</p>
+          </div>
+          <input
+            type="text"
+            autoFocus
+            value={tagline}
+            onChange={(e) => setTagline(e.target.value)}
+            placeholder="e.g. All day I dream about sports."
+            maxLength={120}
+            style={textInputStyle}
+          />
+          <button type="button" onClick={() => setStep("prompts")} style={primaryBtn(false)}>
+            Continue
+          </button>
+          <button type="button" onClick={() => setStep("location")} style={backBtnStyle}>
+            ← Back
+          </button>
+        </div>
+      </OnboardingShell>
+    );
+  }
+
+  // Step 6: Prompts (optional)
   return (
-    <OnboardingShell step={3}>
+    <OnboardingShell step={6}>
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         <div>
-          <p style={titleStyle}>Add a photo</p>
-          <p style={subtitleStyle}>Optional — helps friends recognize you in the feed.</p>
+          <p style={titleStyle}>Profile prompts</p>
+          <p style={subtitleStyle}>Optional — answer any that speak to you. These show on your About page.</p>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
-          <div
-            onClick={() => fileRef.current?.click()}
-            style={{
-              width: 120,
-              height: 120,
-              borderRadius: 44,
-              overflow: "hidden",
-              cursor: "pointer",
-              border: "2px dashed var(--border-strong)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: "var(--surface)",
-              transition: "border-color 0.2s",
-            }}
-          >
-            {photoPreview ? (
-              <img
-                src={photoPreview}
-                alt="Preview"
-                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {PROMPT_OPTIONS.map((question, i) => (
+            <div key={question}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  letterSpacing: "-0.2px",
+                  color: "var(--foreground-subtle)",
+                  marginBottom: 6,
+                  fontFamily: "var(--font-mono), 'B612 Mono', monospace",
+                  textTransform: "uppercase",
+                }}
+              >
+                {question}
+              </label>
+              <input
+                type="text"
+                value={promptAnswers[i]}
+                onChange={(e) => {
+                  const next = [...promptAnswers];
+                  next[i] = e.target.value;
+                  setPromptAnswers(next);
+                }}
+                placeholder="Your answer..."
+                maxLength={200}
+                style={{ ...textInputStyle, fontSize: 16 }}
               />
-            ) : (
-              <UserAvatar name={name} size="lg" />
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            style={{
-              background: "none",
-              border: "none",
-              color: "var(--accent)",
-              fontSize: 15,
-              fontWeight: 700,
-              fontFamily: "inherit",
-              cursor: "pointer",
-              padding: "4px 8px",
-            }}
-          >
-            {photoPreview ? "Change photo" : "Choose photo"}
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            onChange={handlePhotoSelect}
-            style={{ display: "none" }}
-          />
+            </div>
+          ))}
         </div>
 
         <button type="button" onClick={handleFinish} disabled={loading} style={primaryBtn(loading)}>
           {loading ? "Saving…" : "Let's go"}
         </button>
 
-        <button type="button" onClick={() => setStep("handle")} style={backBtnStyle}>
+        <button type="button" onClick={() => setStep("tagline")} style={backBtnStyle}>
           ← Back
         </button>
       </div>
@@ -310,7 +437,7 @@ export default function OnboardingPage() {
   );
 }
 
-// ── Shared styles ──
+// Shared styles
 
 const titleStyle: React.CSSProperties = {
   margin: "0 0 6px",
@@ -393,7 +520,7 @@ function OnboardingShell({
     >
       <div style={{ width: "100%", maxWidth: 400 }}>
         <div style={{ display: "flex", gap: 6, marginBottom: 32 }}>
-          {[1, 2, 3].map((s) => (
+          {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((s) => (
             <div
               key={s}
               style={{

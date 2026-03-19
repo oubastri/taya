@@ -12,34 +12,60 @@ const DEFAULT_USER: User = {
   handle: "me",
 };
 
+let sharedUser: User = DEFAULT_USER;
+let sharedHydrated = false;
+const subscribers = new Set<(u: User) => void>();
+
+function notifyAll() {
+  subscribers.forEach((fn) => fn(sharedUser));
+}
+
+function hydrateOnce() {
+  if (sharedHydrated) return;
+  sharedHydrated = true;
+
+  if (isRealMode) {
+    fetchUserProfile().then((u) => {
+      if (u) sharedUser = u;
+      notifyAll();
+    });
+  } else {
+    const CORRECT_AVATAR_URL = "/profilephotos/user10.jpg";
+    let stored = adapter.getUser();
+    if (stored && stored.avatarUrl !== CORRECT_AVATAR_URL) {
+      stored = { ...stored, avatarUrl: CORRECT_AVATAR_URL };
+      adapter.setUser(stored);
+    }
+    if (stored) sharedUser = stored;
+    notifyAll();
+  }
+}
+
 export function useUser() {
-  const [user, setUser] = useState<User>(DEFAULT_USER);
-  const [hydrated, setHydrated] = useState(false);
+  const [user, setUser] = useState<User>(sharedUser);
+  const [hydrated, setHydrated] = useState(sharedHydrated);
 
   useEffect(() => {
-    if (isRealMode) {
-      fetchUserProfile().then((u) => {
-        if (u) setUser(u);
-        setHydrated(true);
-      });
-    } else {
-      const CORRECT_AVATAR_URL = "/profilephotos/user10.jpg";
-      let stored = adapter.getUser();
-      if (stored && stored.avatarUrl !== CORRECT_AVATAR_URL) {
-        stored = { ...stored, avatarUrl: CORRECT_AVATAR_URL };
-        adapter.setUser(stored);
-      }
-      if (stored) setUser(stored);
+    const listener = (u: User) => {
+      setUser(u);
+      setHydrated(true);
+    };
+    subscribers.add(listener);
+
+    if (sharedHydrated) {
+      setUser(sharedUser);
       setHydrated(true);
     }
+
+    hydrateOnce();
+
+    return () => { subscribers.delete(listener); };
   }, []);
 
   const updateUser = useCallback((updates: Partial<User>) => {
-    setUser((prev) => {
-      const next = { ...prev, ...updates };
-      adapter.setUser(next);
-      return next;
-    });
+    sharedUser = { ...sharedUser, ...updates };
+    adapter.setUser(sharedUser);
+    notifyAll();
     if (isRealMode) {
       updateUserProfile(updates);
     }

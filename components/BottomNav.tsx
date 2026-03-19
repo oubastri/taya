@@ -12,13 +12,13 @@ export function BottomNav() {
   const pathname = usePathname();
 
   const isHome = pathname === "/";
-  const isFriends = pathname === "/friends" || pathname.startsWith("/friends/");
+  const isAthletes = pathname === "/athletes" || pathname.startsWith("/athletes/");
   const isProfile = pathname === "/profile" || pathname.startsWith("/profile/");
-  const activeIndex = isHome ? 0 : isFriends ? 1 : isProfile ? 2 : -1;
+  const activeIndex = isHome ? 0 : isAthletes ? 1 : isProfile ? 2 : -1;
 
   return (
     <nav aria-label="Main navigation" className="bottom-nav-wrapper">
-      {/* Main pill: Home · Friends · Profile */}
+      {/* Main pill: Home · Athletes · Profile */}
       <div
         className="liquid-glass-nav"
         style={{ "--active-index": activeIndex >= 0 ? activeIndex : 0 } as React.CSSProperties}
@@ -45,15 +45,15 @@ export function BottomNav() {
           />
         </Link>
 
-        {/* Friends */}
+        {/* Athletes */}
         <Link
-          href="/friends"
-          aria-label="Friends"
+          href="/athletes"
+          aria-label="Athletes"
           className="nav-item"
-          data-active={isFriends || undefined}
+          data-active={isAthletes || undefined}
         >
           <Image
-            src={isFriends ? "/icons/tabbar/globe-selected.svg" : "/icons/tabbar/globe-unselected.svg"}
+            src={isAthletes ? "/icons/tabbar/globe-selected.svg" : "/icons/tabbar/globe-unselected.svg"}
             alt=""
             width={22}
             height={22}
