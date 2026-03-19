@@ -4,34 +4,73 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useFriends } from "@/hooks/use-friends";
+import { useUser } from "@/hooks/use-user";
+import { loadLikersForEntity } from "@/lib/load-likers";
 import { useLikes } from "@/hooks/use-likes";
 import { ProfileCalendar } from "@/components/ProfileCalendar";
 import { ProfileSegmentedControl, type ProfileSection } from "@/components/ProfileSegmentedControl";
 import { FeedPost } from "@/components/FeedPost";
 import { ProfileStatNumber } from "@/components/ProfileStatNumber";
 import { ProfileAboutSection } from "@/components/ProfileAboutSection";
+import { ProfileStatStrip } from "@/components/ProfileStatStrip";
+import { LikersSheet } from "@/components/LikersSheet";
+import {
+  buildProfileFansPeople,
+  buildProfileFollowingPeople,
+} from "@/lib/profile-social-lists";
 import type { FeedItem } from "@/hooks/use-friends";
+import type { LikePerson } from "@/types/likes";
 import { UserAvatar } from "@/components/UserAvatar";
 import type { Workout } from "@/types/workout";
-import { shareUrl } from "@/lib/share";
 
-const NAV_BTN_SIZE = 54;
-const NAV_BTN_STYLE: React.CSSProperties = {
-  display: "inline-flex",
+/** Matches athletes tab search control (`app/athletes/page.tsx`) */
+const PROFILE_NAV_HEIGHT = 54;
+
+/** Sticky top bar — stays pinned while profile content scrolls */
+const PROFILE_STICKY_TOP_BAR: React.CSSProperties = {
+  position: "sticky",
+  top: 0,
+  zIndex: 51,
+  width: "100vw",
+  maxWidth: "100vw",
+  marginLeft: "calc(50% - 50vw)",
+  marginRight: "calc(50% - 50vw)",
+  boxSizing: "border-box",
+  paddingTop: "max(env(safe-area-inset-top), 20px)",
+  paddingBottom: 20,
+  paddingLeft: 16,
+  paddingRight: 16,
+  display: "flex",
   alignItems: "center",
-  justifyContent: "center",
-  width: NAV_BTN_SIZE,
-  height: NAV_BTN_SIZE,
+  gap: 8,
+};
+
+const PROFILE_GLASS_CIRCLE_STYLE: React.CSSProperties = {
+  width: PROFILE_NAV_HEIGHT,
+  height: PROFILE_NAV_HEIGHT,
   borderRadius: "100px",
   backdropFilter: "blur(24px) saturate(1.8)",
   WebkitBackdropFilter: "blur(24px) saturate(1.8)",
   background: "var(--glass-btn-bg)",
   border: "1px solid var(--glass-btn-border)",
   boxShadow: "var(--glass-btn-shadow)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
   cursor: "pointer",
   flexShrink: 0,
   WebkitTapHighlightColor: "transparent",
   padding: 0,
+};
+
+const AVATAR_RADIUS = 32.789;
+
+const PROFILE_NAME_TAGLINE_TEXT: React.CSSProperties = {
+  fontFamily: "var(--font-sans), sans-serif",
+  fontSize: 32,
+  fontWeight: 400,
+  lineHeight: "32px",
+  letterSpacing: "-0.04em",
 };
 
 function formatDateLabel(dateStr: string): string {
@@ -68,14 +107,17 @@ function getStats(workouts: Workout[]) {
 
 function UserProfileSkeleton() {
   return (
-    <div style={{ padding: "0 20px" }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
-        <div className="skeleton" style={{ width: 84, height: 84, borderRadius: 28 }} />
-        <div className="skeleton" style={{ width: 160, height: 28, borderRadius: 6 }} />
-        <div className="skeleton" style={{ width: 100, height: 14, borderRadius: 4 }} />
-        <div className="skeleton" style={{ width: 220, height: 14, borderRadius: 4 }} />
+    <div style={{ padding: "0 16px" }}>
+      <div style={{ display: "flex", gap: 16, marginBottom: 16 }}>
+        <div className="skeleton" style={{ width: 84, height: 84, borderRadius: AVATAR_RADIUS }} />
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+          <div className="skeleton" style={{ height: 18, borderRadius: 4 }} />
+          <div className="skeleton" style={{ height: 18, borderRadius: 4 }} />
+          <div className="skeleton" style={{ height: 18, borderRadius: 4 }} />
+        </div>
       </div>
-      <div className="skeleton" style={{ height: 48, borderRadius: 9999, marginBottom: 20 }} />
+      <div className="skeleton" style={{ width: 160, height: 28, borderRadius: 6, marginBottom: 12 }} />
+      <div className="skeleton" style={{ height: 48, borderRadius: 9999, marginBottom: 32 }} />
       <div className="skeleton" style={{ height: 300, borderRadius: 16 }} />
     </div>
   );
@@ -86,7 +128,12 @@ export default function UserProfilePage() {
   const router = useRouter();
   const userId = typeof params.userId === "string" ? params.userId : "";
   const { friends, hydrated: fh, follow, unfollow } = useFriends();
+  const { user: me, hydrated: mh } = useUser();
   const [section, setSection] = useState<ProfileSection>("about");
+  const [socialSheet, setSocialSheet] = useState<{
+    title: string;
+    people: LikePerson[];
+  } | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetDateKey, setSheetDateKey] = useState<string | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -99,7 +146,70 @@ export default function UserProfilePage() {
   const workouts = useMemo(() => friend?.workouts ?? [], [friend?.workouts]);
 
   const workoutIds = useMemo(() => workouts.map((w) => w.id), [workouts]);
-  const { getLike, toggleLike } = useLikes(workoutIds);
+  const promptLikeIds = useMemo(
+    () =>
+      friend
+        ? (friend.prompts ?? []).map((_, i) => `profile-prompt:${friend.id}:${i}`)
+        : [],
+    [friend],
+  );
+  const likeEntityIds = useMemo(
+    () => [...workoutIds, ...promptLikeIds],
+    [workoutIds, promptLikeIds],
+  );
+  const likeViewer = useMemo(
+    () =>
+      mh
+        ? {
+            id: me.id,
+            name: me.name,
+            handle: me.handle,
+            avatarUrl: me.avatarUrl,
+          }
+        : null,
+    [mh, me.id, me.name, me.handle, me.avatarUrl],
+  );
+  const followingIds = useMemo(
+    () => new Set(friends.filter((f) => f.following).map((f) => f.id)),
+    [friends],
+  );
+  const resolveLikers = useCallback(
+    (entityId: string) => loadLikersForEntity(entityId, followingIds),
+    [followingIds],
+  );
+  const { getLike, toggleLike, likeIfNeeded } = useLikes(likeEntityIds, likeViewer);
+
+  const openFollowingSheet = useCallback(() => {
+    if (!friend) return;
+    const followingN =
+      friend.followingCount ?? Math.max(0, Math.floor((friend.followersCount ?? 0) / 4));
+    setSocialSheet({
+      title: "Following",
+      people: buildProfileFollowingPeople(friend.id, friends, followingN, false, followingIds),
+    });
+  }, [friend, friends, followingIds]);
+
+  const openFansSheet = useCallback(() => {
+    if (!friend) return;
+    setSocialSheet({
+      title: "Fans",
+      people: buildProfileFansPeople(
+        friend.id,
+        friends,
+        friend.followersCount ?? 0,
+        followingIds,
+      ),
+    });
+  }, [friend, friends, followingIds]);
+
+  const onSelectSocialProfile = useCallback(
+    (userId: string) => {
+      setSocialSheet(null);
+      if (userId === me.id) router.push("/profile");
+      else router.push(`/profile/${userId}`);
+    },
+    [router, me.id],
+  );
 
   const postsSorted = useMemo(
     () => [...workouts].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
@@ -128,20 +238,18 @@ export default function UserProfilePage() {
   const stats = friend ? getStats(workouts) : { thisMonth: 0, thisWeek: 0 };
   const isFollowing = friend?.following ?? false;
 
-  const handleShareProfile = useCallback(async () => {
-    if (!friend) return;
-    await shareUrl(`/profile/${friend.id}`, {
-      title: "TAYA",
-      text: `Check out ${friend.name}'s profile on TAYA — @${friend.handle}`,
-    });
-  }, [friend]);
-
   useEffect(() => {
     if (!fh) return;
     if (isMe) {
       router.replace("/profile");
     }
   }, [isMe, fh, router]);
+
+  useEffect(() => {
+    if (!socialSheet) return;
+    document.body.classList.add("search-open");
+    return () => document.body.classList.remove("search-open");
+  }, [socialSheet]);
 
   const openSheet = useCallback((dk: string) => {
     setSheetDateKey(dk);
@@ -197,7 +305,7 @@ export default function UserProfilePage() {
     }
   };
 
-  if (!fh || isMe) {
+  if (!fh || !mh || isMe) {
     return (
       <main style={{ minHeight: "100vh", background: "var(--background)", paddingBottom: 96 }}>
         <div style={{ padding: "max(env(safe-area-inset-top), 20px) 20px 0" }}>
@@ -224,14 +332,14 @@ export default function UserProfilePage() {
             type="button"
             onClick={() => router.back()}
             aria-label="Go back"
-            style={NAV_BTN_STYLE}
+            style={PROFILE_GLASS_CIRCLE_STYLE}
             className="active:scale-95"
           >
             <Image
               src="/icons/nav/arrow-left.svg"
               alt=""
-              width={18}
-              height={18}
+              width={20}
+              height={20}
               aria-hidden
               className="nav-btn-icon"
             />
@@ -257,12 +365,21 @@ export default function UserProfilePage() {
       <FeedPost
         key={workout.id}
         workout={feedItem}
+        currentUserId={me.id}
         liked={like.likedByMe}
         likeCount={like.count}
         onToggleLike={() => toggleLike(workout.id)}
+        onLikeIfNeeded={() => likeIfNeeded(workout.id)}
+        resolveLikers={resolveLikers}
+        density="compact"
       />
     );
   }
+
+  const tagline = (friend.tagline || friend.bio)?.trim() || "";
+  const crewStat =
+    friend.followingCount ??
+    Math.max(0, Math.floor((friend.followersCount ?? 0) / 4));
 
   return (
     <main
@@ -272,79 +389,6 @@ export default function UserProfilePage() {
         paddingBottom: 96,
       }}
     >
-      {/* Back button — fixed top-left */}
-      <button
-        type="button"
-        onClick={() => router.back()}
-        aria-label="Go back"
-        style={{
-          ...NAV_BTN_STYLE,
-          position: "fixed",
-          top: "max(env(safe-area-inset-top), 20px)",
-          left: 16,
-          zIndex: 50,
-        }}
-        className="active:scale-95"
-      >
-        <Image
-          src="/icons/nav/arrow-left.svg"
-          alt=""
-          width={20}
-          height={20}
-          aria-hidden
-          className="nav-btn-icon"
-        />
-      </button>
-
-      {/* Settings + Share — fixed top-right */}
-      <div
-        style={{
-          position: "fixed",
-          top: "max(env(safe-area-inset-top), 20px)",
-          right: 16,
-          zIndex: 50,
-          display: "flex",
-          gap: 8,
-        }}
-      >
-        <button
-          type="button"
-          onClick={() => router.push("/settings")}
-          aria-label="Settings"
-          style={NAV_BTN_STYLE}
-          className="active:scale-95"
-        >
-          <Image
-            src="/icons/nav/settings.svg"
-            alt=""
-            width={20}
-            height={20}
-            aria-hidden
-            className="nav-btn-icon"
-          />
-        </button>
-        <button
-          type="button"
-          onClick={handleShareProfile}
-          aria-label="Share profile"
-          style={NAV_BTN_STYLE}
-          className="active:scale-95"
-        >
-          <Image
-            src="/icons/nav/share.svg"
-            alt=""
-            width={20}
-            height={20}
-            aria-hidden
-            className="nav-btn-icon"
-          />
-        </button>
-      </div>
-
-      {/* Spacer to push content below fixed buttons */}
-      <div style={{ height: "calc(max(env(safe-area-inset-top), 20px) + 54px + 20px)" }} />
-
-      {/* Content */}
       <div
         style={{
           width: "100%",
@@ -354,107 +398,118 @@ export default function UserProfilePage() {
           boxSizing: "border-box",
         }}
       >
-        {/* Identity block */}
-        <div style={{ marginBottom: 40 }}>
-          {/* Avatar */}
-          <div
+        <header style={{ ...PROFILE_STICKY_TOP_BAR, justifyContent: "space-between" }}>
+          <button
+            type="button"
+            onClick={() => router.back()}
+            aria-label="Go back"
+            style={PROFILE_GLASS_CIRCLE_STYLE}
+            className="active:scale-95"
+          >
+            <Image
+              src="/icons/nav/arrow-left.svg"
+              alt=""
+              width={20}
+              height={20}
+              aria-hidden
+              className="nav-btn-icon"
+            />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => (isFollowing ? unfollow(friend.id) : follow(friend.id))}
             style={{
-              width: 84,
-              height: 84,
-              borderRadius: 28,
-              overflow: "hidden",
-              flexShrink: 0,
+              minWidth: 78,
+              width: "max-content",
+              height: 48,
+              padding: "8px 16px",
+              borderRadius: 33,
+              border: isFollowing ? "1px solid var(--border-strong)" : "none",
+              backgroundColor: isFollowing ? "var(--surface)" : "var(--accent)",
+              color: isFollowing ? "var(--foreground)" : "#000",
+              fontFamily: "var(--font-sans), sans-serif",
+              fontSize: 14,
+              fontWeight: 500,
+              letterSpacing: "normal",
+              lineHeight: "normal",
+              cursor: "pointer",
+              WebkitTapHighlightColor: "transparent",
+              backdropFilter: "blur(10px)",
+              WebkitBackdropFilter: "blur(10px)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: "var(--foreground-subtle)",
-              marginBottom: 16,
+              boxSizing: "border-box",
             }}
+            className="active:scale-95"
           >
-            <UserAvatar avatarUrl={friend.avatarUrl} name={friend.name} fillParent />
-          </div>
+            {isFollowing ? "Following" : "Follow"}
+          </button>
+        </header>
 
-          {/* Name + Follow row */}
+        <div style={{ marginTop: 36, marginBottom: 36 }}>
           <div
             style={{
               display: "flex",
-              alignItems: "center",
+              flexDirection: "row",
+              alignItems: "flex-start",
               justifyContent: "space-between",
-              marginBottom: 4,
+              gap: 16,
+              marginBottom: 16,
             }}
           >
-            <h1
+            <div
               style={{
-                fontFamily: "var(--font-sans), sans-serif",
-                fontSize: 32,
-                fontWeight: 500,
-                letterSpacing: "-1.2px",
-                color: "var(--foreground)",
-                margin: 0,
-                lineHeight: 1,
-              }}
-            >
-              {friend.name}
-            </h1>
-            <button
-              type="button"
-              onClick={() => (isFollowing ? unfollow(friend.id) : follow(friend.id))}
-              style={{
-                padding: "8px 12px",
-                height: 37,
-                borderRadius: 9999,
-                border: isFollowing ? "1px solid var(--border-strong)" : "none",
-                backgroundColor: isFollowing ? "transparent" : "var(--accent)",
-                color: isFollowing ? "var(--foreground)" : "#000",
-                fontSize: 14,
-                fontWeight: 500,
-                letterSpacing: "-0.2px",
-                cursor: "pointer",
+                width: 84,
+                height: 84,
+                borderRadius: AVATAR_RADIUS,
+                overflow: "hidden",
                 flexShrink: 0,
-                WebkitTapHighlightColor: "transparent",
-                fontFamily: "inherit",
-                transition: "background-color 0.2s ease, color 0.2s ease",
-                backdropFilter: "blur(10px)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "var(--foreground-subtle)",
               }}
-              className="active:scale-95"
             >
-              {isFollowing ? "Following" : "Follow"}
-            </button>
+              <UserAvatar avatarUrl={friend.avatarUrl} name={friend.name} fillParent />
+            </div>
+            <ProfileStatStrip
+              followingCount={crewStat}
+              fansCount={friend.followersCount ?? 0}
+              moves={workouts.length}
+              onFollowingPress={openFollowingSheet}
+              onFansPress={openFansSheet}
+            />
           </div>
 
-          {/* Handle + location */}
-          <p
+          <h1
             style={{
-              margin: "0 0 2px",
-              fontSize: 14,
-              fontWeight: 500,
-              letterSpacing: "-0.2px",
-              color: "var(--foreground-subtle)",
-            }}
-          >
-            @{friend.handle}{friend.location ? ` · ${friend.location}` : ""}
-          </p>
-
-          {/* Followers / following */}
-          <p
-            style={{
+              ...PROFILE_NAME_TAGLINE_TEXT,
+              color: "var(--foreground)",
               margin: 0,
-              fontSize: 14,
-              fontWeight: 500,
-              letterSpacing: "-0.2px",
-              color: "var(--foreground-subtle)",
             }}
           >
-            {friend.followersCount ?? 0} followers · {workouts.length} following
-          </p>
+            {friend.name}
+          </h1>
+
+          {tagline && (
+            <p
+              style={{
+                ...PROFILE_NAME_TAGLINE_TEXT,
+                color: "var(--accent)",
+                margin: "2px 0 0",
+              }}
+            >
+              {tagline}
+            </p>
+          )}
         </div>
 
-        {/* Segmented control */}
-        <div style={{ marginBottom: 48 }}>
+        <div style={{ marginBottom: section === "about" ? 36 : 48 }}>
           <ProfileSegmentedControl value={section} onChange={setSection} />
         </div>
 
-        {/* Section content */}
         <div
           key={section}
           className="animate-fade-in-up"
@@ -465,14 +520,18 @@ export default function UserProfilePage() {
         >
           {section === "about" && (
             <ProfileAboutSection
-              tagline={friend.tagline}
               prompts={friend.prompts}
+              promptLikeIds={promptLikeIds}
+              getLike={getLike}
+              toggleLike={toggleLike}
+              likeIfNeeded={likeIfNeeded}
+              resolveLikers={resolveLikers}
+              currentUserId={me.id}
             />
           )}
 
           {section === "moves" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-              {/* Stats sentence */}
               <p
                 style={{
                   fontFamily: "var(--font-sans), sans-serif",
@@ -489,22 +548,21 @@ export default function UserProfilePage() {
                 <ProfileStatNumber variant={2}>{stats.thisWeek}</ProfileStatNumber> this week.
               </p>
 
-              {/* Calendar */}
               <div
                 style={{
                   backgroundColor: "var(--surface)",
                   borderRadius: 32,
-                  padding: "20px 18px",
+                  padding: 16,
                 }}
               >
                 <ProfileCalendar
                   workouts={workouts}
                   readOnly
+                  selectedDateKey={sheetOpen ? sheetDateKey : null}
                   onSelectDate={openSheet}
                 />
               </div>
 
-              {/* Posts */}
               {movesByMonth.length === 0 ? (
                 <p
                   style={{
@@ -533,7 +591,7 @@ export default function UserProfilePage() {
                     >
                       {label}
                     </h2>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                       {monthWorkouts.map(renderFeedPost)}
                     </div>
                   </section>
@@ -702,6 +760,15 @@ export default function UserProfilePage() {
           </>
         );
       })()}
+
+      {socialSheet && (
+        <LikersSheet
+          title={socialSheet.title}
+          people={socialSheet.people}
+          onClose={() => setSocialSheet(null)}
+          onSelectProfile={onSelectSocialProfile}
+        />
+      )}
     </main>
   );
 }

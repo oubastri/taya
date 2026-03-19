@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useCallback, useRef } from "react";
+import { loadLikersForEntity } from "@/lib/load-likers";
 import Image from "next/image";
 import { useUser } from "@/hooks/use-user";
 import { useWorkouts } from "@/hooks/use-workouts";
@@ -28,7 +29,8 @@ function FeedSkeleton() {
 export default function FeedPage() {
   const { user, hydrated: uh } = useUser();
   const { workouts, hydrated: wh } = useWorkouts();
-  const { getFeedWorkouts, getAllFeedWorkouts, hydrated: fh } = useFriends();
+  const { friends, getFeedWorkouts, getAllFeedWorkouts, hydrated: fh } =
+    useFriends();
 
   const [feedMode, setFeedMode] = useState<FeedMode>("team");
   const { theme, toggle: toggleTheme } = useTheme();
@@ -74,7 +76,27 @@ export default function FeedPage() {
     () => sortedFeedItems.map((item) => item.id),
     [sortedFeedItems],
   );
-  const { getLike, toggleLike } = useLikes(workoutIds);
+  const likeViewer = useMemo(
+    () =>
+      uh
+        ? {
+            id: user.id,
+            name: user.name,
+            handle: user.handle,
+            avatarUrl: user.avatarUrl,
+          }
+        : null,
+    [uh, user.id, user.name, user.handle, user.avatarUrl],
+  );
+  const followingIds = useMemo(
+    () => new Set(friends.filter((f) => f.following).map((f) => f.id)),
+    [friends],
+  );
+  const resolveLikers = useCallback(
+    (entityId: string) => loadLikersForEntity(entityId, followingIds),
+    [followingIds],
+  );
+  const { getLike, toggleLike, likeIfNeeded } = useLikes(workoutIds, likeViewer);
 
   const today = useMemo(() => {
     const d = new Date();
@@ -298,6 +320,8 @@ export default function FeedPage() {
                             liked={like.likedByMe}
                             likeCount={like.count}
                             onToggleLike={() => toggleLike(item.id)}
+                            onLikeIfNeeded={() => likeIfNeeded(item.id)}
+                            resolveLikers={resolveLikers}
                           />
                         </div>
                       );

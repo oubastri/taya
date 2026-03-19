@@ -1,4 +1,5 @@
 import type { User, FriendData } from "@/types/user";
+import type { LikePerson } from "@/types/likes";
 import type { Workout, ActivityType } from "@/types/workout";
 import {
   loadWorkouts,
@@ -342,6 +343,34 @@ export async function fetchLikesForWorkouts(
     }
   }
   return result;
+}
+
+export async function fetchWorkoutLikersSupabase(
+  workoutId: string,
+): Promise<LikePerson[]> {
+  const { data: likeRows } = await supabase()
+    .from("likes")
+    .select("user_id")
+    .eq("workout_id", workoutId);
+
+  const ids = (likeRows ?? []).map((r) => r.user_id as string).filter(Boolean);
+  if (ids.length === 0) return [];
+
+  const { data: profiles } = await supabase()
+    .from("profiles")
+    .select("id, name, handle, avatar_url")
+    .in("id", ids);
+
+  const rows: LikePerson[] = (profiles ?? []).map((p) => ({
+    id: p.id,
+    name: p.name ?? "",
+    handle: p.handle ?? "",
+    avatarUrl: p.avatar_url ?? undefined,
+  }));
+
+  const order = new Map(ids.map((id, i) => [id, i]));
+  rows.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+  return rows;
 }
 
 export async function toggleLikeSupabase(

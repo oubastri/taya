@@ -50,12 +50,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${lexendDeca.variable} ${b612Mono.variable}`} suppressHydrationWarning>
-      {/* Apply saved theme before first paint to avoid flash */}
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `(function(){try{var t=localStorage.getItem('taya-theme')||( window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t);}catch(e){}})();`,
-        }}
-      />
+      <head>
+        {/* Apply saved theme before first paint — must live in <head>, not as sibling of <body> */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('taya-theme')||( window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t);}catch(e){}})();`,
+          }}
+        />
+      </head>
       <body className={`min-h-full antialiased ${lexendDeca.className}`}>
         <ToastProvider>
           <LogSheetProvider>

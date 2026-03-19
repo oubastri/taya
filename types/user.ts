@@ -21,6 +21,8 @@ export type User = {
   phone?: string;
   email?: string;
   followersCount?: number;
+  /** People they follow (FOLLOWING count on profile). */
+  followingCount?: number;
   location?: string;
   tagline?: string;
   prompts?: ProfilePrompt[];

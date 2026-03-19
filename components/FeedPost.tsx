@@ -1,20 +1,19 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { FeedItem } from "@/hooks/use-friends";
 import { ACTIVITY_FEED_PHRASE, ACTIVITY_FEED_HIGHLIGHT } from "@/types/workout";
 import type { ActivityType } from "@/types/workout";
+import type { LikePerson } from "@/types/likes";
 import { ActivityIcon } from "./ActivityIcon";
 import { UserAvatar } from "./UserAvatar";
+import { FeedLikeButton } from "./FeedLikeButton";
+import { LikersSheet } from "./LikersSheet";
 
 const ACTIVITY_GREEN = "#01EF54";
-
-const AVATAR_SIZE = 44;
-const ICON_SIZE = 28;
-const OVERLAP = 10;
-
 
 function getActivityPhrase(activityType: string): string {
   return ACTIVITY_FEED_PHRASE[activityType as ActivityType] ?? ACTIVITY_FEED_PHRASE.other;
@@ -26,6 +25,13 @@ interface FeedPostProps {
   liked?: boolean;
   likeCount?: number;
   onToggleLike?: () => void;
+  /** Double-tap / one-shot like (does not unlike if already liked). */
+  onLikeIfNeeded?: () => void;
+  /** Load people who liked this entity (workout or prompt id). */
+  resolveLikers?: (entityId: string) => Promise<LikePerson[]>;
+  /** Defaults to `workout.id` when omitted. */
+  likeEntityId?: string;
+  density?: "default" | "compact";
 }
 
 export function FeedPost({
@@ -34,7 +40,15 @@ export function FeedPost({
   liked: likedProp,
   likeCount: likeCountProp,
   onToggleLike,
+  onLikeIfNeeded,
+  resolveLikers,
+  likeEntityId,
+  density = "default",
 }: FeedPostProps) {
+  const AVATAR_SIZE = density === "compact" ? 32 : 44;
+  const ICON_SIZE = density === "compact" ? 24 : 28;
+  const OVERLAP = density === "compact" ? 6 : 10;
+  const AVATAR_RADIUS = density === "compact" ? 10.67 : 14;
   const activityType = (workout.activityType ?? "other") as ActivityType;
   const phrase = getActivityPhrase(activityType);
   const highlight = ACTIVITY_FEED_HIGHLIGHT[activityType] ?? ACTIVITY_FEED_HIGHLIGHT.other;
@@ -46,6 +60,8 @@ export function FeedPost({
   const router = useRouter();
   const profileHref = isMe ? "/profile" : `/profile/${workout.userId}`;
 
+  const entityId = likeEntityId ?? workout.id;
+
   const managed = likedProp !== undefined && onToggleLike !== undefined;
   const [localLiked, setLocalLiked] = useState(false);
   const [localCount, setLocalCount] = useState(0);
@@ -53,258 +69,274 @@ export function FeedPost({
   const liked = managed ? likedProp : localLiked;
   const likeCount = managed ? (likeCountProp ?? 0) : localCount;
 
-  const [animating, setAnimating] = useState(false);
-  const lastTapRef = useRef(0);
+  const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastCardTapRef = useRef<{ t: number; id: string } | null>(null);
+
+  const [likersOpen, setLikersOpen] = useState(false);
+  const [likersPeople, setLikersPeople] = useState<LikePerson[]>([]);
+  const [likersLoading, setLikersLoading] = useState(false);
+  const [portalReady, setPortalReady] = useState(false);
+
+  const clearNavTimer = () => {
+    if (navTimerRef.current) {
+      clearTimeout(navTimerRef.current);
+      navTimerRef.current = null;
+    }
+  };
+
+  useEffect(() => () => clearNavTimer(), []);
+
+  useEffect(() => setPortalReady(true), []);
+
+  const scheduleNav = () => {
+    clearNavTimer();
+    navTimerRef.current = setTimeout(() => {
+      navTimerRef.current = null;
+      router.push(profileHref);
+    }, 320);
+  };
 
   const handleLike = () => {
     if (managed) {
-      onToggleLike();
-    } else {
-      if (localLiked) {
-        setLocalLiked(false);
-        setLocalCount((c) => Math.max(0, c - 1));
-      } else {
-        setLocalLiked(true);
-        setLocalCount((c) => c + 1);
-      }
-    }
-    if (!liked) {
-      setAnimating(true);
-      setTimeout(() => setAnimating(false), 500);
-    }
-  };
-
-  const handleDoubleTapLike = (e: React.TouchEvent | React.MouseEvent) => {
-    const target = e.target as HTMLElement;
-    if (target.closest?.("button")) return;
-    const now = Date.now();
-    if (now - lastTapRef.current < 400) {
-      e.preventDefault();
-      handleLike();
-      lastTapRef.current = 0;
+      onToggleLike?.();
       return;
     }
-    lastTapRef.current = now;
+    if (localLiked) {
+      setLocalLiked(false);
+      setLocalCount((c) => Math.max(0, c - 1));
+    } else {
+      setLocalLiked(true);
+      setLocalCount((c) => c + 1);
+    }
   };
 
-  const handleCardClick = (e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
-    if (target.closest?.("button") || target.closest?.("a")) return;
-    router.push(profileHref);
+  const applyDoubleTapLike = () => {
+    if (managed) {
+      if (!liked) onLikeIfNeeded?.();
+      return;
+    }
+    if (!localLiked) handleLike();
   };
+
+  const onCardPointerUp = (e: React.PointerEvent) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (
+      target.closest(
+        "button, a, [data-feed-like-heart], [data-feed-like-count]",
+      )
+    ) {
+      return;
+    }
+
+    const now = Date.now();
+    const prev = lastCardTapRef.current;
+    if (prev && prev.id === entityId && now - prev.t < 380) {
+      clearNavTimer();
+      lastCardTapRef.current = null;
+      applyDoubleTapLike();
+      return;
+    }
+    lastCardTapRef.current = { t: now, id: entityId };
+    clearNavTimer();
+    scheduleNav();
+  };
+
+  const openLikers = useCallback(async () => {
+    if (!resolveLikers || likeCount <= 0) return;
+    setLikersPeople([]);
+    setLikersLoading(true);
+    setLikersOpen(true);
+    try {
+      const people = await resolveLikers(entityId);
+      setLikersPeople(people);
+    } finally {
+      setLikersLoading(false);
+    }
+  }, [resolveLikers, likeCount, entityId]);
+
+  const onSelectLiker = useCallback(
+    (userId: string) => {
+      setLikersOpen(false);
+      if (currentUserId && userId === currentUserId) router.push("/profile");
+      else router.push(`/profile/${userId}`);
+    },
+    [router, currentUserId],
+  );
+
+  useEffect(() => {
+    if (!likersOpen) return;
+    document.body.classList.add("search-open");
+    return () => document.body.classList.remove("search-open");
+  }, [likersOpen]);
 
   return (
-    <article
-      onClick={handleCardClick}
-      onTouchEnd={handleDoubleTapLike}
-      onDoubleClick={handleDoubleTapLike}
-      style={{
-        backgroundColor: "var(--card-bg)",
-        borderRadius: 32,
-        padding: "16px 16px 24px",
-        display: "flex",
-        flexDirection: "column",
-        gap: 20,
-        overflow: "hidden",
-        cursor: "pointer",
-      }}
-    >
-      <div
+    <>
+      <article
+        onPointerUp={onCardPointerUp}
         style={{
+          backgroundColor: "var(--card-bg)",
+          borderRadius: 32,
+          padding: density === "compact" ? 16 : "16px 16px 24px",
           display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          width: "100%",
+          flexDirection: "column",
+          gap: 20,
+          overflow: "hidden",
+          cursor: "pointer",
         }}
       >
         <div
           style={{
             display: "flex",
-            alignItems: "center",
-            flexShrink: 0,
-            marginRight: -OVERLAP,
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            width: "100%",
           }}
         >
-          <Link
-            href={isMe ? "/profile" : `/profile/${workout.userId}`}
+          <div
             style={{
+              display: "flex",
+              alignItems: "center",
               flexShrink: 0,
-              textDecoration: "none",
-              color: "inherit",
+              marginRight: -OVERLAP,
             }}
-            aria-label={isMe ? "View your profile" : `View ${workout.userName}'s profile`}
           >
+            <Link
+              href={isMe ? "/profile" : `/profile/${workout.userId}`}
+              style={{
+                flexShrink: 0,
+                textDecoration: "none",
+                color: "inherit",
+              }}
+              aria-label={isMe ? "View your profile" : `View ${workout.userName}'s profile`}
+            >
+              <div
+                style={{
+                  width: AVATAR_SIZE,
+                  height: AVATAR_SIZE,
+                  borderRadius: AVATAR_RADIUS,
+                  overflow: "hidden",
+                  border: "1px solid var(--card-ring)",
+                  flexShrink: 0,
+                }}
+              >
+                <UserAvatar
+                  avatarUrl={workout.userAvatarUrl}
+                  name={workout.userName}
+                  fillParent
+                />
+              </div>
+            </Link>
             <div
               style={{
                 width: AVATAR_SIZE,
                 height: AVATAR_SIZE,
-                borderRadius: 14,
-                overflow: "hidden",
+                borderRadius: AVATAR_RADIUS,
+                backgroundColor: "var(--card-icon-bg)",
                 border: "1px solid var(--card-ring)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
                 flexShrink: 0,
+                marginLeft: -OVERLAP,
+                overflow: "hidden",
               }}
             >
-              <UserAvatar
-                avatarUrl={workout.userAvatarUrl}
-                name={workout.userName}
-                fillParent
-              />
+              <ActivityIcon type={activityType} size={ICON_SIZE} />
             </div>
-          </Link>
+          </div>
+          <FeedLikeButton
+            liked={liked}
+            likeCount={likeCount}
+            onToggleHeart={handleLike}
+            onOpenLikers={
+              managed && resolveLikers && likeCount > 0 ? openLikers : undefined
+            }
+          />
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+            fontFamily: "var(--font-sans), sans-serif",
+            fontSize: 16,
+            fontWeight: 400,
+            letterSpacing: "-0.64px",
+            color: "var(--foreground)",
+          }}
+        >
+          <p style={{ margin: 0, lineHeight: "normal" }}>
+            <span>@</span>
+            {isMe ? (
+              <Link
+                href="/profile"
+                style={{ textDecoration: "underline", color: "inherit" }}
+                aria-label="View your profile"
+              >
+                {workout.userHandle}
+              </Link>
+            ) : (
+              <Link
+                href={`/profile/${workout.userId}`}
+                style={{ textDecoration: "underline", color: "inherit" }}
+                aria-label={`View ${workout.userName}'s profile`}
+              >
+                {workout.userHandle}
+              </Link>
+            )}
+            <span> {beforeHighlight}</span>
+            <span style={{ color: ACTIVITY_GREEN }}>{highlight}</span>
+            <span>{afterHighlight}.</span>
+          </p>
+          {hasDescription && (
+            <p
+              style={{
+                margin: 0,
+                fontSize: 14,
+                color: "var(--text-secondary)",
+                letterSpacing: "-0.56px",
+                lineHeight: "normal",
+              }}
+            >
+              {workout.description}
+            </p>
+          )}
+        </div>
+      </article>
+
+      {portalReady &&
+        likersOpen &&
+        likersLoading &&
+        createPortal(
           <div
             style={{
-              width: AVATAR_SIZE,
-              height: AVATAR_SIZE,
-              borderRadius: 14,
-              backgroundColor: "var(--card-icon-bg)",
-              border: "1px solid var(--card-ring)",
+              position: "fixed",
+              inset: 0,
+              zIndex: 99,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              flexShrink: 0,
-              marginLeft: -OVERLAP,
-              overflow: "hidden",
+              background: "var(--overlay)",
+              fontFamily: "var(--font-sans), sans-serif",
+              color: "var(--foreground-muted)",
             }}
+            role="status"
+            aria-live="polite"
           >
-            <ActivityIcon type={activityType} size={ICON_SIZE} />
-          </div>
-        </div>
-        <LikeButton
-          liked={liked}
-          likeCount={likeCount}
-          animating={animating}
-          onToggle={handleLike}
-        />
-      </div>
-
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 8,
-          fontFamily: "var(--font-sans), sans-serif",
-          fontSize: 16,
-          fontWeight: 400,
-          letterSpacing: "-0.64px",
-          color: "var(--foreground)",
-        }}
-      >
-        <p style={{ margin: 0, lineHeight: "normal" }}>
-          <span>@</span>
-          {isMe ? (
-            <Link
-              href="/profile"
-              style={{ textDecoration: "underline", color: "inherit" }}
-              aria-label="View your profile"
-            >
-              {workout.userHandle}
-            </Link>
-          ) : (
-            <Link
-              href={`/profile/${workout.userId}`}
-              style={{ textDecoration: "underline", color: "inherit" }}
-              aria-label={`View ${workout.userName}'s profile`}
-            >
-              {workout.userHandle}
-            </Link>
-          )}
-          <span> {beforeHighlight}</span>
-          <span style={{ color: ACTIVITY_GREEN }}>{highlight}</span>
-          <span>{afterHighlight}.</span>
-        </p>
-        {hasDescription && (
-          <p
-            style={{
-              margin: 0,
-              fontSize: 14,
-              color: "var(--text-secondary)",
-              letterSpacing: "-0.56px",
-              lineHeight: "normal",
-            }}
-          >
-            {workout.description}
-          </p>
+            Loading…
+          </div>,
+          document.body,
         )}
-      </div>
-    </article>
-  );
-}
 
-const HEART_COLOR = "#ff3b5c";
-const HEART_GRAY = "var(--text-secondary)";
-
-function LikeButton({
-  liked,
-  likeCount,
-  animating,
-  onToggle,
-}: {
-  liked: boolean;
-  likeCount: number;
-  animating: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-label={liked ? "Unlike" : "Like"}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 4,
-        padding: "6px 0",
-        border: "none",
-        background: "none",
-        cursor: "pointer",
-        flexShrink: 0,
-        WebkitTapHighlightColor: "transparent",
-      }}
-    >
-      <span
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          transform: animating ? "scale(1.35)" : liked ? "scale(1.1)" : "scale(1)",
-          transition: "transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.2s ease",
-        }}
-      >
-        <HeartIcon filled={liked} />
-      </span>
-      <span
-        style={{
-          fontFamily: "var(--font-sans), sans-serif",
-          fontSize: 14,
-          fontWeight: 500,
-          color: liked ? HEART_COLOR : HEART_GRAY,
-          letterSpacing: "-0.56px",
-          transition: "color 0.2s ease",
-        }}
-      >
-        {likeCount}
-      </span>
-    </button>
-  );
-}
-
-function HeartIcon({ filled }: { filled: boolean }) {
-  const color = filled ? HEART_COLOR : HEART_GRAY;
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill={filled ? color : "none"}
-      stroke={color}
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{ flexShrink: 0, color }}
-      aria-hidden
-    >
-      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-    </svg>
+      {likersOpen && !likersLoading && (
+        <LikersSheet
+          people={likersPeople}
+          onClose={() => setLikersOpen(false)}
+          onSelectProfile={onSelectLiker}
+        />
+      )}
+    </>
   );
 }

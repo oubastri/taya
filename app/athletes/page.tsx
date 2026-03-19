@@ -214,10 +214,16 @@ function SearchSheet({
 
   // Trigger enter animation on next paint
   useEffect(() => {
-    const raf = requestAnimationFrame(() =>
-      requestAnimationFrame(() => setOpen(true)),
-    );
-    return () => cancelAnimationFrame(raf);
+    let cancelled = false;
+    const outer = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!cancelled) setOpen(true);
+      });
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(outer);
+    };
   }, []);
 
   // Focus input after sheet settles

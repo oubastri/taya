@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import { loadLikersForEntity } from "@/lib/load-likers";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/hooks/use-user";
@@ -12,39 +13,78 @@ import { ProfileSegmentedControl, type ProfileSection } from "@/components/Profi
 import { FeedPost } from "@/components/FeedPost";
 import { ProfileStatNumber } from "@/components/ProfileStatNumber";
 import { ProfileAboutSection } from "@/components/ProfileAboutSection";
+import { ProfileStatStrip } from "@/components/ProfileStatStrip";
+import { LikersSheet } from "@/components/LikersSheet";
+import {
+  buildProfileFansPeople,
+  buildProfileFollowingPeople,
+} from "@/lib/profile-social-lists";
 import type { FeedItem } from "@/hooks/use-friends";
+import type { LikePerson } from "@/types/likes";
 import { UserAvatar } from "@/components/UserAvatar";
 import { shareUrl } from "@/lib/share";
 
-const NAV_BTN_SIZE = 54;
-const NAV_BTN_STYLE: React.CSSProperties = {
-  display: "inline-flex",
+/** Sticky top bar — stays pinned while profile content scrolls */
+const PROFILE_STICKY_TOP_BAR: CSSProperties = {
+  position: "sticky",
+  top: 0,
+  zIndex: 51,
+  width: "100vw",
+  maxWidth: "100vw",
+  marginLeft: "calc(50% - 50vw)",
+  marginRight: "calc(50% - 50vw)",
+  boxSizing: "border-box",
+  paddingTop: "max(env(safe-area-inset-top), 20px)",
+  paddingBottom: 20,
+  paddingLeft: 16,
+  paddingRight: 16,
+  display: "flex",
   alignItems: "center",
-  justifyContent: "center",
-  width: NAV_BTN_SIZE,
-  height: NAV_BTN_SIZE,
+  gap: 8,
+};
+
+/** 54px — matches `NAV_HEIGHT` in `app/athletes/page.tsx` */
+const PROFILE_GLASS_CIRCLE_STYLE: CSSProperties = {
+  width: 54,
+  height: 54,
   borderRadius: "100px",
   backdropFilter: "blur(24px) saturate(1.8)",
   WebkitBackdropFilter: "blur(24px) saturate(1.8)",
   background: "var(--glass-btn-bg)",
   border: "1px solid var(--glass-btn-border)",
   boxShadow: "var(--glass-btn-shadow)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
   cursor: "pointer",
   flexShrink: 0,
   WebkitTapHighlightColor: "transparent",
   padding: 0,
 };
 
+const AVATAR_RADIUS = 32.789;
+
+const PROFILE_NAME_TAGLINE_TEXT: CSSProperties = {
+  fontFamily: "var(--font-sans), sans-serif",
+  fontSize: 32,
+  fontWeight: 400,
+  lineHeight: "32px",
+  letterSpacing: "-0.04em",
+};
+
 function ProfileSkeleton() {
   return (
     <div style={{ padding: "0 16px" }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
-        <div className="skeleton" style={{ width: 84, height: 84, borderRadius: 28 }} />
-        <div className="skeleton" style={{ width: 160, height: 28, borderRadius: 6 }} />
-        <div className="skeleton" style={{ width: 100, height: 14, borderRadius: 4 }} />
-        <div className="skeleton" style={{ width: 200, height: 14, borderRadius: 4 }} />
+      <div style={{ display: "flex", gap: 16, marginBottom: 16 }}>
+        <div className="skeleton" style={{ width: 84, height: 84, borderRadius: AVATAR_RADIUS }} />
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+          <div className="skeleton" style={{ height: 18, borderRadius: 4 }} />
+          <div className="skeleton" style={{ height: 18, borderRadius: 4 }} />
+          <div className="skeleton" style={{ height: 18, borderRadius: 4 }} />
+        </div>
       </div>
-      <div className="skeleton" style={{ height: 48, borderRadius: 9999, marginBottom: 20 }} />
+      <div className="skeleton" style={{ width: 160, height: 28, borderRadius: 6, marginBottom: 12 }} />
+      <div className="skeleton" style={{ height: 48, borderRadius: 9999, marginBottom: 32 }} />
       <div className="skeleton" style={{ height: 300, borderRadius: 16 }} />
     </div>
   );
@@ -58,27 +98,78 @@ export default function ProfilePage() {
   const [section, setSection] = useState<ProfileSection>("about");
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState("");
-  const [editingBio, setEditingBio] = useState(false);
-  const [bioInput, setBioInput] = useState("");
+  const [socialSheet, setSocialSheet] = useState<{
+    title: string;
+    people: LikePerson[];
+  } | null>(null);
 
   const workoutIds = useMemo(() => workouts.map((w) => w.id), [workouts]);
-  const { getLike, toggleLike } = useLikes(workoutIds);
+  const promptLikeIds = useMemo(
+    () => (user.prompts ?? []).map((_, i) => `profile-prompt:${user.id}:${i}`),
+    [user.id, user.prompts],
+  );
+  const likeEntityIds = useMemo(
+    () => [...workoutIds, ...promptLikeIds],
+    [workoutIds, promptLikeIds],
+  );
+  const likeViewer = useMemo(
+    () =>
+      uh
+        ? {
+            id: user.id,
+            name: user.name,
+            handle: user.handle,
+            avatarUrl: user.avatarUrl,
+          }
+        : null,
+    [uh, user.id, user.name, user.handle, user.avatarUrl],
+  );
+  const followingIds = useMemo(
+    () => new Set(friends.filter((f) => f.following).map((f) => f.id)),
+    [friends],
+  );
+  const resolveLikers = useCallback(
+    (entityId: string) => loadLikersForEntity(entityId, followingIds),
+    [followingIds],
+  );
+  const { getLike, toggleLike, likeIfNeeded } = useLikes(likeEntityIds, likeViewer);
+
+  const openFollowingSheet = useCallback(() => {
+    setSocialSheet({
+      title: "Following",
+      people: buildProfileFollowingPeople(user.id, friends, 0, true, followingIds),
+    });
+  }, [user.id, friends, followingIds]);
+
+  const openFansSheet = useCallback(() => {
+    setSocialSheet({
+      title: "Fans",
+      people: buildProfileFansPeople(user.id, friends, user.followersCount ?? 0, followingIds),
+    });
+  }, [user.id, friends, user.followersCount, followingIds]);
+
+  const onSelectSocialProfile = useCallback(
+    (userId: string) => {
+      setSocialSheet(null);
+      if (userId === user.id) router.push("/profile");
+      else router.push(`/profile/${userId}`);
+    },
+    [router, user.id],
+  );
 
   useEffect(() => {
-    if (uh) {
-      setNameInput(user.name || "");
-      setBioInput(user.bio ?? "");
-    }
-  }, [uh, user.name, user.bio]);
+    if (uh) setNameInput(user.name || "");
+  }, [uh, user.name]);
+
+  useEffect(() => {
+    if (!socialSheet) return;
+    document.body.classList.add("search-open");
+    return () => document.body.classList.remove("search-open");
+  }, [socialSheet]);
 
   const handleNameBlur = () => {
     if (nameInput.trim()) updateUser({ name: nameInput.trim() });
     setEditingName(false);
-  };
-
-  const handleBioBlur = () => {
-    updateUser({ bio: bioInput.trim() || undefined });
-    setEditingBio(false);
   };
 
   const postsSorted = useMemo(
@@ -127,7 +218,7 @@ export default function ProfilePage() {
   }
 
   const displayName = user.name || "Athlete";
-  const handle = user.handle || "you";
+  const tagline = (user.tagline || user.bio)?.trim() || "";
   const followingCount = friends.filter((f) => f.following).length;
   const followersCount = user.followersCount ?? 0;
 
@@ -136,7 +227,7 @@ export default function ProfilePage() {
       ...workout,
       userId: user.id,
       userName: displayName,
-      userHandle: handle,
+      userHandle: user.handle,
       userAvatarUrl: user.avatarUrl,
     };
     const like = getLike(workout.id);
@@ -148,6 +239,9 @@ export default function ProfilePage() {
         liked={like.likedByMe}
         likeCount={like.count}
         onToggleLike={() => toggleLike(workout.id)}
+        onLikeIfNeeded={() => likeIfNeeded(workout.id)}
+        resolveLikers={resolveLikers}
+        density="compact"
       />
     );
   }
@@ -160,55 +254,6 @@ export default function ProfilePage() {
         paddingBottom: 96,
       }}
     >
-      {/* Settings + Share — fixed top-right */}
-      <div
-        style={{
-          position: "fixed",
-          top: "max(env(safe-area-inset-top), 20px)",
-          right: 16,
-          zIndex: 50,
-          display: "flex",
-          gap: 8,
-        }}
-      >
-        <button
-          type="button"
-          onClick={() => router.push("/settings")}
-          aria-label="Settings"
-          style={NAV_BTN_STYLE}
-          className="active:scale-95"
-        >
-          <Image
-            src="/icons/nav/settings.svg"
-            alt=""
-            width={20}
-            height={20}
-            aria-hidden
-            className="nav-btn-icon"
-          />
-        </button>
-        <button
-          type="button"
-          onClick={handleShareProfile}
-          aria-label="Share profile"
-          style={NAV_BTN_STYLE}
-          className="active:scale-95"
-        >
-          <Image
-            src="/icons/nav/share.svg"
-            alt=""
-            width={20}
-            height={20}
-            aria-hidden
-            className="nav-btn-icon"
-          />
-        </button>
-      </div>
-
-      {/* Spacer to push content below fixed buttons */}
-      <div style={{ height: "calc(max(env(safe-area-inset-top), 20px) + 54px + 20px)" }} />
-
-      {/* Content */}
       <div
         style={{
           width: "100%",
@@ -218,27 +263,76 @@ export default function ProfilePage() {
           boxSizing: "border-box",
         }}
       >
-        {/* Identity block */}
-        <div style={{ marginBottom: 40 }}>
-          {/* Avatar */}
+        <header style={{ ...PROFILE_STICKY_TOP_BAR, justifyContent: "flex-end" }}>
+          <button
+            type="button"
+            onClick={() => router.push("/settings")}
+            aria-label="Settings"
+            style={PROFILE_GLASS_CIRCLE_STYLE}
+            className="active:scale-95"
+          >
+            <Image
+              src="/icons/nav/dots.svg"
+              alt=""
+              width={20}
+              height={20}
+              aria-hidden
+              className="nav-btn-icon"
+            />
+          </button>
+          <button
+            type="button"
+            onClick={handleShareProfile}
+            aria-label="Share profile"
+            style={PROFILE_GLASS_CIRCLE_STYLE}
+            className="active:scale-95"
+          >
+            <Image
+              src="/icons/nav/share.svg"
+              alt=""
+              width={20}
+              height={20}
+              aria-hidden
+              className="nav-btn-icon"
+            />
+          </button>
+        </header>
+
+        <div style={{ marginTop: 36, marginBottom: 36 }}>
           <div
             style={{
-              width: 84,
-              height: 84,
-              borderRadius: 28,
-              overflow: "hidden",
-              flexShrink: 0,
               display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: "var(--foreground-subtle)",
+              flexDirection: "row",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: 16,
               marginBottom: 16,
             }}
           >
-            <UserAvatar avatarUrl={user.avatarUrl} name={displayName} fillParent />
+            <div
+              style={{
+                width: 84,
+                height: 84,
+                borderRadius: AVATAR_RADIUS,
+                overflow: "hidden",
+                flexShrink: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "var(--foreground-subtle)",
+              }}
+            >
+              <UserAvatar avatarUrl={user.avatarUrl} name={displayName} fillParent />
+            </div>
+            <ProfileStatStrip
+              followingCount={followingCount}
+              fansCount={followersCount}
+              moves={workouts.length}
+              onFollowingPress={openFollowingSheet}
+              onFansPress={openFansSheet}
+            />
           </div>
 
-          {/* Name */}
           {editingName ? (
             <input
               value={nameInput}
@@ -246,14 +340,14 @@ export default function ProfilePage() {
               onBlur={handleNameBlur}
               onKeyDown={(e) => {
                 if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                if (e.key === "Escape") { setNameInput(displayName); setEditingName(false); }
+                if (e.key === "Escape") {
+                  setNameInput(displayName);
+                  setEditingName(false);
+                }
               }}
               autoFocus
               style={{
-                fontFamily: "var(--font-sans), sans-serif",
-                fontSize: 32,
-                fontWeight: 500,
-                letterSpacing: "-1.2px",
+                ...PROFILE_NAME_TAGLINE_TEXT,
                 color: "var(--foreground)",
                 border: "none",
                 borderBottom: "2px solid var(--accent)",
@@ -261,62 +355,44 @@ export default function ProfilePage() {
                 outline: "none",
                 padding: "2px 0",
                 width: "100%",
-                marginBottom: 4,
+                marginBottom: 0,
                 display: "block",
-                lineHeight: 1,
               }}
             />
           ) : (
             <h1
-              onClick={() => { setEditingName(true); setNameInput(displayName); }}
+              onClick={() => {
+                setEditingName(true);
+                setNameInput(displayName);
+              }}
               style={{
-                fontFamily: "var(--font-sans), sans-serif",
-                fontSize: 32,
-                fontWeight: 500,
-                letterSpacing: "-1.2px",
+                ...PROFILE_NAME_TAGLINE_TEXT,
                 color: "var(--foreground)",
-                margin: "0 0 4px",
+                margin: "0 0 0",
                 cursor: "text",
-                lineHeight: 1,
               }}
             >
               {displayName}
             </h1>
           )}
 
-          {/* Handle + location */}
-          <p
-            style={{
-              margin: "0 0 2px",
-              fontSize: 14,
-              fontWeight: 500,
-              letterSpacing: "-0.2px",
-              color: "var(--foreground-subtle)",
-            }}
-          >
-            @{handle}{user.location ? ` · ${user.location}` : ""}
-          </p>
-
-          {/* Followers / following */}
-          <p
-            style={{
-              margin: 0,
-              fontSize: 14,
-              fontWeight: 500,
-              letterSpacing: "-0.2px",
-              color: "var(--foreground-subtle)",
-            }}
-          >
-            {followersCount} followers · {followingCount} following
-          </p>
+          {tagline && (
+            <p
+              style={{
+                ...PROFILE_NAME_TAGLINE_TEXT,
+                color: "var(--accent)",
+                margin: "2px 0 0",
+              }}
+            >
+              {tagline}
+            </p>
+          )}
         </div>
 
-        {/* Segmented control */}
-        <div style={{ marginBottom: 48 }}>
+        <div style={{ marginBottom: section === "about" ? 36 : 48 }}>
           <ProfileSegmentedControl value={section} onChange={setSection} />
         </div>
 
-        {/* Section content */}
         <div
           key={section}
           className="animate-fade-in-up"
@@ -327,14 +403,18 @@ export default function ProfilePage() {
         >
           {section === "about" && (
             <ProfileAboutSection
-              tagline={user.tagline}
               prompts={user.prompts}
+              promptLikeIds={promptLikeIds}
+              getLike={getLike}
+              toggleLike={toggleLike}
+              likeIfNeeded={likeIfNeeded}
+              resolveLikers={resolveLikers}
+              currentUserId={user.id}
             />
           )}
 
           {section === "moves" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-              {/* Stats sentence */}
               <p
                 style={{
                   fontFamily: "var(--font-sans), sans-serif",
@@ -351,18 +431,16 @@ export default function ProfilePage() {
                 <ProfileStatNumber variant={2}>{stats.thisWeek}</ProfileStatNumber> this week.
               </p>
 
-              {/* Calendar */}
               <div
                 style={{
                   backgroundColor: "var(--surface)",
                   borderRadius: 32,
-                  padding: "20px 18px",
+                  padding: 16,
                 }}
               >
                 <ProfileCalendar workouts={workouts} />
               </div>
 
-              {/* Posts */}
               {movesByMonth.length === 0 ? (
                 <p
                   style={{
@@ -391,7 +469,7 @@ export default function ProfilePage() {
                     >
                       {label}
                     </h2>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                       {monthWorkouts.map(renderFeedPost)}
                     </div>
                   </section>
@@ -401,6 +479,15 @@ export default function ProfilePage() {
           )}
         </div>
       </div>
+
+      {socialSheet && (
+        <LikersSheet
+          title={socialSheet.title}
+          people={socialSheet.people}
+          onClose={() => setSocialSheet(null)}
+          onSelectProfile={onSelectSocialProfile}
+        />
+      )}
     </main>
   );
 }

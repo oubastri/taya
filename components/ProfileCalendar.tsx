@@ -74,6 +74,9 @@ export function ProfileCalendar({
     return result;
   }, [year, month]);
 
+  const CELL = 47;
+  const dayFontPx = 17.625;
+
   return (
     <div style={{ userSelect: "none" }}>
       <div
@@ -81,7 +84,7 @@ export function ProfileCalendar({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          marginBottom: 28,
+          marginBottom: 24,
         }}
       >
         <button
@@ -110,11 +113,12 @@ export function ProfileCalendar({
         <div style={{ textAlign: "center" }}>
           <div
             style={{
+              fontFamily: "var(--font-sans), sans-serif",
               fontSize: 14,
               fontWeight: 500,
-              letterSpacing: "-0.03em",
+              letterSpacing: "normal",
               color: "var(--foreground)",
-              lineHeight: 1,
+              lineHeight: "normal",
             }}
           >
             {MONTHS[month]} {year}
@@ -147,17 +151,20 @@ export function ProfileCalendar({
         </button>
       </div>
 
-      <div style={{ display: "flex", gap: 0, marginTop: 4, marginBottom: 6 }}>
+      <div style={{ display: "flex", gap: 0, marginBottom: 8 }}>
         {DAY_LABELS.map((d, i) => (
           <div
             key={i}
             style={{
               flex: 1,
+              minWidth: 0,
               textAlign: "center",
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: "0.05em",
-              color: "var(--foreground-subtle)",
+              fontFamily: "var(--font-sans), sans-serif",
+              fontSize: dayFontPx,
+              fontWeight: 400,
+              letterSpacing: "normal",
+              lineHeight: "normal",
+              color: "var(--cal-dow)",
             }}
           >
             {d}
@@ -179,29 +186,31 @@ export function ProfileCalendar({
                 return (
                   <div
                     key={di}
-                    style={{ flex: 1, aspectRatio: "1", minWidth: 0 }}
+                    style={{ flex: 1, minWidth: 0, height: CELL, display: "flex", alignItems: "center", justifyContent: "center" }}
                   />
                 );
               }
 
               let bg: string;
               let border: string;
+              let color: string;
 
-              if (isToday && hasWorkout) {
-                bg = "var(--foreground)";
+              if (isToday) {
+                bg = "var(--chip-bg)";
                 border = "2px solid var(--foreground)";
-              } else if (isToday) {
-                bg = "rgba(0,0,0,0.05)";
-                border = "2px solid var(--foreground)";
+                color = "var(--foreground)";
               } else if (hasWorkout) {
                 bg = "var(--foreground)";
                 border = "none";
+                color = "var(--background)";
               } else if (isFuture) {
-                bg = "var(--border)";
+                bg = "var(--chip-bg)";
                 border = "none";
+                color = "var(--cal-day-muted)";
               } else {
-                bg = "rgba(0,0,0,0.05)";
+                bg = "var(--chip-bg)";
                 border = "none";
+                color = "var(--cal-day-muted)";
               }
 
               const handleDateClick = () => {
@@ -216,16 +225,18 @@ export function ProfileCalendar({
 
               const isSelected = selectedDateKey === dk;
               const dayNum = date.getDate();
-              const dayLabelColor =
-                hasWorkout ? "#fff" : isToday ? "var(--foreground)" : isFuture ? "var(--foreground-faint)" : "rgba(0,0,0,0.2)";
+              const selectionBorder =
+                isSelected && !isToday ? "2px solid var(--foreground)" : border;
+              const selectionRing =
+                isSelected && isToday ? "2px solid var(--foreground)" : selectionBorder;
 
               return (
                 <div
                   key={di}
                   style={{
                     flex: 1,
-                    aspectRatio: "1",
                     minWidth: 0,
+                    height: CELL,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -243,13 +254,11 @@ export function ProfileCalendar({
                           : `Select ${date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
                     }
                     style={{
-                      width: "100%",
-                      height: "100%",
-                      minWidth: 0,
-                      minHeight: 0,
+                      width: CELL,
+                      height: CELL,
                       borderRadius: "50%",
                       backgroundColor: bg,
-                      border: isSelected ? "1.5px solid var(--foreground)" : border,
+                      border: selectionRing,
                       boxSizing: "border-box",
                       display: "flex",
                       alignItems: "center",
@@ -264,10 +273,11 @@ export function ProfileCalendar({
                   >
                     <span
                       style={{
-                        fontSize: 11,
-                        fontWeight: 800,
-                        color: dayLabelColor,
-                        letterSpacing: "-0.03em",
+                        fontFamily: "var(--font-sans), sans-serif",
+                        fontSize: dayFontPx,
+                        fontWeight: 500,
+                        color,
+                        letterSpacing: "normal",
                         lineHeight: 1,
                       }}
                     >
