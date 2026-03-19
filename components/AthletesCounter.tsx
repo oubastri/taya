@@ -122,8 +122,8 @@ export function AthletesCounter({ count, className = "" }: AthletesCounterProps)
           alignItems: "center",
           gap: 6,
           borderRadius: 4,
-          border: "1px dashed #919191",
-          background: "rgba(255,255,255,0.58)",
+          border: "1px dashed var(--mono-border)",
+          background: "var(--glass-btn-bg)",
           backdropFilter: "blur(24px) saturate(1.8)",
           WebkitBackdropFilter: "blur(24px) saturate(1.8)",
         }}
@@ -134,11 +134,12 @@ export function AthletesCounter({ count, className = "" }: AthletesCounterProps)
           width={14}
           height={14}
           aria-hidden
+          className="activity-icon-auto"
           style={{ flexShrink: 0 }}
         />
         <span
           style={{
-            color: "#000",
+            color: "var(--foreground)",
             fontFamily: '"B612 Mono", ui-monospace, monospace',
             fontSize: 12,
             fontWeight: 400,

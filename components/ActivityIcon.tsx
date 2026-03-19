@@ -72,6 +72,7 @@ export function ActivityIcon({
       height={iconSize}
       aria-hidden
       draggable={false}
+      className={showWhite ? undefined : "activity-icon-auto"}
       style={{
         width: iconSize,
         height: iconSize,

@@ -42,7 +42,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={lexendDeca.variable}>
+    <html lang="en" className={lexendDeca.variable} suppressHydrationWarning>
+      {/* Apply saved theme before first paint to avoid flash */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `(function(){try{var t=localStorage.getItem('taya-theme')||( window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t);}catch(e){}})();`,
+        }}
+      />
       <body className={`min-h-full antialiased ${lexendDeca.className}`}>
         <ToastProvider>
           <LogSheetProvider>

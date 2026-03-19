@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useRef } from "react";
+import Image from "next/image";
 import { useUser } from "@/hooks/use-user";
 import { useWorkouts } from "@/hooks/use-workouts";
 import { useFriends } from "@/hooks/use-friends";
 import { useLikes } from "@/hooks/use-likes";
+import { useTheme } from "@/hooks/use-theme";
 import { FeedPost } from "@/components/FeedPost";
 import { MovesCounter } from "@/components/MovesCounter";
 import { FeedToggle, type FeedMode } from "@/components/FeedToggle";
@@ -29,6 +31,16 @@ export default function FeedPage() {
   const { getFeedWorkouts, getAllFeedWorkouts, hydrated: fh } = useFriends();
 
   const [feedMode, setFeedMode] = useState<FeedMode>("team");
+  const { theme, toggle: toggleTheme } = useTheme();
+  const [exitingTheme, setExitingTheme] = useState<"light" | "dark" | null>(null);
+  const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleToggleTheme = useCallback(() => {
+    setExitingTheme(theme);
+    if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
+    exitTimerRef.current = setTimeout(() => setExitingTheme(null), 200);
+    toggleTheme();
+  }, [theme, toggleTheme]);
 
   const hydrated = uh && wh && fh;
 
@@ -117,12 +129,13 @@ export default function FeedPage() {
       <header
         style={{
           padding: "max(env(safe-area-inset-top), 20px) 20px 56px",
+          position: "relative",
         }}
       >
         <h1
           style={{
             margin: 0,
-            color: "#000",
+            color: "var(--foreground)",
             fontFamily: "var(--font-sans), sans-serif",
             fontSize: "clamp(26px, 8vw, 36px)",
             fontWeight: 500,
@@ -133,6 +146,56 @@ export default function FeedPage() {
         >
           To All You <span style={{ color: "#01EF54" }}>Athletes</span>
         </h1>
+
+        {/* Dark mode toggle */}
+        <button
+          type="button"
+          onClick={handleToggleTheme}
+          aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          className="theme-toggle-btn"
+          style={{
+            position: "absolute",
+            top: "max(env(safe-area-inset-top), 20px)",
+            right: 20,
+            width: 54,
+            height: 54,
+            borderRadius: "100px",
+            backdropFilter: "blur(24px) saturate(1.8)",
+            WebkitBackdropFilter: "blur(24px) saturate(1.8)",
+            background: "var(--glass-btn-bg)",
+            border: "1px solid var(--glass-btn-border)",
+            boxShadow: "var(--glass-btn-shadow)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            WebkitTapHighlightColor: "transparent",
+            overflow: "hidden",
+          }}
+        >
+          {/* Exiting icon — plays exit animation while new one enters */}
+          {exitingTheme && (
+            <Image
+              key={`exit-${exitingTheme}`}
+              src={`/icons/dark-light-mode/${exitingTheme === "dark" ? "sun" : "moon"}.svg`}
+              alt=""
+              width={22}
+              height={22}
+              aria-hidden
+              className={`activity-icon-auto theme-icon-exit`}
+            />
+          )}
+          {/* Entering icon — springs in */}
+          <Image
+            key={`enter-${theme}`}
+            src={`/icons/dark-light-mode/${theme === "dark" ? "sun" : "moon"}.svg`}
+            alt=""
+            width={22}
+            height={22}
+            aria-hidden
+            className={`activity-icon-auto theme-icon-enter`}
+          />
+        </button>
       </header>
 
       {/* Content — constrained column */}
@@ -214,7 +277,7 @@ export default function FeedPage() {
                       fontWeight: 600,
                       letterSpacing: "-0.02em",
                       textTransform: "uppercase",
-                      color: "#919191",
+                      color: "var(--text-secondary)",
                     }}
                   >
                     {dateLabel(group.date)}

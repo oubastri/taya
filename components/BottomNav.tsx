@@ -41,6 +41,7 @@ export function BottomNav() {
             width={22}
             height={22}
             aria-hidden
+            className="activity-icon-auto"
           />
         </Link>
 
@@ -52,11 +53,12 @@ export function BottomNav() {
           data-active={isFriends || undefined}
         >
           <Image
-            src={isFriends ? "/icons/tabbar/friend-selected.svg" : "/icons/tabbar/friends-unselected.svg"}
+            src={isFriends ? "/icons/tabbar/globe-selected.svg" : "/icons/tabbar/globe-unselected.svg"}
             alt=""
             width={22}
             height={22}
             aria-hidden
+            className="activity-icon-auto"
           />
         </Link>
 

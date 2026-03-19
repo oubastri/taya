@@ -40,6 +40,163 @@
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --duration-fast: 0.2s;
   --duration-normal: 0.35s;
+
+  /* Liquid-glass circle button (search / theme toggle) */
+  --glass-btn-bg: rgba(255, 255, 255, 0.72);
+  --glass-btn-border: rgba(0, 0, 0, 0.08);
+  --glass-btn-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.06), 0 4px 20px rgba(0, 0, 0, 0.08);
+  --glass-btn-icon: rgba(0, 0, 0, 0.6);
+
+  /* Sheets (frosted glass slide-up panels) */
+  --sheet-bg: rgba(255, 255, 255, 0.82);
+  --sheet-shadow: 0 -1px 0 rgba(0, 0, 0, 0.07), 0 -12px 48px rgba(0, 0, 0, 0.13);
+  --drag-handle: rgba(0, 0, 0, 0.16);
+
+  /* Close / dismiss buttons */
+  --close-btn-bg: rgba(0, 0, 0, 0.06);
+  --close-btn-border: rgba(0, 0, 0, 0.07);
+  --close-btn-icon: rgba(0, 0, 0, 0.55);
+
+  /* Inputs */
+  --input-color: #000;
+  --input-placeholder: rgba(0, 0, 0, 0.28);
+
+  /* Thin separators and row dividers */
+  --separator: rgba(0, 0, 0, 0.08);
+  --row-border: rgba(0, 0, 0, 0.07);
+
+  /* Avatar / initials placeholders */
+  --avatar-placeholder-bg: #e8e8ef;
+  --avatar-placeholder-text: #999;
+
+  /* Activity chips (unselected / selected) */
+  --chip-bg: rgba(0, 0, 0, 0.06);
+  --chip-color: rgba(0, 0, 0, 0.75);
+  --chip-selected-bg: #000;
+  --chip-selected-color: #fff;
+
+  /* Calendar */
+  --cal-header: #000;
+  --cal-nav-bg: rgba(0, 0, 0, 0.06);
+  --cal-nav-icon: rgba(0, 0, 0, 0.6);
+  --cal-dow: rgba(0, 0, 0, 0.3);
+  --cal-day: rgba(0, 0, 0, 0.85);
+  --cal-day-muted: rgba(0, 0, 0, 0.18);
+  --cal-today-border: rgba(0, 0, 0, 0.25);
+  --cal-selected-bg: #000;
+  --cal-selected-color: #fff;
+
+  /* Primary CTA button */
+  --cta-bg: #000;
+  --cta-color: #fff;
+
+  /* Feed post cards */
+  --card-bg: #ffffff;
+  --card-icon-bg: #f3f3f3;
+  --card-ring: #ffffff;
+
+  /* Secondary / muted text */
+  --text-secondary: #919191;
+
+  /* Row action buttons (edit/delete) */
+  --action-btn-bg: rgba(0, 0, 0, 0.08);
+  --row-card-bg: rgba(0, 0, 0, 0.04);
+
+  /* Mono badge border */
+  --mono-border: #919191;
+}
+
+[data-theme="dark"] {
+  /* Surfaces */
+  --background: #0D0D0D;
+  --surface: #1A1A1A;
+  --surface-elevated: #242424;
+  --overlay: rgba(0, 0, 0, 0.65);
+
+  /* Text */
+  --foreground: #F0F0F0;
+  --foreground-muted: rgba(255, 255, 255, 0.5);
+  --foreground-subtle: rgba(255, 255, 255, 0.35);
+  --foreground-faint: rgba(255, 255, 255, 0.2);
+
+  /* Brand green — unchanged */
+  --accent: #01EF54;
+  --accent-soft: rgba(1, 239, 84, 0.15);
+  --accent-glow: rgba(1, 239, 84, 0.22);
+
+  /* UI */
+  --border: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.12);
+
+  /* Shadows — lighter tint for dark bg */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.35);
+  --shadow-card-hover: 0 2px 8px rgba(0, 0, 0, 0.4), 0 12px 32px rgba(0, 0, 0, 0.45);
+  --shadow-nav: 0 -1px 0 var(--border), 0 -4px 24px rgba(0, 0, 0, 0.3);
+  --shadow-fab: 0 4px 14px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.3);
+
+  /* Liquid-glass circle button */
+  --glass-btn-bg: rgba(40, 40, 40, 0.78);
+  --glass-btn-border: rgba(255, 255, 255, 0.1);
+  --glass-btn-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.06), 0 4px 20px rgba(0, 0, 0, 0.35);
+  --glass-btn-icon: rgba(255, 255, 255, 0.72);
+
+  /* Sheets */
+  --sheet-bg: rgba(26, 26, 26, 0.92);
+  --sheet-shadow: 0 -1px 0 rgba(255, 255, 255, 0.06), 0 -12px 48px rgba(0, 0, 0, 0.6);
+  --drag-handle: rgba(255, 255, 255, 0.15);
+
+  /* Close buttons */
+  --close-btn-bg: rgba(255, 255, 255, 0.08);
+  --close-btn-border: rgba(255, 255, 255, 0.1);
+  --close-btn-icon: rgba(255, 255, 255, 0.55);
+
+  /* Inputs */
+  --input-color: #F0F0F0;
+  --input-placeholder: rgba(255, 255, 255, 0.28);
+
+  /* Thin separators and row dividers */
+  --separator: rgba(255, 255, 255, 0.08);
+  --row-border: rgba(255, 255, 255, 0.07);
+
+  /* Avatar placeholders */
+  --avatar-placeholder-bg: #2a2a2a;
+  --avatar-placeholder-text: #555;
+
+  /* Activity chips — keep selected dark so invert=true icons remain white */
+  --chip-bg: rgba(255, 255, 255, 0.08);
+  --chip-color: rgba(255, 255, 255, 0.75);
+  --chip-selected-bg: #3a3a3a;
+  --chip-selected-color: #fff;
+
+  /* Calendar */
+  --cal-header: #F0F0F0;
+  --cal-nav-bg: rgba(255, 255, 255, 0.08);
+  --cal-nav-icon: rgba(255, 255, 255, 0.6);
+  --cal-dow: rgba(255, 255, 255, 0.3);
+  --cal-day: rgba(255, 255, 255, 0.85);
+  --cal-day-muted: rgba(255, 255, 255, 0.2);
+  --cal-today-border: rgba(255, 255, 255, 0.35);
+  --cal-selected-bg: #ffffff;
+  --cal-selected-color: #000;
+
+  /* Primary CTA button */
+  --cta-bg: #ffffff;
+  --cta-color: #000;
+
+  /* Feed post cards */
+  --card-bg: #1A1A1A;
+  --card-icon-bg: #2a2a2a;
+  --card-ring: #1A1A1A;
+
+  /* Secondary / muted text */
+  --text-secondary: rgba(255, 255, 255, 0.5);
+
+  /* Row action buttons */
+  --action-btn-bg: rgba(255, 255, 255, 0.1);
+  --row-card-bg: rgba(255, 255, 255, 0.05);
+
+  /* Mono badge border */
+  --mono-border: rgba(255, 255, 255, 0.35);
 }
 
 html {
@@ -209,6 +366,28 @@ body.search-open .bottom-nav-wrapper {
     0 0 0 0.5px rgba(0, 0, 0, 0.09),
     inset 0 1px 0 rgba(255, 255, 255, 0.85),
     0 4px 20px rgba(0, 0, 0, 0.07);
+  transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+[data-theme="dark"] .liquid-glass-nav {
+  background: rgba(30, 30, 30, 0.72);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 0 0 0.5px rgba(255, 255, 255, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .nav-indicator {
+  background: rgba(80, 80, 80, 0.55);
+}
+
+[data-theme="dark"] .nav-item {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+[data-theme="dark"] .nav-item[data-active] {
+  color: rgba(255, 255, 255, 0.9);
 }
 
 /* Sliding pill — positioned via CSS custom property, no JS measurement */
@@ -318,6 +497,57 @@ body.search-open .bottom-nav-wrapper {
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+/* Theme toggle — subtle icon crossfade */
+@keyframes theme-icon-in {
+  from {
+    opacity: 0;
+    transform: rotate(-20deg) scale(0.75);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
+  }
+}
+
+@keyframes theme-icon-out {
+  from {
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: rotate(20deg) scale(0.75);
+  }
+}
+
+.theme-icon-enter {
+  animation: theme-icon-in 0.3s var(--ease-out-expo) forwards;
+  display: inline-flex;
+}
+
+.theme-icon-exit {
+  animation: theme-icon-out 0.18s ease-in forwards;
+  display: inline-flex;
+  position: absolute;
+  pointer-events: none;
+}
+
+.theme-toggle-btn:active {
+  transform: scale(0.9) !important;
+  transition: transform 0.1s ease !important;
+}
+
+/* Activity icons — auto-invert on dark backgrounds */
+[data-theme="dark"] .activity-icon-auto {
+  filter: brightness(0) invert(1);
+}
+
+/* Input placeholder color via CSS variable */
+input::placeholder,
+textarea::placeholder {
+  color: var(--input-placeholder);
 }
 
 /* Scrollbar */

@@ -127,7 +127,7 @@ export function MovesCounter({ count, className = "" }: MovesCounterProps) {
           alignItems: "center",
           gap: 6,
           borderRadius: 4,
-          border: "1px dashed #919191",
+          border: "1px dashed var(--mono-border)",
         }}
       >
         <Image
@@ -136,11 +136,12 @@ export function MovesCounter({ count, className = "" }: MovesCounterProps) {
           width={14}
           height={14}
           aria-hidden
+          className="activity-icon-auto"
           style={{ flexShrink: 0 }}
         />
         <span
           style={{
-            color: "#000",
+            color: "var(--foreground)",
             fontFamily: '"B612 Mono", ui-monospace, monospace',
             fontSize: 12,
             fontWeight: 400,

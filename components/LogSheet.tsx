@@ -137,13 +137,13 @@ function CalendarPicker({
           aria-label="Previous month"
           style={{
             width: 32, height: 32, borderRadius: "50%",
-            border: "none", background: "rgba(0,0,0,0.06)",
+            border: "none", background: "var(--cal-nav-bg)",
             display: "flex", alignItems: "center", justifyContent: "center",
             cursor: "pointer", WebkitTapHighlightColor: "transparent",
           }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-            stroke="rgba(0,0,0,0.6)" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
+            stroke="var(--cal-nav-icon)" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
@@ -151,7 +151,7 @@ function CalendarPicker({
           style={{
             fontFamily: "var(--font-sans), sans-serif",
             fontSize: 14, fontWeight: 600,
-            letterSpacing: "-0.025em", color: "#000",
+            letterSpacing: "-0.025em", color: "var(--cal-header)",
           }}
         >
           {MONTH_NAMES[vm]} {vy}
@@ -162,13 +162,13 @@ function CalendarPicker({
           aria-label="Next month"
           style={{
             width: 32, height: 32, borderRadius: "50%",
-            border: "none", background: "rgba(0,0,0,0.06)",
+            border: "none", background: "var(--cal-nav-bg)",
             display: "flex", alignItems: "center", justifyContent: "center",
             cursor: "pointer", WebkitTapHighlightColor: "transparent",
           }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-            stroke="rgba(0,0,0,0.6)" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
+            stroke="var(--cal-nav-icon)" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
             <path d="M9 18l6-6-6-6" />
           </svg>
         </button>
@@ -183,7 +183,7 @@ function CalendarPicker({
               textAlign: "center",
               fontFamily: "var(--font-sans), sans-serif",
               fontSize: 11, fontWeight: 500,
-              color: "rgba(0,0,0,0.3)",
+              color: "var(--cal-dow)",
               paddingBottom: 6,
             }}
           >
@@ -207,13 +207,13 @@ function CalendarPicker({
                 display: "flex", alignItems: "center", justifyContent: "center",
                 aspectRatio: "1",
                 borderRadius: "50%",
-                border: isToday && !isSelected ? "1.5px solid rgba(0,0,0,0.25)" : "none",
-                background: isSelected ? "#000" : "transparent",
+                border: isToday && !isSelected ? "1.5px solid var(--cal-today-border)" : "none",
+                background: isSelected ? "var(--cal-selected-bg)" : "transparent",
                 color: isSelected
-                  ? "#fff"
+                  ? "var(--cal-selected-color)"
                   : cell.current
-                    ? isToday ? "#000" : "rgba(0,0,0,0.85)"
-                    : "rgba(0,0,0,0.18)",
+                    ? isToday ? "var(--cal-header)" : "var(--cal-day)"
+                    : "var(--cal-day-muted)",
                 fontFamily: "var(--font-sans), sans-serif",
                 fontSize: 13,
                 fontWeight: isSelected || isToday ? 600 : 400,
@@ -261,6 +261,7 @@ export function LogSheet() {
     const el = chipsRef.current;
     const inner = chipsInnerRef.current;
     if (!el || !inner) return;
+    const safeInner: HTMLElement = inner;
     const drag = chipsDragRef.current;
 
     // Rolling velocity sample buffer — last 100ms of pointer events
@@ -279,7 +280,7 @@ export function LogSheet() {
 
     function setTranslate(px: number) {
       overscroll = px;
-      inner.style.transform = px === 0 ? "" : `translateX(${px}px)`;
+      safeInner.style.transform = px === 0 ? "" : `translateX(${px}px)`;
     }
 
     // Exponential decay settling in ~300ms — matches iOS edge-bounce duration
@@ -288,11 +289,11 @@ export function LogSheet() {
       const animate = () => {
         overscroll *= 0.80;
         if (Math.abs(overscroll) < 0.2) {
-          inner.style.transform = "";
+          safeInner.style.transform = "";
           overscroll = 0;
           return;
         }
-        inner.style.transform = `translateX(${overscroll}px)`;
+        safeInner.style.transform = `translateX(${overscroll}px)`;
         springRafId = requestAnimationFrame(animate);
       };
       springRafId = requestAnimationFrame(animate);
@@ -314,7 +315,7 @@ export function LogSheet() {
       cancelAnimationFrame(drag.rafId);
       cancelAnimationFrame(springRafId);
       overscroll = 0;
-      inner.style.transform = "";
+      safeInner.style.transform = "";
       velSamples.length = 0;
       drag.active = true;
       drag.moved = false;
@@ -513,7 +514,6 @@ export function LogSheet() {
     <>
       <style>{`
         #log-sheet-chips::-webkit-scrollbar { display: none; }
-        #log-sheet-note::placeholder { color: rgba(0,0,0,0.28); }
       `}</style>
 
       {/* Scrim */}
@@ -525,7 +525,7 @@ export function LogSheet() {
           position: "fixed",
           inset: 0,
           zIndex: 100,
-          background: "rgba(0,0,0,0.32)",
+          background: "var(--overlay)",
           opacity: isOpen ? 1 : 0,
           pointerEvents: isOpen ? "auto" : "none",
           transition: `opacity ${SPRING}`,
@@ -545,12 +545,11 @@ export function LogSheet() {
           width: "100%",
           maxWidth: 428,
           zIndex: 101,
-          background: "rgba(255,255,255,0.82)",
+          background: "var(--sheet-bg)",
           backdropFilter: "blur(40px) saturate(1.8)",
           WebkitBackdropFilter: "blur(40px) saturate(1.8)",
           borderRadius: "32px 32px 0 0",
-          boxShadow:
-            "0 -1px 0 rgba(0,0,0,0.07), 0 -12px 48px rgba(0,0,0,0.13)",
+          boxShadow: "var(--sheet-shadow)",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
@@ -584,7 +583,7 @@ export function LogSheet() {
               width: 36,
               height: 4,
               borderRadius: 2,
-              background: "rgba(0,0,0,0.16)",
+              background: "var(--drag-handle)",
             }}
           />
         </div>
@@ -602,8 +601,8 @@ export function LogSheet() {
             width: CLOSE_BTN,
             height: CLOSE_BTN,
             borderRadius: "100px",
-            background: "rgba(0,0,0,0.06)",
-            border: "1px solid rgba(0,0,0,0.07)",
+            background: "var(--close-btn-bg)",
+            border: "1px solid var(--close-btn-border)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -617,7 +616,7 @@ export function LogSheet() {
             height="14"
             viewBox="0 0 24 24"
             fill="none"
-            stroke="rgba(0,0,0,0.55)"
+            stroke="var(--close-btn-icon)"
             strokeWidth="2.6"
             strokeLinecap="round"
             aria-hidden
@@ -636,7 +635,7 @@ export function LogSheet() {
               fontWeight: 500,
               lineHeight: 1.15,
               letterSpacing: "-0.04em",
-              color: "#000",
+              color: "var(--foreground)",
               margin: 0,
             }}
           >
@@ -655,13 +654,13 @@ export function LogSheet() {
               gap: 5,
               padding: "4px 8px",
               borderRadius: 4,
-              border: "1px dashed #919191",
+              border: "1px dashed var(--mono-border)",
               background: "none",
               cursor: "pointer",
               fontFamily: '"B612 Mono", ui-monospace, monospace',
               fontSize: 12,
               fontWeight: 400,
-              color: "#000",
+              color: "var(--foreground)",
               letterSpacing: "-0.48px",
               WebkitTapHighlightColor: "transparent",
               lineHeight: "normal",
@@ -710,7 +709,7 @@ export function LogSheet() {
         <div
           style={{
             height: "0.5px",
-            background: "rgba(0,0,0,0.08)",
+            background: "var(--separator)",
             margin: "24px 0 0",
             flexShrink: 0,
           }}
@@ -756,13 +755,13 @@ export function LogSheet() {
                     height: 40,
                     borderRadius: 100,
                     border: "none",
-                    background: isSelected ? "#000" : "rgba(0,0,0,0.06)",
+                    background: isSelected ? "var(--chip-selected-bg)" : "var(--chip-bg)",
                     cursor: "pointer",
                     fontFamily: "var(--font-sans), sans-serif",
                     fontSize: 14,
                     fontWeight: 500,
                     letterSpacing: "-0.02em",
-                    color: isSelected ? "#fff" : "rgba(0,0,0,0.75)",
+                    color: isSelected ? "var(--chip-selected-color)" : "var(--chip-color)",
                     WebkitTapHighlightColor: "transparent",
                     transition: "background 0.18s, color 0.18s",
                     flexShrink: 0,
@@ -788,13 +787,13 @@ export function LogSheet() {
                   height: 40,
                   borderRadius: 100,
                   border: "none",
-                  background: "rgba(0,0,0,0.06)",
+                  background: "var(--chip-bg)",
                   cursor: "pointer",
                   fontFamily: "var(--font-sans), sans-serif",
                   fontSize: 14,
                   fontWeight: 500,
                   letterSpacing: "-0.02em",
-                  color: "rgba(0,0,0,0.75)",
+                  color: "var(--chip-color)",
                   WebkitTapHighlightColor: "transparent",
                   flexShrink: 0,
                   whiteSpace: "nowrap",
@@ -823,7 +822,7 @@ export function LogSheet() {
         <div
           style={{
             height: "0.5px",
-            background: "rgba(0,0,0,0.08)",
+            background: "var(--separator)",
             flexShrink: 0,
           }}
         />
@@ -850,7 +849,7 @@ export function LogSheet() {
               fontFamily: "var(--font-sans), sans-serif",
               fontSize: 16,
               fontWeight: 400,
-              color: "#000",
+              color: "var(--input-color)",
               letterSpacing: "-0.025em",
               lineHeight: 1.55,
               display: "block",
@@ -873,8 +872,8 @@ export function LogSheet() {
               height: 54,
               borderRadius: 50,
               border: "none",
-              backgroundColor: "#000",
-              color: "#fff",
+              backgroundColor: "var(--cta-bg)",
+              color: "var(--cta-color)",
               fontFamily: "var(--font-sans), sans-serif",
               fontSize: 16,
               fontWeight: 500,

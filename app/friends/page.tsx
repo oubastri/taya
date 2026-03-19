@@ -141,6 +141,7 @@ function drawUserBowl(
   zoom: number,
   radialCompress: number,
   radialAngle: number,
+  isDark: boolean,
 ) {
   const R = (AVATAR_RADIUS / AVATAR_SIZE) * S;
 
@@ -163,9 +164,9 @@ function drawUserBowl(
   if (img && img.complete && img.naturalWidth > 0) {
     ctx.drawImage(img, -half, -half, S, S);
   } else {
-    ctx.fillStyle = "#e8e8ef";
+    ctx.fillStyle = isDark ? "#2a2a2a" : "#e8e8ef";
     ctx.fillRect(-half, -half, S, S);
-    ctx.fillStyle = "#999";
+    ctx.fillStyle = isDark ? "#555" : "#999";
     ctx.font = `700 ${Math.round(S * 0.28)}px ${FONT}`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -181,10 +182,10 @@ function drawUserBowl(
     ctx.globalAlpha = alpha;
     ctx.textAlign = "center";
     ctx.textBaseline = "alphabetic";
-    ctx.fillStyle = "#111";
+    ctx.fillStyle = isDark ? "#E0E0E0" : "#111";
     ctx.font = `700 ${13 * ts}px ${FONT}`;
     ctx.fillText(user.name, 0, nameY, S * 1.2);
-    ctx.fillStyle = "rgba(0,0,0,0.42)";
+    ctx.fillStyle = isDark ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.42)";
     ctx.font = `500 ${11 * ts}px ${FONT}`;
     ctx.fillText(`@${user.handle}`, 0, nameY + 17 * ts, S * 1.2);
     ctx.globalAlpha = 1;
@@ -292,7 +293,7 @@ function SearchSheet({
 
   return (
     <>
-      <style>{`#taya-search-input::placeholder { color: rgba(0,0,0,0.28); }`}</style>
+      <style>{`#taya-search-input::placeholder { color: var(--input-placeholder); }`}</style>
 
       {/* Scrim */}
       <div
@@ -302,7 +303,7 @@ function SearchSheet({
           position: "fixed",
           inset: 0,
           zIndex: 99,
-          background: "rgba(0,0,0,0.32)",
+          background: "var(--overlay)",
           opacity: open ? 1 : 0,
           transition: `opacity ${SPRING}`,
         }}
@@ -319,11 +320,11 @@ function SearchSheet({
           maxWidth: 428,
           height: "85svh",
           zIndex: 100,
-          background: "rgba(255,255,255,0.82)",
+          background: "var(--sheet-bg)",
           backdropFilter: "blur(40px) saturate(1.8)",
           WebkitBackdropFilter: "blur(40px) saturate(1.8)",
           borderRadius: "32px 32px 0 0",
-          boxShadow: "0 -1px 0 rgba(0,0,0,0.07), 0 -12px 48px rgba(0,0,0,0.13)",
+          boxShadow: "var(--sheet-shadow)",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
@@ -354,7 +355,7 @@ function SearchSheet({
               width: 36,
               height: 4,
               borderRadius: 2,
-              background: "rgba(0,0,0,0.16)",
+              background: "var(--drag-handle)",
             }}
           />
         </div>
@@ -371,8 +372,8 @@ function SearchSheet({
             width: NAV_HEIGHT,
             height: NAV_HEIGHT,
             borderRadius: "100px",
-            background: "rgba(0,0,0,0.06)",
-            border: "1px solid rgba(0,0,0,0.07)",
+            background: "var(--close-btn-bg)",
+            border: "1px solid var(--close-btn-border)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -387,7 +388,7 @@ function SearchSheet({
             height="14"
             viewBox="0 0 24 24"
             fill="none"
-            stroke="rgba(0,0,0,0.55)"
+            stroke="var(--close-btn-icon)"
             strokeWidth="2.6"
             strokeLinecap="round"
             aria-hidden
@@ -421,8 +422,8 @@ function SearchSheet({
               fontSize: "clamp(26px, 7vw, 32px)",
               fontWeight: 500,
               letterSpacing: "-0.04em",
-              color: "#000",
-              caretColor: "#000",
+              color: "var(--input-color)",
+              caretColor: "var(--input-color)",
               minWidth: 0,
             }}
             autoComplete="off"
@@ -433,7 +434,7 @@ function SearchSheet({
         </div>
 
         {/* Separator */}
-        <div style={{ height: "0.5px", background: "rgba(0,0,0,0.08)", flexShrink: 0 }} />
+        <div style={{ height: "0.5px", background: "var(--separator)", flexShrink: 0 }} />
 
         {/* Results */}
         <div
@@ -458,7 +459,7 @@ function SearchSheet({
                 background: "none",
                 border: "none",
                 borderBottom:
-                  i < results.length - 1 ? "0.5px solid rgba(0,0,0,0.07)" : "none",
+                  i < results.length - 1 ? "0.5px solid var(--row-border)" : "none",
                 cursor: "pointer",
                 fontFamily: "var(--font-sans), sans-serif",
                 textAlign: "left",
@@ -472,7 +473,7 @@ function SearchSheet({
                   borderRadius: 14,
                   overflow: "hidden",
                   flexShrink: 0,
-                  background: "#e8e8ef",
+                  background: "var(--avatar-placeholder-bg)",
                 }}
               >
                 {f.avatarUrl ? (
@@ -491,7 +492,7 @@ function SearchSheet({
                       justifyContent: "center",
                       fontSize: 15,
                       fontWeight: 700,
-                      color: "#999",
+                      color: "var(--avatar-placeholder-text)",
                       fontFamily: "var(--font-sans), sans-serif",
                     }}
                   >
@@ -506,7 +507,7 @@ function SearchSheet({
                     fontFamily: "var(--font-sans), sans-serif",
                     fontSize: 16,
                     fontWeight: 600,
-                    color: "#000",
+                    color: "var(--foreground)",
                     letterSpacing: "-0.025em",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -520,7 +521,7 @@ function SearchSheet({
                     margin: "1px 0 0",
                     fontFamily: "var(--font-sans), sans-serif",
                     fontSize: 13,
-                    color: "rgba(0,0,0,0.38)",
+                    color: "var(--foreground-subtle)",
                     fontWeight: 400,
                     letterSpacing: "-0.01em",
                   }}
@@ -534,7 +535,7 @@ function SearchSheet({
                     fontFamily: "var(--font-sans), sans-serif",
                     fontSize: 12,
                     fontWeight: 600,
-                    color: "rgba(0,0,0,0.32)",
+                    color: "var(--foreground-subtle)",
                     letterSpacing: "-0.01em",
                     flexShrink: 0,
                   }}
@@ -551,7 +552,7 @@ function SearchSheet({
                 margin: "36px 24px 0",
                 fontFamily: "var(--font-sans), sans-serif",
                 fontSize: 15,
-                color: "rgba(0,0,0,0.3)",
+                color: "var(--foreground-muted)",
                 fontWeight: 500,
                 letterSpacing: "-0.02em",
               }}
@@ -720,9 +721,11 @@ export default function FriendsPage() {
         allUsers: users,
       } = gridRef.current;
 
-      // Clear to white
+      const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+
+      // Clear to theme background
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = "#ffffff";
+      ctx.fillStyle = isDark ? "#0D0D0D" : "#F3F3F3";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       // Visible world range (extra margin so bowl-warp can't clip edge tiles)
@@ -747,10 +750,17 @@ export default function FriendsPage() {
       // Gradient reaches the screen corners so dots are visible edge-to-edge
       const globeR    = Math.hypot(cssW, cssH) * 0.55;
       const dotGrad   = ctx.createRadialGradient(scx, scy, 0, scx, scy, globeR);
-      dotGrad.addColorStop(0.0,  "rgba(0,0,0,0.22)");
-      dotGrad.addColorStop(0.55, "rgba(0,0,0,0.18)");
-      dotGrad.addColorStop(0.85, "rgba(0,0,0,0.10)");
-      dotGrad.addColorStop(1.0,  "rgba(0,0,0,0.04)");
+      if (isDark) {
+        dotGrad.addColorStop(0.0,  "rgba(255,255,255,0.18)");
+        dotGrad.addColorStop(0.55, "rgba(255,255,255,0.13)");
+        dotGrad.addColorStop(0.85, "rgba(255,255,255,0.07)");
+        dotGrad.addColorStop(1.0,  "rgba(255,255,255,0.02)");
+      } else {
+        dotGrad.addColorStop(0.0,  "rgba(0,0,0,0.22)");
+        dotGrad.addColorStop(0.55, "rgba(0,0,0,0.18)");
+        dotGrad.addColorStop(0.85, "rgba(0,0,0,0.10)");
+        dotGrad.addColorStop(1.0,  "rgba(0,0,0,0.04)");
+      }
 
       const gcMin = Math.floor(visLeft  / DOT_SPACING) - 1;
       const gcMax = Math.ceil(visRight  / DOT_SPACING) + 1;
@@ -823,6 +833,7 @@ export default function FriendsPage() {
               z,
               radialCompress,
               radialAngle,
+              isDark,
             );
           } // users
         } // tx
@@ -1143,7 +1154,7 @@ export default function FriendsPage() {
   );
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#fff" }}>
+    <div style={{ position: "fixed", inset: 0, background: "var(--background)" }}>
       {/* ── infinite canvas ──────────────────────────────────────────────── */}
       <canvas
         ref={canvasRef}
@@ -1161,7 +1172,7 @@ export default function FriendsPage() {
             position: "fixed",
             inset: 0,
             zIndex: 10,
-            background: "#fff",
+            background: "var(--background)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -1209,9 +1220,9 @@ export default function FriendsPage() {
           borderRadius: "100px",
           backdropFilter: "blur(24px) saturate(1.8)",
           WebkitBackdropFilter: "blur(24px) saturate(1.8)",
-          background: "rgba(255,255,255,0.72)",
-          border: "1px solid rgba(0,0,0,0.08)",
-          boxShadow: "0 0 0 0.5px rgba(0,0,0,0.06), 0 4px 20px rgba(0,0,0,0.08)",
+          background: "var(--glass-btn-bg)",
+          border: "1px solid var(--glass-btn-border)",
+          boxShadow: "var(--glass-btn-shadow)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -1225,7 +1236,7 @@ export default function FriendsPage() {
           height="20"
           viewBox="0 0 24 24"
           fill="none"
-          stroke="rgba(0,0,0,0.6)"
+          stroke="var(--glass-btn-icon)"
           strokeWidth="2.2"
           strokeLinecap="round"
           aria-hidden

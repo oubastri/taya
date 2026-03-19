@@ -99,7 +99,7 @@ export function FeedPost({
       onTouchEnd={handleDoubleTapLike}
       onDoubleClick={handleDoubleTapLike}
       style={{
-        backgroundColor: "#fff",
+        backgroundColor: "var(--card-bg)",
         borderRadius: 32,
         padding: "16px 16px 24px",
         display: "flex",
@@ -140,7 +140,7 @@ export function FeedPost({
                 height: AVATAR_SIZE,
                 borderRadius: 14,
                 overflow: "hidden",
-                border: "1px solid #fff",
+                border: "1px solid var(--card-ring)",
                 flexShrink: 0,
               }}
             >
@@ -156,8 +156,8 @@ export function FeedPost({
               width: AVATAR_SIZE,
               height: AVATAR_SIZE,
               borderRadius: 14,
-              backgroundColor: "#f3f3f3",
-              border: "1px solid #fff",
+              backgroundColor: "var(--card-icon-bg)",
+              border: "1px solid var(--card-ring)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -186,7 +186,7 @@ export function FeedPost({
           fontSize: 16,
           fontWeight: 400,
           letterSpacing: "-0.64px",
-          color: "#000",
+          color: "var(--foreground)",
         }}
       >
         <p style={{ margin: 0, lineHeight: "normal" }}>
@@ -217,7 +217,7 @@ export function FeedPost({
             style={{
               margin: 0,
               fontSize: 14,
-              color: "#919191",
+              color: "var(--text-secondary)",
               letterSpacing: "-0.56px",
               lineHeight: "normal",
             }}
@@ -231,7 +231,7 @@ export function FeedPost({
 }
 
 const HEART_COLOR = "#ff3b5c";
-const HEART_GRAY = "#919191";
+const HEART_GRAY = "var(--text-secondary)";
 
 function LikeButton({
   liked,

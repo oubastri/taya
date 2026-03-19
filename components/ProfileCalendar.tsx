@@ -98,7 +98,7 @@ export function ProfileCalendar({
             height: 36,
             borderRadius: "50%",
             border: "none",
-            backgroundColor: "rgba(0,0,0,0.05)",
+            backgroundColor: "var(--chip-bg)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -109,7 +109,7 @@ export function ProfileCalendar({
           }}
           className="active:scale-95"
         >
-          <img src="/icons/nav/arrow-left.svg?v=1" alt="" width={14} height={14} aria-hidden style={{ display: "block" }} />
+          <img src="/icons/nav/arrow-left.svg?v=1" alt="" width={14} height={14} aria-hidden className="activity-icon-auto" style={{ display: "block" }} />
         </button>
 
         <div style={{ textAlign: "center" }}>
@@ -149,7 +149,7 @@ export function ProfileCalendar({
             height: 36,
             borderRadius: "50%",
             border: "none",
-            backgroundColor: isCurrentMonth ? "transparent" : "rgba(0,0,0,0.05)",
+            backgroundColor: isCurrentMonth ? "transparent" : "var(--chip-bg)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -161,7 +161,7 @@ export function ProfileCalendar({
           }}
           className="active:scale-95"
         >
-          <img src="/icons/nav/arrow-right.svg?v=1" alt="" width={14} height={14} aria-hidden style={{ display: "block" }} />
+          <img src="/icons/nav/arrow-right.svg?v=1" alt="" width={14} height={14} aria-hidden className="activity-icon-auto" style={{ display: "block" }} />
         </button>
       </div>
 
@@ -217,10 +217,10 @@ export function ProfileCalendar({
                 bg = "var(--accent)";
                 border = "none";
               } else if (isFuture) {
-                bg = "rgba(0,0,0,0.04)";
+                bg = "var(--border)";
                 border = "none";
               } else {
-                bg = "rgba(0,0,0,0.08)";
+                bg = "var(--border-strong)";
                 border = "none";
               }
 
@@ -238,7 +238,7 @@ export function ProfileCalendar({
               const dayNum = date.getDate();
               const isGreenCircle = hasWorkout || (isToday && hasWorkout);
               const dayLabelColor =
-                isGreenCircle ? "#000" : isToday ? "var(--accent)" : "var(--foreground-muted)";
+                isGreenCircle ? "#000" : isToday ? "var(--accent)" : "var(--foreground)";
 
               return (
                 <div

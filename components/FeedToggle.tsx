@@ -29,7 +29,7 @@ export function FeedToggle({ value, onChange }: FeedToggleProps) {
         alignItems: "center",
         padding: "4px 8px",
         borderRadius: 4,
-        border: "1px dashed #919191",
+        border: "1px dashed var(--mono-border)",
         cursor: "pointer",
         WebkitTapHighlightColor: "transparent",
         userSelect: "none",
@@ -38,7 +38,7 @@ export function FeedToggle({ value, onChange }: FeedToggleProps) {
         fontWeight: 400,
         letterSpacing: "-0.48px",
         lineHeight: "normal",
-        color: "#000",
+        color: "var(--foreground)",
       }}
     >
       {LABELS[value]}

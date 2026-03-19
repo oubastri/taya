@@ -169,7 +169,7 @@ export function DayDetailSheet() {
                       gap: 12,
                       padding: "14px 16px",
                       borderRadius: 14,
-                      backgroundColor: "rgba(0,0,0,0.04)",
+                      backgroundColor: "var(--row-card-bg)",
                       border: "1px solid var(--border)",
                     }}
                   >
@@ -224,7 +224,7 @@ export function DayDetailSheet() {
                           height: 36,
                           borderRadius: 10,
                           border: "none",
-                          backgroundColor: "rgba(0,0,0,0.08)",
+                          backgroundColor: "var(--action-btn-bg)",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
@@ -247,7 +247,7 @@ export function DayDetailSheet() {
                           height: 36,
                           borderRadius: 10,
                           border: "none",
-                          backgroundColor: "rgba(0,0,0,0.08)",
+                          backgroundColor: "var(--action-btn-bg)",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
