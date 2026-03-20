@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useFriends } from "@/hooks/use-friends";
 import { useUser } from "@/hooks/use-user";
 import { AthletesCounter } from "@/components/AthletesCounter";
+import { CustomCursor } from "@/components/CustomCursor";
 import type { FriendData } from "@/types/user";
 
 // ─── constants ───────────────────────────────────────────────────────────────
@@ -1161,6 +1162,7 @@ export default function FriendsPage() {
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "var(--background)" }}>
+      <CustomCursor />
       {/* ── infinite canvas ──────────────────────────────────────────────── */}
       <canvas
         ref={canvasRef}

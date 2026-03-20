@@ -252,6 +252,7 @@ export function ProfileCalendar({
               const hasWorkout = workoutDates.has(dk);
               const isToday = dk === today;
               const isFuture = dk > today;
+              const isSelected = selectedDateKey === dk;
 
               if (!inMonth) {
                 return (
@@ -282,7 +283,11 @@ export function ProfileCalendar({
               let color: string;
 
               if (isDateSelector) {
-                if (isToday) {
+                if (isSelected) {
+                  bg = "var(--foreground)";
+                  border = isToday ? "2px solid var(--background)" : "none";
+                  color = "var(--background)";
+                } else if (isToday) {
                   bg = "var(--chip-bg)";
                   border = "2px solid var(--foreground)";
                   color = "var(--foreground)";
@@ -331,12 +336,15 @@ export function ProfileCalendar({
                 else openLogSheet(dk);
               };
 
-              const isSelected = selectedDateKey === dk;
               const dayNum = date.getDate();
               const selectionBorder =
-                isSelected && !isToday ? "2px solid var(--foreground)" : border;
+                !isDateSelector && isSelected && !isToday
+                  ? "2px solid var(--foreground)"
+                  : border;
               const selectionRing =
-                isSelected && isToday ? "2px solid var(--foreground)" : selectionBorder;
+                !isDateSelector && isSelected && isToday
+                  ? "2px solid var(--foreground)"
+                  : selectionBorder;
 
               return (
                 <div
@@ -381,7 +389,7 @@ export function ProfileCalendar({
                       maxHeight: "100%",
                       borderRadius: "50%",
                       backgroundColor: bg,
-                      border: selectionRing,
+                      border: isDateSelector ? border : selectionRing,
                       boxSizing: "border-box",
                       display: "flex",
                       alignItems: "center",

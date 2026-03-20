@@ -522,11 +522,11 @@ export function LogSheet() {
           </svg>
         </button>
 
-        {/* Date chip toggles inline calendar (same sheet) */}
+        {/* Date chip toggles inline calendar (same sheet); top inset matches close (16) */}
         <div
           style={{
-            paddingTop: 12,
-            paddingLeft: 24,
+            paddingTop: 0,
+            paddingLeft: 16,
             paddingRight: 16 + CLOSE_BTN + 10,
           }}
         >
@@ -586,7 +586,7 @@ export function LogSheet() {
               letterSpacing: "-0.04em",
               color: "var(--foreground)",
               margin: 0,
-              marginTop: datePickerOpen ? 14 : 28,
+              marginTop: 28,
             }}
           >
             {datePickerOpen ? "Select date" : "What did you do?"}
@@ -776,7 +776,8 @@ export function LogSheet() {
         <div
           style={{
             padding: "16px 24px",
-            paddingBottom: "max(12px, env(safe-area-inset-bottom))",
+            paddingBottom:
+              "max(20px, calc(10px + env(safe-area-inset-bottom)))",
           }}
         >
           <button
@@ -851,7 +852,8 @@ export function LogSheet() {
               style={{
                 flexShrink: 0,
                 padding: "12px 24px",
-                paddingBottom: "max(12px, env(safe-area-inset-bottom))",
+                paddingBottom:
+                  "max(20px, calc(10px + env(safe-area-inset-bottom)))",
                 boxSizing: "border-box",
               }}
             >

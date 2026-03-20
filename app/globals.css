@@ -250,6 +250,41 @@ html {
   -webkit-text-size-adjust: 100%;
 }
 
+/* Custom cursor — only while Athletes tab is mounted (immersive globe). See CustomCursor.tsx */
+html[data-custom-cursor="on"] *,
+html[data-custom-cursor="on"] *::before,
+html[data-custom-cursor="on"] *::after {
+  cursor: none !important;
+}
+
+/* Fixed-size dot — solid black (light) / solid light (dark) for max contrast */
+.custom-cursor-shape {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%) translateZ(0);
+  box-sizing: border-box;
+  isolation: isolate;
+  border-style: solid;
+  border-width: 1px;
+  background-color: #0a0a0a;
+  border-color: #000;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.45),
+    0 2px 12px rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="dark"] .custom-cursor-shape {
+  background-color: #f0f0f0;
+  border-color: #fff;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 2px 14px rgba(0, 0, 0, 0.5);
+}
+
 html,
 body {
   overflow-x: hidden;
