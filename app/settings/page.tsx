@@ -139,6 +139,13 @@ const pillBtn: React.CSSProperties = {
   WebkitBackdropFilter: "blur(14.524px)",
 };
 
+const fieldErrorText: React.CSSProperties = {
+  margin: 0,
+  fontSize: 12,
+  color: "#ff3b30",
+  lineHeight: 1.35,
+};
+
 export default function SettingsPage() {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -158,6 +165,10 @@ export default function SettingsPage() {
   const [uploading, setUploading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [nameFieldError, setNameFieldError] = useState<string | null>(null);
+  const [handleBlurError, setHandleBlurError] = useState<string | null>(null);
+  const [avatarFieldError, setAvatarFieldError] = useState<string | null>(null);
+  const [deleteFieldError, setDeleteFieldError] = useState<string | null>(null);
 
   const [promptAnswers, setPromptAnswers] = useState<string[]>(() =>
     PROMPT_OPTIONS.map(() => ""),
@@ -246,6 +257,7 @@ export default function SettingsPage() {
   async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    setAvatarFieldError(null);
 
     if (!isRealMode) {
       const url = URL.createObjectURL(file);
@@ -265,7 +277,7 @@ export default function SettingsPage() {
         .upload(path, file, { upsert: true, contentType: file.type });
 
       if (uploadErr) {
-        toast("Upload failed — make sure the avatars bucket exists.", "error");
+        setAvatarFieldError("Upload failed — make sure the avatars bucket exists.");
         return;
       }
 
@@ -285,10 +297,11 @@ export default function SettingsPage() {
     const trimmed = nameInput.trim();
     if (trimmed === user.name) return;
     if (!trimmed) {
-      toast("Please enter your name.", "error");
+      setNameFieldError("Please enter your name.");
       setNameInput(user.name);
       return;
     }
+    setNameFieldError(null);
     updateUser({ name: trimmed });
   }
 
@@ -298,18 +311,19 @@ export default function SettingsPage() {
 
     const fmt = validateHandleFormat(clean);
     if (fmt) {
-      toast(fmt, "error");
+      setHandleBlurError(fmt);
       setHandleInput(user.handle);
       return;
     }
 
     const free = await checkHandleFree(clean);
     if (!free) {
-      toast("That handle is already taken.", "error");
+      setHandleBlurError("Already taken");
       setHandleInput(user.handle);
       return;
     }
 
+    setHandleBlurError(null);
     updateUser({ handle: clean });
   }
 
@@ -320,8 +334,7 @@ export default function SettingsPage() {
         const supabase = createClient();
         const { error } = await supabase.rpc("delete_own_account");
         if (error) {
-          toast("Failed to delete account.", "error");
-          setShowDeleteConfirm(false);
+          setDeleteFieldError("Failed to delete account.");
           return;
         }
         await supabase.auth.signOut();
@@ -365,6 +378,7 @@ export default function SettingsPage() {
           alignItems: "center",
           marginTop: 8,
           marginBottom: AVATAR_TO_FIRST_CARD,
+          width: "100%",
         }}
       >
         <div
@@ -439,6 +453,22 @@ export default function SettingsPage() {
             style={{ display: "none" }}
           />
         </div>
+        {avatarFieldError ? (
+          <p
+            role="alert"
+            style={{
+              ...fieldErrorText,
+              marginTop: 10,
+              textAlign: "center",
+              maxWidth: "100%",
+              paddingLeft: 16,
+              paddingRight: 16,
+              boxSizing: "border-box",
+            }}
+          >
+            {avatarFieldError}
+          </p>
+        ) : null}
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: CARD_GAP }}>
@@ -449,7 +479,10 @@ export default function SettingsPage() {
             <input
               type="text"
               value={nameInput}
-              onChange={(e) => setNameInput(e.target.value)}
+              onChange={(e) => {
+                setNameFieldError(null);
+                setNameInput(e.target.value);
+              }}
               onBlur={() => void handleBlurName()}
               onKeyDown={(e) => {
                 if (e.key === "Enter") (e.target as HTMLInputElement).blur();
@@ -457,6 +490,11 @@ export default function SettingsPage() {
               autoComplete="name"
               style={{ ...valueInput, display: "block" }}
             />
+            {nameFieldError ? (
+              <p role="alert" style={{ ...fieldErrorText, marginTop: 4 }}>
+                {nameFieldError}
+              </p>
+            ) : null}
           </div>
         </div>
 
@@ -479,7 +517,10 @@ export default function SettingsPage() {
                 <input
                   type="text"
                   value={handleInput}
-                  onChange={(e) => setHandleInput(e.target.value.replace(/\s/g, ""))}
+                  onChange={(e) => {
+                    setHandleBlurError(null);
+                    setHandleInput(e.target.value.replace(/\s/g, ""));
+                  }}
                   onBlur={() => void handleBlurHandle()}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") (e.target as HTMLInputElement).blur();
@@ -511,25 +552,18 @@ export default function SettingsPage() {
                 </span>
               ) : null}
             </div>
+            {handleBlurError ||
+            ((handleStatus === "invalid" && normalizeHandle(handleInput) !== user.handle) ||
+              handleStatus === "taken") ? (
+              <p role="alert" style={{ ...fieldErrorText, marginTop: 4 }}>
+                {handleBlurError ??
+                  (handleStatus === "taken"
+                    ? "Already taken"
+                    : validateHandleFormat(normalizeHandle(handleInput)) ?? "")}
+              </p>
+            ) : null}
           </div>
         </div>
-
-        {(handleStatus === "invalid" && normalizeHandle(handleInput) !== user.handle) ||
-        handleStatus === "taken" ? (
-          <p
-            style={{
-              margin: 0,
-              fontSize: 12,
-              color: "#ff3b30",
-              lineHeight: 1.35,
-              paddingLeft: 4,
-            }}
-          >
-            {handleStatus === "taken"
-              ? "Already taken"
-              : validateHandleFormat(normalizeHandle(handleInput))}
-          </p>
-        ) : null}
 
         {/* Motto (tagline) */}
         <div style={hubCard}>
@@ -779,7 +813,10 @@ export default function SettingsPage() {
         {!showDeleteConfirm ? (
           <button
             type="button"
-            onClick={() => setShowDeleteConfirm(true)}
+            onClick={() => {
+              setDeleteFieldError(null);
+              setShowDeleteConfirm(true);
+            }}
             style={{
               ...pillBtn,
               background: "transparent",
@@ -803,10 +840,18 @@ export default function SettingsPage() {
             >
               This permanently deletes your account, workouts, and follows. This can&apos;t be undone.
             </p>
+            {deleteFieldError ? (
+              <p role="alert" style={{ ...fieldErrorText, margin: "0 0 12px" }}>
+                {deleteFieldError}
+              </p>
+            ) : null}
             <div style={{ display: "flex", gap: 10 }}>
               <button
                 type="button"
-                onClick={() => setShowDeleteConfirm(false)}
+                onClick={() => {
+                  setDeleteFieldError(null);
+                  setShowDeleteConfirm(false);
+                }}
                 style={{
                   flex: 1,
                   padding: "12px",

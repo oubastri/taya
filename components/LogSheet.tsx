@@ -1,9 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { useLogSheet } from "@/contexts/log-sheet";
 import { useWorkouts } from "@/hooks/use-workouts";
 import { ActivityIcon } from "./ActivityIcon";
+import { ProfileCalendar } from "./ProfileCalendar";
 import {
   ACTIVITY_LABELS,
   ACTIVITY_TYPES,
@@ -22,7 +30,17 @@ const DEFAULT_TOP_5: ActivityType[] = [
 
 const MAX_DESCRIPTION_LENGTH = 150;
 const SPRING = "0.38s cubic-bezier(0.32, 0.72, 0, 1)";
+/** Cross-fade + slide between log form and inline date picker */
+const LOG_VIEW_TRANSITION = `0.36s cubic-bezier(0.32, 0.72, 0, 1)`;
 const CLOSE_BTN = 54;
+
+/** Matches `fieldErrorText` in settings sheets (e.g. ChangePasswordSheet) */
+const logSheetFieldError: CSSProperties = {
+  margin: 0,
+  fontSize: 12,
+  color: "#ff3b30",
+  lineHeight: 1.35,
+};
 
 function formatSheetDate(dateKey: string): string {
   const today = toDateKey(new Date());
@@ -64,173 +82,6 @@ function getOrderedActivities(
   return [...top5, ...rest];
 }
 
-// ── Inline calendar ────────────────────────────────────────────────────────
-
-const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
-const MONTH_NAMES = [
-  "January","February","March","April","May","June",
-  "July","August","September","October","November","December",
-];
-
-function buildCalendarDays(year: number, month: number) {
-  const firstDow = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const daysInPrev = new Date(year, month, 0).getDate();
-  const cells: { date: Date; current: boolean }[] = [];
-
-  for (let i = firstDow - 1; i >= 0; i--) {
-    cells.push({ date: new Date(year, month - 1, daysInPrev - i), current: false });
-  }
-  for (let d = 1; d <= daysInMonth; d++) {
-    cells.push({ date: new Date(year, month, d), current: true });
-  }
-  const trailing = 42 - cells.length;
-  for (let d = 1; d <= trailing; d++) {
-    cells.push({ date: new Date(year, month + 1, d), current: false });
-  }
-  return cells;
-}
-
-function CalendarPicker({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (dk: string) => void;
-}) {
-  const today = toDateKey(new Date());
-  const initYear = parseInt(value.slice(0, 4));
-  const initMonth = parseInt(value.slice(5, 7)) - 1;
-  const [vy, setVy] = useState(initYear);
-  const [vm, setVm] = useState(initMonth);
-
-  useEffect(() => {
-    setVy(parseInt(value.slice(0, 4)));
-    setVm(parseInt(value.slice(5, 7)) - 1);
-  }, [value]);
-
-  const cells = useMemo(() => buildCalendarDays(vy, vm), [vy, vm]);
-
-  const prev = () => {
-    if (vm === 0) { setVm(11); setVy(y => y - 1); }
-    else setVm(m => m - 1);
-  };
-  const next = () => {
-    if (vm === 11) { setVm(0); setVy(y => y + 1); }
-    else setVm(m => m + 1);
-  };
-
-  return (
-    <div style={{ padding: "12px 0 4px" }}>
-      {/* Month / year nav */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 10,
-        }}
-      >
-        <button
-          type="button"
-          onClick={prev}
-          aria-label="Previous month"
-          style={{
-            width: 32, height: 32, borderRadius: "50%",
-            border: "none", background: "var(--cal-nav-bg)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            cursor: "pointer", WebkitTapHighlightColor: "transparent",
-          }}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-            stroke="var(--cal-nav-icon)" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        </button>
-        <span
-          style={{
-            fontFamily: "var(--font-sans), sans-serif",
-            fontSize: 14, fontWeight: 600,
-            letterSpacing: "-0.025em", color: "var(--cal-header)",
-          }}
-        >
-          {MONTH_NAMES[vm]} {vy}
-        </span>
-        <button
-          type="button"
-          onClick={next}
-          aria-label="Next month"
-          style={{
-            width: 32, height: 32, borderRadius: "50%",
-            border: "none", background: "var(--cal-nav-bg)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            cursor: "pointer", WebkitTapHighlightColor: "transparent",
-          }}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-            stroke="var(--cal-nav-icon)" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
-            <path d="M9 18l6-6-6-6" />
-          </svg>
-        </button>
-      </div>
-
-      {/* Day-of-week labels */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", marginBottom: 4 }}>
-        {DAY_LABELS.map((l, i) => (
-          <div
-            key={i}
-            style={{
-              textAlign: "center",
-              fontFamily: "var(--font-sans), sans-serif",
-              fontSize: 11, fontWeight: 500,
-              color: "var(--cal-dow)",
-              paddingBottom: 6,
-            }}
-          >
-            {l}
-          </div>
-        ))}
-      </div>
-
-      {/* Day cells */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
-        {cells.map((cell, i) => {
-          const dk = toDateKey(cell.date);
-          const isSelected = dk === value;
-          const isToday = dk === today;
-          return (
-            <button
-              key={i}
-              type="button"
-              onClick={() => { if (cell.current) onChange(dk); }}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                aspectRatio: "1",
-                borderRadius: "50%",
-                border: isToday && !isSelected ? "1.5px solid var(--cal-today-border)" : "none",
-                background: isSelected ? "var(--cal-selected-bg)" : "transparent",
-                color: isSelected
-                  ? "var(--cal-selected-color)"
-                  : cell.current
-                    ? isToday ? "var(--cal-header)" : "var(--cal-day)"
-                    : "var(--cal-day-muted)",
-                fontFamily: "var(--font-sans), sans-serif",
-                fontSize: 13,
-                fontWeight: isSelected || isToday ? 600 : 400,
-                cursor: cell.current ? "pointer" : "default",
-                WebkitTapHighlightColor: "transparent",
-                transition: "background 0.15s",
-              }}
-            >
-              {cell.date.getDate()}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 export function LogSheet() {
   const { isOpen, close, initialDateKey, workoutToEdit } = useLogSheet();
   const { workouts, addWorkout, updateWorkout } = useWorkouts();
@@ -240,6 +91,11 @@ export function LogSheet() {
   const [date, setDate] = useState(() => toDateKey(new Date()));
   const [showAll, setShowAll] = useState(false);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [draftDate, setDraftDate] = useState(() => toDateKey(new Date()));
+  const [datePickerFutureErr, setDatePickerFutureErr] = useState<string | null>(
+    null
+  );
+  const datePickerSnapshotRef = useRef<string>("");
 
   const sheetRef = useRef<HTMLDivElement>(null);
   const scrimRef = useRef<HTMLDivElement>(null);
@@ -424,21 +280,53 @@ export function LogSheet() {
     if (!isOpen) return;
     if (workoutToEdit) {
       setDate(workoutToEdit.date);
+      setDraftDate(workoutToEdit.date);
       setDescription(workoutToEdit.description ?? "");
       setSelected((workoutToEdit.activityType ?? "other") as ActivityType);
     } else {
-      setDate(initialDateKey ?? toDateKey(new Date()));
+      const d = initialDateKey ?? toDateKey(new Date());
+      setDate(d);
+      setDraftDate(d);
       setDescription("");
       setSelected(null);
     }
   }, [isOpen, initialDateKey, workoutToEdit]);
+
+  const openInlineDatePicker = useCallback(() => {
+    datePickerSnapshotRef.current = date;
+    setDraftDate(date);
+    setDatePickerFutureErr(null);
+    setDatePickerOpen(true);
+  }, [date]);
+
+  const cancelInlineDatePicker = useCallback(() => {
+    setDate(datePickerSnapshotRef.current);
+    setDatePickerFutureErr(null);
+    setDatePickerOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (!datePickerOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") cancelInlineDatePicker();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [datePickerOpen, cancelInlineDatePicker]);
 
   const reset = useCallback(() => {
     setSelected(null);
     setDescription("");
     setShowAll(false);
     setDatePickerOpen(false);
+    setDatePickerFutureErr(null);
   }, []);
+
+  useEffect(() => {
+    if (!datePickerFutureErr) return;
+    const t = window.setTimeout(() => setDatePickerFutureErr(null), 4000);
+    return () => window.clearTimeout(t);
+  }, [datePickerFutureErr]);
 
   const handleClose = useCallback(() => {
     close();
@@ -537,7 +425,13 @@ export function LogSheet() {
         ref={sheetRef}
         role="dialog"
         aria-modal="true"
-        aria-label={isEditing ? "Edit workout" : "Log a workout"}
+        aria-label={
+          datePickerOpen
+            ? "Select workout date"
+            : isEditing
+              ? "Edit workout"
+              : "Log a workout"
+        }
         style={{
           position: "fixed",
           bottom: 0,
@@ -553,7 +447,9 @@ export function LogSheet() {
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
-          maxHeight: "90svh",
+          maxHeight: datePickerOpen
+            ? "min(94svh, calc(100dvh - 8px))"
+            : "90svh",
           transform: isOpen
             ? "translateX(-50%)"
             : "translateX(-50%) translateY(100%)",
@@ -626,8 +522,61 @@ export function LogSheet() {
           </svg>
         </button>
 
-        {/* Heading + date */}
-        <div style={{ padding: "20px 24px 0" }}>
+        {/* Date chip toggles inline calendar (same sheet) */}
+        <div
+          style={{
+            paddingTop: 12,
+            paddingLeft: 24,
+            paddingRight: 16 + CLOSE_BTN + 10,
+          }}
+        >
+          <button
+            type="button"
+            onClick={() =>
+              datePickerOpen ? cancelInlineDatePicker() : openInlineDatePicker()
+            }
+            aria-expanded={datePickerOpen}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "8px 14px",
+              borderRadius: 100,
+              border: "none",
+              background: "var(--chip-bg)",
+              cursor: "pointer",
+              fontFamily: '"B612 Mono", ui-monospace, monospace',
+              fontSize: 12,
+              fontWeight: 500,
+              color: "var(--chip-color)",
+              letterSpacing: "-0.48px",
+              WebkitTapHighlightColor: "transparent",
+              lineHeight: "normal",
+              transition: "background 0.18s, color 0.18s",
+            }}
+            className="active:opacity-90"
+          >
+            {formatSheetDate(datePickerOpen ? draftDate : date)}
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+              style={{
+                opacity: 0.85,
+                transition: "transform 0.22s ease",
+                transform: datePickerOpen ? "rotate(180deg)" : "rotate(0deg)",
+              }}
+            >
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </button>
+
           <h2
             style={{
               fontFamily: "var(--font-sans), sans-serif",
@@ -637,84 +586,56 @@ export function LogSheet() {
               letterSpacing: "-0.04em",
               color: "var(--foreground)",
               margin: 0,
+              marginTop: datePickerOpen ? 14 : 28,
             }}
           >
-            What did you do?
+            {datePickerOpen ? "Select date" : "What did you do?"}
           </h2>
-
-          {/* Date badge */}
-          <button
-            type="button"
-            onClick={() => setDatePickerOpen((o) => !o)}
-            aria-expanded={datePickerOpen}
-            style={{
-              marginTop: 14,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 5,
-              padding: "4px 8px",
-              borderRadius: 4,
-              border: "1px dashed var(--mono-border)",
-              background: "none",
-              cursor: "pointer",
-              fontFamily: '"B612 Mono", ui-monospace, monospace',
-              fontSize: 12,
-              fontWeight: 400,
-              color: "var(--foreground)",
-              letterSpacing: "-0.48px",
-              WebkitTapHighlightColor: "transparent",
-              lineHeight: "normal",
-            }}
-          >
-            {formatSheetDate(date)}
-            <svg
-              width="9"
-              height="9"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
-              style={{
-                transition: "transform 0.22s ease",
-                transform: datePickerOpen ? "rotate(180deg)" : "rotate(0deg)",
-              }}
-            >
-              <path d="M6 9l6 6 6-6" />
-            </svg>
-          </button>
-
-          {/* Inline calendar — expands below the badge */}
-          <div
-            style={{
-              overflow: "hidden",
-              maxHeight: datePickerOpen ? 320 : 0,
-              opacity: datePickerOpen ? 1 : 0,
-              transition: "max-height 0.3s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.22s ease",
-            }}
-          >
-            <CalendarPicker
-              value={date}
-              onChange={(dk) => {
-                setDate(dk);
-                setDatePickerOpen(false);
-              }}
-            />
-          </div>
+          {datePickerOpen && datePickerFutureErr ? (
+            <p role="alert" style={{ ...logSheetFieldError, marginTop: 8 }}>
+              {datePickerFutureErr}
+            </p>
+          ) : null}
         </div>
 
-        {/* Separator */}
+        {/* In-flow height comes from minHeight (children are position:absolute). Animate minHeight when the inline calendar opens. */}
         <div
           style={{
-            height: "0.5px",
-            background: "var(--separator)",
-            margin: "24px 0 0",
+            flex: "0 0 auto",
             flexShrink: 0,
+            minHeight: datePickerOpen
+              ? "min(560px, calc(94svh - 230px))"
+              : "min(300px, 44svh)",
+            transition: `min-height ${LOG_VIEW_TRANSITION}`,
+            position: "relative",
+            display: "flex",
+            flexDirection: "column",
           }}
-        />
-
+        >
+          {/* Log form — fades out when picking a date */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+              opacity: datePickerOpen ? 0 : 1,
+              transition: `opacity ${LOG_VIEW_TRANSITION}`,
+              pointerEvents: datePickerOpen ? "none" : "auto",
+            }}
+          >
+            <div
+              style={{
+                flex: 1,
+                minHeight: 0,
+                overflowY: "auto",
+                overflowX: "hidden",
+                WebkitOverflowScrolling: "touch",
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
         {/* Activity chips — horizontal scroll */}
         <div
           id="log-sheet-chips"
@@ -734,7 +655,7 @@ export function LogSheet() {
             style={{
               display: "flex",
               gap: 8,
-              padding: "18px 24px 20px",
+              padding: "26px 24px 22px",
               width: "max-content",
               willChange: "transform",
             }}
@@ -747,6 +668,9 @@ export function LogSheet() {
                   type="button"
                   onClick={() => setSelected(isSelected ? null : activity)}
                   aria-pressed={isSelected}
+                  className={
+                    isSelected ? "log-sheet-activity-chip--selected" : undefined
+                  }
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
@@ -818,20 +742,11 @@ export function LogSheet() {
           </div>
         </div>
 
-        {/* Separator */}
-        <div
-          style={{
-            height: "0.5px",
-            background: "var(--separator)",
-            flexShrink: 0,
-          }}
-        />
-
         {/* Notes */}
-        <div style={{ padding: "22px 24px 0" }}>
+        <div style={{ padding: "26px 24px 0" }}>
           <textarea
             id="log-sheet-note"
-            placeholder="Add a note (optional)"
+            placeholder="Tell us about it (optional)"
             value={description}
             onChange={(e) =>
               setDescription(e.target.value.slice(0, MAX_DESCRIPTION_LENGTH))
@@ -860,8 +775,8 @@ export function LogSheet() {
         {/* CTA */}
         <div
           style={{
-            padding: "20px 24px",
-            paddingBottom: "max(28px, env(safe-area-inset-bottom))",
+            padding: "16px 24px",
+            paddingBottom: "max(12px, env(safe-area-inset-bottom))",
           }}
         >
           <button
@@ -886,6 +801,83 @@ export function LogSheet() {
           >
             {isEditing ? "Save" : "Log move"}
           </button>
+        </div>
+            </div>
+          </div>
+
+          {/* Inline calendar — fades in over the same region */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+              opacity: datePickerOpen ? 1 : 0,
+              transition: datePickerOpen
+                ? `opacity ${LOG_VIEW_TRANSITION} 70ms`
+                : `opacity 0.28s cubic-bezier(0.32, 0.72, 0, 1)`,
+              pointerEvents: datePickerOpen ? "auto" : "none",
+            }}
+          >
+            <div
+              style={{
+                flex: 1,
+                minHeight: 0,
+                overflowY: "auto",
+                WebkitOverflowScrolling: "touch",
+                padding: "22px 24px 4px",
+                boxSizing: "border-box",
+              }}
+            >
+              <ProfileCalendar
+                workouts={[]}
+                preventFutureDates
+                onAttemptSelectFuture={() =>
+                  setDatePickerFutureErr(
+                    "You can only log workouts on or before today."
+                  )
+                }
+                pickDate={(dk) => {
+                  setDatePickerFutureErr(null);
+                  setDraftDate(dk);
+                  setDate(dk);
+                  setDatePickerOpen(false);
+                }}
+                selectedDateKey={draftDate}
+              />
+            </div>
+            <div
+              style={{
+                flexShrink: 0,
+                padding: "12px 24px",
+                paddingBottom: "max(12px, env(safe-area-inset-bottom))",
+                boxSizing: "border-box",
+              }}
+            >
+              <button
+                type="button"
+                onClick={cancelInlineDatePicker}
+                style={{
+                  width: "100%",
+                  height: 52,
+                  borderRadius: 50,
+                  border: "1px solid var(--border-strong)",
+                  background: "transparent",
+                  color: "var(--foreground)",
+                  fontFamily: "var(--font-sans), sans-serif",
+                  fontSize: 16,
+                  fontWeight: 500,
+                  letterSpacing: "-0.02em",
+                  cursor: "pointer",
+                  WebkitTapHighlightColor: "transparent",
+                }}
+                className="active:opacity-90"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </>

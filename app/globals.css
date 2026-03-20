@@ -90,10 +90,10 @@
   --cta-bg: #000;
   --cta-color: #fff;
 
-  /* Feed post cards */
-  --card-bg: #ffffff;
+  /* Feed post cards — elevated vs page (--background) and sheets (--sheet-bg) */
+  --card-bg: var(--surface-elevated);
   --card-icon-bg: #f3f3f3;
-  --card-ring: #ffffff;
+  --card-ring: var(--card-bg);
 
   /* Secondary / muted text */
   --text-secondary: #919191;
@@ -185,11 +185,11 @@
   --avatar-placeholder-bg: #2a2a2a;
   --avatar-placeholder-text: #555;
 
-  /* Activity chips — keep selected dark so invert=true icons remain white */
+  /* Activity chips — selected reads like a clear “on” state (contrast with muted chips) */
   --chip-bg: rgba(255, 255, 255, 0.08);
   --chip-color: rgba(255, 255, 255, 0.75);
-  --chip-selected-bg: #3a3a3a;
-  --chip-selected-color: #fff;
+  --chip-selected-bg: #ffffff;
+  --chip-selected-color: #0a0a0a;
 
   /* Calendar */
   --cal-header: #F0F0F0;
@@ -206,10 +206,10 @@
   --cta-bg: #ffffff;
   --cta-color: #000;
 
-  /* Feed post cards */
-  --card-bg: #1A1A1A;
-  --card-icon-bg: #2a2a2a;
-  --card-ring: #1A1A1A;
+  /* Feed post cards — use elevated surface so cards read above sheet (~--surface) */
+  --card-bg: var(--surface-elevated);
+  --card-icon-bg: #333333;
+  --card-ring: var(--card-bg);
 
   /* Secondary / muted text */
   --text-secondary: rgba(255, 255, 255, 0.5);
@@ -607,6 +607,11 @@ body.search-open .bottom-nav-wrapper {
 }
 [data-theme="dark"] .nav-btn-icon {
   filter: brightness(0) invert(1);
+}
+
+/* Log sheet — dark mode selected activity: restore full-color icons on light pill */
+[data-theme="dark"] .log-sheet-activity-chip--selected img {
+  filter: none !important;
 }
 
 /* Input placeholder color via CSS variable */

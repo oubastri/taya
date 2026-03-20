@@ -66,6 +66,13 @@ const pillBtn: React.CSSProperties = {
   WebkitBackdropFilter: "blur(14.524px)",
 };
 
+const fieldErrorText: React.CSSProperties = {
+  margin: 0,
+  fontSize: 12,
+  color: "#ff3b30",
+  lineHeight: 1.35,
+};
+
 interface ChangePasswordSheetProps {
   onClose: () => void;
 }
@@ -79,6 +86,10 @@ export function ChangePasswordSheet({ onClose }: ChangePasswordSheetProps) {
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNext, setShowNext] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [errCurrent, setErrCurrent] = useState<string | null>(null);
+  const [errNext, setErrNext] = useState<string | null>(null);
+  const [errConfirm, setErrConfirm] = useState<string | null>(null);
+  const [errGeneral, setErrGeneral] = useState<string | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -91,6 +102,10 @@ export function ChangePasswordSheet({ onClose }: ChangePasswordSheetProps) {
     setConfirm("");
     setShowCurrent(false);
     setShowNext(false);
+    setErrCurrent(null);
+    setErrNext(null);
+    setErrConfirm(null);
+    setErrGeneral(null);
   }
 
   const close = useCallback(() => {
@@ -177,12 +192,17 @@ export function ChangePasswordSheet({ onClose }: ChangePasswordSheetProps) {
   };
 
   async function submit() {
+    setErrCurrent(null);
+    setErrNext(null);
+    setErrConfirm(null);
+    setErrGeneral(null);
+
     if (next.length < 8) {
-      toast("Use at least 8 characters.", "error");
+      setErrNext("Use at least 8 characters.");
       return;
     }
     if (next !== confirm) {
-      toast("New passwords don’t match.", "error");
+      setErrConfirm("New passwords don’t match.");
       return;
     }
 
@@ -194,7 +214,7 @@ export function ChangePasswordSheet({ onClose }: ChangePasswordSheetProps) {
       } = await supabase.auth.getUser();
       const email = user?.email;
       if (!email) {
-        toast("No email on this account.", "error");
+        setErrGeneral("No email on this account.");
         return;
       }
 
@@ -203,13 +223,13 @@ export function ChangePasswordSheet({ onClose }: ChangePasswordSheetProps) {
         password: current,
       });
       if (signErr) {
-        toast("Current password is incorrect.", "error");
+        setErrCurrent("Current password is incorrect.");
         return;
       }
 
       const { error: updErr } = await supabase.auth.updateUser({ password: next });
       if (updErr) {
-        toast(updErr.message || "Couldn’t update password.", "error");
+        setErrNext(updErr.message || "Couldn’t update password.");
         return;
       }
 
@@ -377,7 +397,11 @@ export function ChangePasswordSheet({ onClose }: ChangePasswordSheetProps) {
                     ref={inputRef}
                     type={showCurrent ? "text" : "password"}
                     value={current}
-                    onChange={(e) => setCurrent(e.target.value)}
+                    onChange={(e) => {
+                      setErrCurrent(null);
+                      setErrGeneral(null);
+                      setCurrent(e.target.value);
+                    }}
                     autoComplete="current-password"
                     style={{ ...valueInput, flex: 1, minWidth: 0, display: "block" }}
                   />
@@ -402,6 +426,11 @@ export function ChangePasswordSheet({ onClose }: ChangePasswordSheetProps) {
                     <EyeIcon open={showCurrent} />
                   </button>
                 </div>
+                {errCurrent ? (
+                  <p role="alert" style={{ ...fieldErrorText, marginTop: 4 }}>
+                    {errCurrent}
+                  </p>
+                ) : null}
               </div>
             </div>
 
@@ -421,7 +450,11 @@ export function ChangePasswordSheet({ onClose }: ChangePasswordSheetProps) {
                   <input
                     type={showNext ? "text" : "password"}
                     value={next}
-                    onChange={(e) => setNext(e.target.value)}
+                    onChange={(e) => {
+                      setErrNext(null);
+                      setErrGeneral(null);
+                      setNext(e.target.value);
+                    }}
                     autoComplete="new-password"
                     style={{ ...valueInput, flex: 1, minWidth: 0, display: "block" }}
                   />
@@ -446,6 +479,11 @@ export function ChangePasswordSheet({ onClose }: ChangePasswordSheetProps) {
                     <EyeIcon open={showNext} />
                   </button>
                 </div>
+                {errNext ? (
+                  <p role="alert" style={{ ...fieldErrorText, marginTop: 4 }}>
+                    {errNext}
+                  </p>
+                ) : null}
               </div>
             </div>
 
@@ -455,12 +493,29 @@ export function ChangePasswordSheet({ onClose }: ChangePasswordSheetProps) {
                 <input
                   type={showNext ? "text" : "password"}
                   value={confirm}
-                  onChange={(e) => setConfirm(e.target.value)}
+                  onChange={(e) => {
+                    setErrConfirm(null);
+                    setErrGeneral(null);
+                    setConfirm(e.target.value);
+                  }}
                   autoComplete="new-password"
                   style={{ ...valueInput, display: "block", minHeight: 32 }}
                 />
+                {errConfirm ? (
+                  <p role="alert" style={{ ...fieldErrorText, marginTop: 4 }}>
+                    {errConfirm}
+                  </p>
+                ) : null}
               </div>
             </div>
+
+            {errGeneral ? (
+              <div style={hubCard}>
+                <p role="alert" style={fieldErrorText}>
+                  {errGeneral}
+                </p>
+              </div>
+            ) : null}
 
             <div style={{ marginTop: 4 }}>
               <button
