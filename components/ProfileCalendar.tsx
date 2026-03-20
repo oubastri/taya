@@ -214,7 +214,7 @@ export function ProfileCalendar({
               }
 
               const handleDateClick = () => {
-                if (onSelectDate) {
+                if (hasWorkout && onSelectDate) {
                   onSelectDate(dk);
                   return;
                 }

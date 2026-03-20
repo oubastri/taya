@@ -15,6 +15,8 @@ import { ProfileStatNumber } from "@/components/ProfileStatNumber";
 import { ProfileAboutSection } from "@/components/ProfileAboutSection";
 import { ProfileStatStrip } from "@/components/ProfileStatStrip";
 import { LikersSheet } from "@/components/LikersSheet";
+import { ProfileDayMovesSheet } from "@/components/ProfileDayMovesSheet";
+import { useLogSheet } from "@/contexts/log-sheet";
 import {
   buildProfileFansPeople,
   buildProfileFollowingPeople,
@@ -93,11 +95,14 @@ function ProfileSkeleton() {
 export default function ProfilePage() {
   const router = useRouter();
   const { user, hydrated: uh, updateUser } = useUser();
-  const { workouts, stats, hydrated: wh } = useWorkouts();
+  const { workouts, stats, hydrated: wh, deleteWorkout } = useWorkouts();
   const { friends } = useFriends();
+  const { openForEdit } = useLogSheet();
   const [section, setSection] = useState<ProfileSection>("about");
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState("");
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetDateKey, setSheetDateKey] = useState<string | null>(null);
   const [socialSheet, setSocialSheet] = useState<{
     title: string;
     people: LikePerson[];
@@ -204,6 +209,24 @@ export default function ProfilePage() {
     });
   }, [user.name]);
 
+  const openSheet = useCallback((dk: string) => {
+    setSheetDateKey(dk);
+    setSheetOpen(false);
+    requestAnimationFrame(() => requestAnimationFrame(() => setSheetOpen(true)));
+  }, []);
+
+  const closeSheet = useCallback(() => {
+    setSheetOpen(false);
+    setTimeout(() => setSheetDateKey(null), 420);
+  }, []);
+
+  const sheetWorkouts = useMemo(() => {
+    if (!sheetDateKey) return [];
+    return workouts
+      .filter((w) => w.date === sheetDateKey)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }, [sheetDateKey, workouts]);
+
   if (!uh || !wh) {
     return (
       <main style={{ minHeight: "100vh", background: "var(--background)", paddingBottom: 96 }}>
@@ -241,7 +264,43 @@ export default function ProfilePage() {
         onToggleLike={() => toggleLike(workout.id)}
         onLikeIfNeeded={() => likeIfNeeded(workout.id)}
         resolveLikers={resolveLikers}
-        density="compact"
+      />
+    );
+  }
+
+  function renderCalendarSheetFeedPost(workout: typeof workouts[number]) {
+    const feedItem: FeedItem = {
+      ...workout,
+      userId: user.id,
+      userName: displayName,
+      userHandle: user.handle,
+      userAvatarUrl: user.avatarUrl,
+    };
+    const like = getLike(workout.id);
+    return (
+      <FeedPost
+        key={workout.id}
+        workout={feedItem}
+        currentUserId={user.id}
+        liked={like.likedByMe}
+        likeCount={like.count}
+        onToggleLike={() => toggleLike(workout.id)}
+        onLikeIfNeeded={() => likeIfNeeded(workout.id)}
+        resolveLikers={resolveLikers}
+        postActions={{
+          onEdit: () => {
+            openForEdit(workout);
+            closeSheet();
+          },
+          onDelete: () => {
+            if (typeof window !== "undefined" && !window.confirm("Remove this log?")) return;
+            const othersSameDay = workouts.filter(
+              (w) => w.date === sheetDateKey && w.id !== workout.id,
+            );
+            deleteWorkout(workout.id);
+            if (othersSameDay.length === 0) closeSheet();
+          },
+        }}
       />
     );
   }
@@ -438,7 +497,11 @@ export default function ProfilePage() {
                   padding: 16,
                 }}
               >
-                <ProfileCalendar workouts={workouts} />
+                <ProfileCalendar
+                  workouts={workouts}
+                  selectedDateKey={sheetOpen ? sheetDateKey : null}
+                  onSelectDate={openSheet}
+                />
               </div>
 
               {movesByMonth.length === 0 ? (
@@ -469,7 +532,7 @@ export default function ProfilePage() {
                     >
                       {label}
                     </h2>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                       {monthWorkouts.map(renderFeedPost)}
                     </div>
                   </section>
@@ -479,6 +542,17 @@ export default function ProfilePage() {
           )}
         </div>
       </div>
+
+      {sheetDateKey !== null && (
+        <ProfileDayMovesSheet
+          open={sheetOpen}
+          dateKey={sheetDateKey}
+          onClose={closeSheet}
+          moveCount={sheetWorkouts.length}
+        >
+          {sheetWorkouts.map(renderCalendarSheetFeedPost)}
+        </ProfileDayMovesSheet>
+      )}
 
       {socialSheet && (
         <LikersSheet

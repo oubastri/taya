@@ -32,6 +32,11 @@ interface FeedPostProps {
   /** Defaults to `workout.id` when omitted. */
   likeEntityId?: string;
   density?: "default" | "compact";
+  /** Your own post: compact edit/delete controls (e.g. profile calendar day sheet). */
+  postActions?: {
+    onEdit: () => void;
+    onDelete: () => void;
+  };
 }
 
 export function FeedPost({
@@ -44,6 +49,7 @@ export function FeedPost({
   resolveLikers,
   likeEntityId,
   density = "default",
+  postActions,
 }: FeedPostProps) {
   const AVATAR_SIZE = density === "compact" ? 32 : 44;
   const ICON_SIZE = density === "compact" ? 24 : 28;
@@ -53,6 +59,7 @@ export function FeedPost({
   const phrase = getActivityPhrase(activityType);
   const highlight = ACTIVITY_FEED_HIGHLIGHT[activityType] ?? ACTIVITY_FEED_HIGHLIGHT.other;
   const isMe = currentUserId ? workout.userId === currentUserId : workout.userId === "me";
+  const showPostActions = isMe && postActions;
   const hasDescription = Boolean(workout.description?.trim());
   const beforeHighlight = phrase.slice(0, phrase.indexOf(highlight));
   const afterHighlight = phrase.slice(phrase.indexOf(highlight) + highlight.length);
@@ -245,14 +252,101 @@ export function FeedPost({
               <ActivityIcon type={activityType} size={ICON_SIZE} />
             </div>
           </div>
-          <FeedLikeButton
-            liked={liked}
-            likeCount={likeCount}
-            onToggleHeart={handleLike}
-            onOpenLikers={
-              managed && resolveLikers && likeCount > 0 ? openLikers : undefined
-            }
-          />
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexShrink: 0,
+            }}
+          >
+            {showPostActions ? (
+              <>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    postActions.onEdit();
+                  }}
+                  aria-label="Edit move"
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: "50%",
+                    border: "1px solid var(--card-ring)",
+                    backgroundColor: "var(--card-icon-bg)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                  className="active:scale-95"
+                >
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--foreground)"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden
+                  >
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    postActions.onDelete();
+                  }}
+                  aria-label="Delete move"
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: "50%",
+                    border: "1px solid var(--card-ring)",
+                    backgroundColor: "var(--card-icon-bg)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                  className="active:scale-95"
+                >
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--foreground)"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden
+                  >
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    <line x1="10" y1="11" x2="10" y2="17" />
+                    <line x1="14" y1="11" x2="14" y2="17" />
+                  </svg>
+                </button>
+              </>
+            ) : null}
+            <FeedLikeButton
+              liked={liked}
+              likeCount={likeCount}
+              onToggleHeart={handleLike}
+              onOpenLikers={
+                managed && resolveLikers && likeCount > 0 ? openLikers : undefined
+              }
+            />
+          </div>
         </div>
 
         <div
