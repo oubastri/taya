@@ -12,6 +12,7 @@ import {
   markSeeded,
 } from "@/lib/storage";
 import { createClient } from "@/lib/supabase/client";
+import { normalizeHandle, validateHandleFormat } from "@/lib/handle";
 
 export const isRealMode = process.env.NEXT_PUBLIC_DATA_MODE === "real";
 
@@ -112,9 +113,77 @@ function supabase() {
 
 async function getAuthUserId(): Promise<string | null> {
   if (cachedAuthUserId) return cachedAuthUserId;
-  const { data: { user } } = await supabase().auth.getUser();
-  cachedAuthUserId = user?.id ?? null;
-  return cachedAuthUserId;
+  const client = supabase();
+  const { data: { session } } = await client.auth.getSession();
+  if (session?.user?.id) {
+    cachedAuthUserId = session.user.id;
+    return cachedAuthUserId;
+  }
+  const { data: { user } } = await client.auth.getUser();
+  if (user?.id) {
+    cachedAuthUserId = user.id;
+    return cachedAuthUserId;
+  }
+  return null;
+}
+
+type AuthUserLike = {
+  id: string;
+  email?: string | null;
+  user_metadata?: Record<string, unknown> | null;
+};
+
+/** When `profiles` has no row or `handle` is empty, derive a valid handle from auth. */
+function deriveHandleFromAuth(authUser: AuthUserLike): string {
+  const meta = authUser.user_metadata ?? {};
+  const metaStrings = [meta.handle, meta.preferred_username, meta.user_name];
+  for (const c of metaStrings) {
+    if (typeof c === "string") {
+      const h = normalizeHandle(c);
+      if (validateHandleFormat(h) === null) return h;
+    }
+  }
+  const email = authUser.email;
+  if (email) {
+    const local = email.split("@")[0]!.toLowerCase();
+    const slug = local.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "user";
+    let h = normalizeHandle(slug).slice(0, 20);
+    if (validateHandleFormat(h) === null) return h;
+  }
+  const idCompact = authUser.id.replace(/-/g, "");
+  const h = normalizeHandle(("user_" + idCompact).slice(0, 20));
+  if (validateHandleFormat(h) === null) return h;
+  return normalizeHandle(("u_" + idCompact).slice(0, 20));
+}
+
+function mapProfileRowToUser(row: Record<string, unknown>): User {
+  return {
+    id: row.id as string,
+    name: (row.name as string) ?? "",
+    handle: (row.handle as string) ?? "",
+    avatarUrl: (row.avatar_url as string | null) ?? undefined,
+    email: (row.email as string | null) ?? undefined,
+    phone: (row.phone as string | null) ?? undefined,
+    location: (row.location as string | null) ?? undefined,
+    tagline: (row.tagline as string | null) ?? undefined,
+    bio: (row.bio as string | null) ?? undefined,
+    prompts: (row.prompts as User["prompts"]) ?? undefined,
+  };
+}
+
+function userFromAuthOnly(authUser: AuthUserLike): User {
+  const meta = authUser.user_metadata ?? {};
+  const email = authUser.email ?? undefined;
+  const name =
+    (typeof meta.full_name === "string" && meta.full_name.trim()) ||
+    (typeof meta.name === "string" && meta.name.trim()) ||
+    (email ? email.split("@")[0]! : "You");
+  return {
+    id: authUser.id,
+    name,
+    handle: deriveHandleFromAuth(authUser),
+    email,
+  };
 }
 
 export function clearAuthCache() {
@@ -124,31 +193,33 @@ export function clearAuthCache() {
 // ---- User / Profile ----
 
 export async function fetchUserProfile(): Promise<User | null> {
-  const uid = await getAuthUserId();
-  if (!uid) return null;
+  const client = supabase();
 
-  const { data } = await supabase()
-    .from("profiles")
-    .select("*")
-    .eq("id", uid)
-    .single();
+  const { data: { session } } = await client.auth.getSession();
+  const { data: { user: verifiedUser } } = await client.auth.getUser();
 
-  if (!data) return null;
+  /** Prefer verified JWT user; fall back to session so we still hydrate if getUser lags. */
+  const authUser = verifiedUser ?? session?.user ?? null;
+  if (!authUser?.id) return null;
 
-  const user: User = {
-    id: data.id,
-    name: data.name ?? "",
-    handle: data.handle ?? "",
-    avatarUrl: data.avatar_url ?? undefined,
-    email: data.email ?? undefined,
-    phone: data.phone ?? undefined,
-    location: data.location ?? undefined,
-    tagline: data.tagline ?? undefined,
-    bio: data.bio ?? undefined,
-    prompts: data.prompts ?? undefined,
-  };
-  supabaseCache.user = user;
-  return user;
+  const uid = authUser.id;
+  cachedAuthUserId = uid;
+
+  const { data: row } = await client.from("profiles").select("*").eq("id", uid).maybeSingle();
+
+  if (row) {
+    const user = mapProfileRowToUser(row as Record<string, unknown>);
+    const clean = normalizeHandle(user.handle);
+    if (!clean || validateHandleFormat(clean) !== null) {
+      user.handle = deriveHandleFromAuth(authUser);
+    }
+    supabaseCache.user = user;
+    return user;
+  }
+
+  const fallback = userFromAuthOnly(authUser);
+  supabaseCache.user = fallback;
+  return fallback;
 }
 
 export async function updateUserProfile(updates: Partial<User>): Promise<void> {

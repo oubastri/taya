@@ -24,7 +24,6 @@ import {
 import type { FeedItem } from "@/hooks/use-friends";
 import type { LikePerson } from "@/types/likes";
 import { UserAvatar } from "@/components/UserAvatar";
-import { shareUrl } from "@/lib/share";
 
 /** Sticky top bar — stays pinned while profile content scrolls */
 const PROFILE_STICKY_TOP_BAR: CSSProperties = {
@@ -201,14 +200,6 @@ export default function ProfilePage() {
       });
   }, [postsSorted]);
 
-  const handleShareProfile = useCallback(async () => {
-    const name = user.name || "Breezy De Vrij";
-    await shareUrl("/profile/me", {
-      title: "TAYA",
-      text: `Check out my profile on TAYA — ${name}`,
-    });
-  }, [user.name]);
-
   const openSheet = useCallback((dk: string) => {
     setSheetDateKey(dk);
     setSheetOpen(false);
@@ -332,22 +323,6 @@ export default function ProfilePage() {
           >
             <Image
               src="/icons/nav/dots.svg"
-              alt=""
-              width={20}
-              height={20}
-              aria-hidden
-              className="nav-btn-icon"
-            />
-          </button>
-          <button
-            type="button"
-            onClick={handleShareProfile}
-            aria-label="Share profile"
-            style={PROFILE_GLASS_CIRCLE_STYLE}
-            className="active:scale-95"
-          >
-            <Image
-              src="/icons/nav/share.svg"
               alt=""
               width={20}
               height={20}

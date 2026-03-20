@@ -104,6 +104,29 @@
 
   /* Mono badge border */
   --mono-border: #919191;
+
+  /* Settings hub (reference layout — light, Figma Settings 445:2420) */
+  --settings-page-bg: #f2f2f2;
+  --settings-card-bg: #ffffff;
+  --settings-hub-label: rgba(0, 0, 0, 0.4);
+  --settings-hub-back-bg: #ffffff;
+  --settings-hub-back-border: rgba(0, 0, 0, 0.06);
+  --settings-hub-card-border: transparent;
+  --settings-hub-delete: #ff3a3a;
+  --settings-card-border: rgba(0, 0, 0, 0.06);
+  --settings-row-divider: rgba(0, 0, 0, 0.08);
+  --settings-icon-well-bg: rgba(0, 0, 0, 0.06);
+  --settings-icon-well-border: rgba(0, 0, 0, 0.06);
+  --settings-switch-on: #dfff00;
+  --settings-switch-off-track: #e9e9ea;
+  --settings-switch-thumb: #ffffff;
+  --settings-cta-bg: #dfff00;
+  --settings-cta-text: #0a0a0a;
+  --settings-destructive-pill-bg: #e9e9ea;
+  --settings-destructive-pill-text: #0a0a0a;
+  --settings-logout-bg: #ffffff;
+  --settings-logout-border: rgba(0, 0, 0, 0.08);
+  --settings-logout-text: #ff3b30;
 }
 
 [data-theme="dark"] {
@@ -197,6 +220,29 @@
 
   /* Mono badge border */
   --mono-border: rgba(255, 255, 255, 0.35);
+
+  /* Settings hub (reference layout — dark) */
+  --settings-page-bg: #000000;
+  --settings-card-bg: #1c1c1e;
+  --settings-hub-label: rgba(255, 255, 255, 0.4);
+  --settings-hub-back-bg: #1c1c1e;
+  --settings-hub-back-border: rgba(255, 255, 255, 0.1);
+  --settings-hub-card-border: rgba(255, 255, 255, 0.08);
+  --settings-hub-delete: #ff3a3a;
+  --settings-card-border: rgba(255, 255, 255, 0.08);
+  --settings-row-divider: rgba(255, 255, 255, 0.12);
+  --settings-icon-well-bg: rgba(255, 255, 255, 0.1);
+  --settings-icon-well-border: rgba(255, 255, 255, 0.12);
+  --settings-switch-on: #dfff00;
+  --settings-switch-off-track: #39393d;
+  --settings-switch-thumb: #ffffff;
+  --settings-cta-bg: #dfff00;
+  --settings-cta-text: #0a0a0a;
+  --settings-destructive-pill-bg: #2c2c2e;
+  --settings-destructive-pill-text: #f0f0f0;
+  --settings-logout-bg: #ffffff;
+  --settings-logout-border: rgba(0, 0, 0, 0.06);
+  --settings-logout-text: #ff3b30;
 }
 
 html {
@@ -321,8 +367,8 @@ textarea:focus-visible {
 
 /* Skeleton loading pulse */
 @keyframes skeleton-pulse {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 0.15; }
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.28; }
 }
 .skeleton {
   animation: skeleton-pulse 1.5s ease-in-out infinite;
@@ -354,6 +400,7 @@ body.search-open .bottom-nav-wrapper {
 .liquid-glass-nav {
   pointer-events: auto;
   position: relative;
+  flex-shrink: 0;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   padding: 6px;
@@ -426,7 +473,7 @@ body.search-open .bottom-nav-wrapper {
 }
 
 .nav-item > svg,
-.nav-item > .nav-avatar {
+.nav-item > .nav-profile-slot {
   transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
@@ -435,7 +482,7 @@ body.search-open .bottom-nav-wrapper {
 }
 
 .nav-item[data-active] > svg,
-.nav-item[data-active] > .nav-avatar {
+.nav-item[data-active] > .nav-profile-slot {
   transform: scale(1.12);
   transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
@@ -480,6 +527,16 @@ body.search-open .bottom-nav-wrapper {
 .nav-add-btn:active {
   transform: scale(0.88);
   transition: transform 0.1s cubic-bezier(0.32, 0.72, 0, 1) !important;
+}
+
+/* Fixed cell for profile tab — matches .nav-avatar so width stays stable before avatar loads */
+.nav-profile-slot {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .nav-avatar {
@@ -569,4 +626,50 @@ textarea::placeholder {
 ::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.15);
   border-radius: 2px;
+}
+
+/* Settings — avatar upload indicator */
+@keyframes settings-avatar-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.settings-avatar-spin {
+  display: block;
+  animation: settings-avatar-spin 0.65s linear infinite;
+}
+
+/* Settings — char limit feedback: visible but not harsh */
+@keyframes settings-char-limit-shake {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  15% {
+    transform: translate3d(-3px, 0, 0);
+  }
+  30% {
+    transform: translate3d(3px, 0, 0);
+  }
+  45% {
+    transform: translate3d(-2px, 0, 0);
+  }
+  60% {
+    transform: translate3d(2px, 0, 0);
+  }
+  75% {
+    transform: translate3d(-1px, 0, 0);
+  }
+  88% {
+    transform: translate3d(1px, 0, 0);
+  }
+}
+.settings-char-limit-shake {
+  display: inline-block;
+  animation: settings-char-limit-shake 0.44s cubic-bezier(0.32, 0.72, 0.32, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .settings-char-limit-shake {
+    animation: none;
+  }
 }

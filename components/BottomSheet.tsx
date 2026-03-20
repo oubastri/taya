@@ -11,6 +11,7 @@ type Props = {
   title?: string;
 };
 
+/** Above bottom nav (nav uses z-index 50). */
 export function BottomSheet({ isOpen, onClose, children, title }: Props) {
   const [entered, setEntered] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
@@ -42,7 +43,7 @@ export function BottomSheet({ isOpen, onClose, children, title }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-20 flex flex-col justify-end"
+      className="fixed inset-0 z-[100] flex flex-col justify-end"
       style={{
         paddingLeft: "env(safe-area-inset-left)",
         paddingRight: "env(safe-area-inset-right)",
@@ -51,7 +52,6 @@ export function BottomSheet({ isOpen, onClose, children, title }: Props) {
       aria-modal="true"
       aria-label={title ?? "Sheet"}
     >
-      {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/25 transition-opacity duration-300 ease-out"
         style={{ opacity: backdropVisible ? 1 : 0 }}
@@ -59,21 +59,20 @@ export function BottomSheet({ isOpen, onClose, children, title }: Props) {
         aria-hidden
       />
 
-      {/* Sheet */}
       <div
-        className="relative z-10 flex max-h-[85vh] flex-col rounded-t-3xl bg-[var(--background)] pb-[env(safe-area-inset-bottom)] transition-transform duration-300 ease-out"
+        className="relative z-10 flex max-h-[85vh] flex-col rounded-t-3xl bg-[var(--surface)] pb-[env(safe-area-inset-bottom)] transition-transform duration-300 ease-out"
         style={{
           transform: sheetVisible ? "translateY(0)" : "translateY(100%)",
+          borderTop: "1px solid var(--border)",
         }}
       >
-        {/* Drag handle */}
         <div className="flex flex-shrink-0 justify-center pt-3 pb-1">
-          <div
-            className="h-1 w-10 rounded-full bg-black/20"
-            aria-hidden
-          />
+          <div className="h-1 w-10 rounded-full bg-[var(--drag-handle)]" aria-hidden />
         </div>
-        <div className="flex-1 overflow-y-auto px-6 pb-6">
+        {title ? (
+          <h2 className="px-6 pb-2 text-center text-[17px] font-semibold text-[var(--foreground)]">{title}</h2>
+        ) : null}
+        <div className="flex-1 overflow-y-auto px-5 pb-6">
           {typeof children === "function" ? children(close) : children}
         </div>
       </div>

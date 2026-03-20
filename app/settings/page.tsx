@@ -1,50 +1,258 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/hooks/use-user";
+import { useFriends } from "@/hooks/use-friends";
 import { UserAvatar } from "@/components/UserAvatar";
-import { BackButton } from "@/components/BackButton";
 import { createClient } from "@/lib/supabase/client";
 import { isRealMode, clearAuthCache } from "@/lib/data-adapter";
+import { normalizeHandle, validateHandleFormat } from "@/lib/handle";
 import { PROMPT_OPTIONS, type ProfilePrompt } from "@/types/user";
+import { useToast } from "@/contexts/toast";
+import { SettingsShell } from "@/components/settings/SettingsShell";
+import { ChangePasswordSheet } from "@/components/settings/ChangePasswordSheet";
+import { AutoHeightTextarea } from "@/components/settings/AutoHeightTextarea";
+import { SettingsCharCounter } from "@/components/settings/SettingsCharCounter";
+
+const PROFILE_AVATAR = 84;
+const EDIT_FAB = 32;
+const MOTTO_MAX = 52;
+/** Figma Settings 445:2420 — card stack rhythm */
+const CARD_GAP = 12;
+const AVATAR_TO_FIRST_CARD = 30;
+const PROMPTS_TITLE_TOP = 32;
+const FOOTER_TOP = 40;
+const FOOTER_BTN_GAP = 8;
+
+function playCharLimitShake(el: HTMLElement | null) {
+  if (!el) return;
+  el.classList.remove("settings-char-limit-shake");
+  void el.offsetWidth;
+  el.classList.add("settings-char-limit-shake");
+}
+
+const CHAR_LIMIT_PASS_KEYS = new Set([
+  "Backspace",
+  "Delete",
+  "Tab",
+  "Escape",
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowUp",
+  "ArrowDown",
+  "Home",
+  "End",
+]);
+
+/** True if input was blocked and counter shook (at hard limit). */
+function handleCharLimitKeyDown(
+  e: KeyboardEvent<HTMLTextAreaElement>,
+  max: number,
+  counterEl: HTMLElement | null,
+): boolean {
+  const el = e.currentTarget;
+  if (el.value.length < max) return false;
+  if (e.ctrlKey || e.metaKey || e.altKey) return false;
+  if (CHAR_LIMIT_PASS_KEYS.has(e.key)) return false;
+  const s0 = el.selectionStart;
+  const s1 = el.selectionEnd;
+  if (s0 !== null && s1 !== null && s0 !== s1) return false;
+  if (e.key === "Enter" || e.key.length === 1) {
+    playCharLimitShake(counterEl);
+    e.preventDefault();
+    return true;
+  }
+  return false;
+}
+
+function handleCharLimitPaste(e: ClipboardEvent<HTMLTextAreaElement>, max: number, counterEl: HTMLElement | null) {
+  const el = e.currentTarget;
+  if (el.value.length < max) return;
+  if (el.selectionStart !== el.selectionEnd) return;
+  playCharLimitShake(counterEl);
+  e.preventDefault();
+}
+
+/** Password row chevron — `public/icons/nav/arrow-right.svg` (from :icons set) */
+const SETTINGS_ARROW_RIGHT_ICON = "/icons/nav/arrow-right.svg?v=7";
+/** Profile-photo edit FAB — `public/icons/nav/edit.svg` */
+const SETTINGS_PROFILE_EDIT_ICON = "/icons/nav/edit.svg?v=5";
+/** Verified handle badge — `public/icons/nav/verify.svg` (from :icons set, green + white check) */
+const SETTINGS_VERIFY_ICON = "/icons/nav/verify.svg?v=6";
+
+type HandleUiStatus = "idle" | "checking" | "ok" | "taken" | "invalid";
+
+const hubCard: React.CSSProperties = {
+  background: "var(--settings-card-bg)",
+  borderRadius: 24,
+  padding: "16px",
+  width: "100%",
+  boxSizing: "border-box",
+  border: "1px solid var(--settings-hub-card-border)",
+};
+
+const labelText: React.CSSProperties = {
+  fontFamily: "var(--font-mono), monospace",
+  fontSize: 12,
+  fontWeight: 400,
+  letterSpacing: "-1px",
+  textTransform: "uppercase",
+  color: "var(--settings-hub-label)",
+  lineHeight: "normal",
+};
+
+const valueText: React.CSSProperties = {
+  fontFamily: "var(--font-sans), sans-serif",
+  fontSize: 24,
+  fontWeight: 400,
+  lineHeight: "32px",
+  letterSpacing: "-0.96px",
+  color: "var(--foreground)",
+};
+
+const valueInput: React.CSSProperties = {
+  ...valueText,
+  width: "100%",
+  border: "none",
+  background: "transparent",
+  outline: "none",
+  padding: 0,
+  margin: 0,
+  WebkitAppearance: "none",
+  appearance: "none",
+};
+
+const pillBtn: React.CSSProperties = {
+  width: "100%",
+  height: 48,
+  borderRadius: 50,
+  padding: "12px 16px",
+  border: "none",
+  fontFamily: "var(--font-sans), sans-serif",
+  fontSize: 16,
+  fontWeight: 400,
+  lineHeight: "normal",
+  cursor: "pointer",
+  WebkitTapHighlightColor: "transparent",
+  backdropFilter: "blur(14.524px)",
+  WebkitBackdropFilter: "blur(14.524px)",
+};
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { user, hydrated, updateUser } = useUser();
   const fileRef = useRef<HTMLInputElement>(null);
+  const taglineCounterRef = useRef<HTMLParagraphElement>(null);
+  const promptCounterRefs = useRef<(HTMLParagraphElement | null)[]>([]);
+  const { toast } = useToast();
+  const { user, hydrated, updateUser } = useUser();
+  const { friends } = useFriends();
+
+  const [signingOut, setSigningOut] = useState(false);
+  const [taglineInput, setTaglineInput] = useState("");
+  const [passwordOpen, setPasswordOpen] = useState(false);
 
   const [nameInput, setNameInput] = useState("");
-  const [locationInput, setLocationInput] = useState("");
-  const [taglineInput, setTaglineInput] = useState("");
-  const [promptAnswers, setPromptAnswers] = useState<string[]>(["", "", "", ""]);
-  const [fieldsReady, setFieldsReady] = useState(false);
+  const [handleInput, setHandleInput] = useState("");
+  const [handleStatus, setHandleStatus] = useState<HandleUiStatus>("idle");
   const [uploading, setUploading] = useState(false);
-  const [signingOut, setSigningOut] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
 
-  if (!fieldsReady && hydrated) {
-    setNameInput(user.name);
-    setLocationInput(user.location ?? "");
+  const [promptAnswers, setPromptAnswers] = useState<string[]>(() =>
+    PROMPT_OPTIONS.map(() => ""),
+  );
+
+  const profileSyncedForUserId = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    if (profileSyncedForUserId.current === user.id) return;
+    profileSyncedForUserId.current = user.id;
     setTaglineInput(user.tagline ?? "");
+    setNameInput(user.name);
+    setHandleInput(user.handle);
+  }, [hydrated, user.id, user.tagline, user.name, user.handle]);
+
+  useEffect(() => {
+    if (!hydrated) return;
     const answers = PROMPT_OPTIONS.map((q) => {
-      const existing = user.prompts?.find((p) => p.question === q);
-      return existing?.answer ?? "";
+      const p = user.prompts?.find((x) => x.question === q);
+      return p?.answer ?? "";
     });
     setPromptAnswers(answers);
-    setFieldsReady(true);
+  }, [hydrated, user.prompts]);
+
+  const checkHandleFree = useCallback(
+    async (clean: string): Promise<boolean> => {
+      if (!isRealMode) {
+        const list = friends ?? [];
+        return !list.some((f) => f.id !== user.id && f.handle.toLowerCase() === clean);
+      }
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("handle", clean)
+        .neq("id", user.id)
+        .maybeSingle();
+      return !data;
+    },
+    [friends, user.id],
+  );
+
+  useEffect(() => {
+    const clean = normalizeHandle(handleInput);
+    if (clean === user.handle) {
+      setHandleStatus("idle");
+      return;
+    }
+    const fmtErr = validateHandleFormat(clean);
+    if (fmtErr) {
+      setHandleStatus("invalid");
+      return;
+    }
+
+    let cancelled = false;
+    setHandleStatus("checking");
+    const t = window.setTimeout(async () => {
+      const free = await checkHandleFree(clean);
+      if (!cancelled) setHandleStatus(free ? "ok" : "taken");
+    }, 420);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [handleInput, user.handle, checkHandleFree]);
+
+  function handleSaveTagline() {
+    const trimmed = taglineInput.trim();
+    if (trimmed === (user.tagline ?? "")) return;
+    updateUser({ tagline: trimmed || undefined });
   }
 
-  function showToast(msg: string) {
-    setToast(msg);
-    setTimeout(() => setToast(null), 2500);
+  function handleSavePrompt(index: number) {
+    const trimmed = promptAnswers[index]!.trim();
+    const next = [...promptAnswers];
+    next[index] = trimmed;
+    setPromptAnswers(next);
+    const prompts: ProfilePrompt[] = PROMPT_OPTIONS.map((q, i) => ({
+      question: q,
+      answer: (i === index ? trimmed : next[i] ?? "").trim(),
+    })).filter((p) => p.answer.length > 0);
+    updateUser({ prompts: prompts.length > 0 ? prompts : undefined });
   }
 
   async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file || !isRealMode) return;
+    if (!file) return;
+
+    if (!isRealMode) {
+      const url = URL.createObjectURL(file);
+      updateUser({ avatarUrl: url });
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
 
     setUploading(true);
     try {
@@ -57,7 +265,7 @@ export default function SettingsPage() {
         .upload(path, file, { upsert: true, contentType: file.type });
 
       if (uploadErr) {
-        showToast("Upload failed — make sure the avatars bucket exists.");
+        toast("Upload failed — make sure the avatars bucket exists.", "error");
         return;
       }
 
@@ -66,42 +274,64 @@ export default function SettingsPage() {
 
       await supabase.from("profiles").update({ avatar_url: publicUrl }).eq("id", user.id);
       updateUser({ avatarUrl: publicUrl });
-      showToast("Photo updated!");
+      toast("Photo updated", "success");
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";
     }
   }
 
-  function handleSaveName() {
+  async function handleBlurName() {
     const trimmed = nameInput.trim();
-    if (!trimmed || trimmed === user.name) return;
+    if (trimmed === user.name) return;
+    if (!trimmed) {
+      toast("Please enter your name.", "error");
+      setNameInput(user.name);
+      return;
+    }
     updateUser({ name: trimmed });
-    showToast("Name saved!");
   }
 
-  function handleSaveLocation() {
-    const trimmed = locationInput.trim();
-    if (trimmed === (user.location ?? "")) return;
-    updateUser({ location: trimmed || undefined });
-    showToast("Location saved!");
+  async function handleBlurHandle() {
+    const clean = normalizeHandle(handleInput);
+    if (clean === user.handle) return;
+
+    const fmt = validateHandleFormat(clean);
+    if (fmt) {
+      toast(fmt, "error");
+      setHandleInput(user.handle);
+      return;
+    }
+
+    const free = await checkHandleFree(clean);
+    if (!free) {
+      toast("That handle is already taken.", "error");
+      setHandleInput(user.handle);
+      return;
+    }
+
+    updateUser({ handle: clean });
   }
 
-  function handleSaveTagline() {
-    const trimmed = taglineInput.trim();
-    if (trimmed === (user.tagline ?? "")) return;
-    updateUser({ tagline: trimmed || undefined });
-    showToast("Tagline saved!");
-  }
-
-  function handleSavePrompt(index: number) {
-    const answer = promptAnswers[index].trim();
-    const prompts: ProfilePrompt[] = PROMPT_OPTIONS.map((q, i) => ({
-      question: q,
-      answer: i === index ? answer : (promptAnswers[i]?.trim() ?? ""),
-    })).filter((p) => p.answer);
-    updateUser({ prompts: prompts.length > 0 ? prompts : undefined });
-    showToast("Prompt saved!");
+  async function handleDeleteAccount() {
+    setDeleting(true);
+    try {
+      if (isRealMode) {
+        const supabase = createClient();
+        const { error } = await supabase.rpc("delete_own_account");
+        if (error) {
+          toast("Failed to delete account.", "error");
+          setShowDeleteConfirm(false);
+          return;
+        }
+        await supabase.auth.signOut();
+        clearAuthCache();
+      }
+      router.push("/login");
+      router.refresh();
+    } finally {
+      setDeleting(false);
+    }
   }
 
   async function handleSignOut() {
@@ -119,381 +349,506 @@ export default function SettingsPage() {
     }
   }
 
-  async function handleDeleteAccount() {
-    setDeleting(true);
-    try {
-      if (isRealMode) {
-        const supabase = createClient();
-        const { error } = await supabase.rpc("delete_own_account");
-        if (error) {
-          showToast("Failed to delete account.");
-          setShowDeleteConfirm(false);
-          return;
-        }
-        await supabase.auth.signOut();
-        clearAuthCache();
-      }
-      router.push("/login");
-      router.refresh();
-    } finally {
-      setDeleting(false);
-    }
-  }
+  const handleShowsVerified =
+    validateHandleFormat(normalizeHandle(handleInput)) === null &&
+    (handleStatus === "ok" ||
+      (handleStatus === "idle" && normalizeHandle(handleInput) === user.handle));
 
   if (!hydrated) return null;
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background: "var(--background)",
-        paddingBottom: 64,
-      }}
-    >
-      {/* Header */}
-      <div style={{ padding: "max(env(safe-area-inset-top), 20px) 16px 0" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
-          <BackButton onClick={() => router.back()} label="Back" />
-          <h1
+    <SettingsShell variant="hub">
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          marginTop: 8,
+          marginBottom: AVATAR_TO_FIRST_CARD,
+        }}
+      >
+        <div
+          style={{
+            position: "relative",
+            width: PROFILE_AVATAR,
+            height: PROFILE_AVATAR,
+          }}
+        >
+          <div
             style={{
-              margin: 0,
-              fontSize: 20,
-              fontWeight: 800,
-              letterSpacing: "-0.02em",
-              color: "var(--foreground)",
+              width: PROFILE_AVATAR,
+              height: PROFILE_AVATAR,
+              borderRadius: 32,
+              overflow: "hidden",
+              backgroundColor: "#979797",
             }}
           >
-            Settings
-          </h1>
+            <UserAvatar avatarUrl={user.avatarUrl} name={user.name} fillParent />
+          </div>
+          <button
+            type="button"
+            aria-label="Change profile photo"
+            disabled={uploading}
+            onClick={() => fileRef.current?.click()}
+            style={{
+              position: "absolute",
+              right: -4,
+              bottom: -4,
+              width: EDIT_FAB,
+              height: EDIT_FAB,
+              borderRadius: "50%",
+              border: "none",
+              padding: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: uploading ? "wait" : "pointer",
+              background: "var(--accent)",
+              WebkitTapHighlightColor: "transparent",
+            }}
+            className="active:scale-95"
+          >
+            {uploading ? (
+              <span
+                className="settings-avatar-spin"
+                style={{
+                  width: 14,
+                  height: 14,
+                  border: "2px solid rgba(255,255,255,0.35)",
+                  borderTopColor: "transparent",
+                  borderRadius: "50%",
+                }}
+              />
+            ) : (
+              <img
+                src={SETTINGS_PROFILE_EDIT_ICON}
+                alt=""
+                width={16}
+                height={16}
+                style={{ display: "block", filter: "brightness(0) invert(1)" }}
+                aria-hidden
+                decoding="async"
+              />
+            )}
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            onChange={handleAvatarChange}
+            style={{ display: "none" }}
+          />
         </div>
       </div>
 
-      {/* Content */}
-      <div style={{ maxWidth: 428, margin: "0 auto", padding: "0 16px" }}>
-        {/* Avatar Section */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 32 }}>
-          <div
-            style={{
-              width: 96,
-              height: 96,
-              borderRadius: 36,
-              overflow: "hidden",
-              marginBottom: 12,
-              position: "relative",
-              cursor: isRealMode ? "pointer" : "default",
-            }}
-            onClick={() => isRealMode && fileRef.current?.click()}
-          >
-            <UserAvatar avatarUrl={user.avatarUrl} name={user.name} fillParent />
-            {isRealMode && (
-              <div
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  background: "rgba(0,0,0,0.35)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  opacity: uploading ? 1 : 0,
-                  transition: "opacity 0.2s",
-                }}
-              >
-                <span style={{ color: "#fff", fontSize: 13, fontWeight: 700 }}>
-                  {uploading ? "Uploading…" : ""}
-                </span>
-              </div>
-            )}
-          </div>
-          {isRealMode && (
-            <>
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                disabled={uploading}
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: "var(--accent)",
-                  fontSize: 15,
-                  fontWeight: 700,
-                  fontFamily: "inherit",
-                  cursor: "pointer",
-                  padding: "4px 8px",
-                }}
-              >
-                {uploading ? "Uploading…" : "Change photo"}
-              </button>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                onChange={handleAvatarChange}
-                style={{ display: "none" }}
-              />
-            </>
-          )}
-        </div>
-
-        {/* Fields */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 40 }}>
-          {/* Name */}
-          <div>
-            <label style={labelStyle}>Name</label>
+      <div style={{ display: "flex", flexDirection: "column", gap: CARD_GAP }}>
+        {/* Name */}
+        <div style={hubCard}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <p style={{ ...labelText, margin: 0 }}>Name</p>
             <input
               type="text"
               value={nameInput}
               onChange={(e) => setNameInput(e.target.value)}
-              onBlur={handleSaveName}
-              onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-              style={inputStyle}
-            />
-          </div>
-
-          {/* Handle (read-only) */}
-          <div>
-            <label style={labelStyle}>Handle</label>
-            <div
-              style={{
-                ...inputStyle,
-                backgroundColor: "var(--background)",
-                color: "var(--foreground-muted)",
-                cursor: "default",
+              onBlur={() => void handleBlurName()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
               }}
-            >
-              @{user.handle}
-            </div>
-          </div>
-
-          {/* Location */}
-          <div>
-            <label style={labelStyle}>Location</label>
-            <input
-              type="text"
-              value={locationInput}
-              onChange={(e) => setLocationInput(e.target.value)}
-              onBlur={handleSaveLocation}
-              onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-              placeholder="e.g. Los Angeles"
-              style={inputStyle}
+              autoComplete="name"
+              style={{ ...valueInput, display: "block" }}
             />
           </div>
-
-          {/* Tagline */}
-          <div>
-            <label style={labelStyle}>Tagline</label>
-            <input
-              type="text"
-              value={taglineInput}
-              onChange={(e) => setTaglineInput(e.target.value)}
-              onBlur={handleSaveTagline}
-              onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-              placeholder="Your motto or tagline"
-              maxLength={120}
-              style={inputStyle}
-            />
-          </div>
-
-          {/* Email (read-only) */}
-          {user.email && (
-            <div>
-              <label style={labelStyle}>Email</label>
-              <div
-                style={{
-                  ...inputStyle,
-                  backgroundColor: "var(--background)",
-                  color: "var(--foreground-muted)",
-                  cursor: "default",
-                }}
-              >
-                {user.email}
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* Prompts Section */}
-        <div style={{ marginBottom: 40 }}>
-          <h2
-            style={{
-              fontSize: 12,
-              fontWeight: 700,
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-              color: "var(--foreground-subtle)",
-              margin: "0 0 16px",
-            }}
-          >
-            Profile Prompts
-          </h2>
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {PROMPT_OPTIONS.map((question, i) => (
-              <div key={question}>
-                <label style={{ ...labelStyle, textTransform: "none", letterSpacing: "-0.2px", fontSize: 13 }}>
-                  {question}
-                </label>
+        {/* Handle */}
+        <div style={hubCard}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <p style={{ ...labelText, margin: 0 }}>Handle</p>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "row",
+                alignItems: "center",
+                width: "100%",
+                gap: 12,
+                minHeight: 32,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", minWidth: 0, flex: 1 }}>
+                <span style={{ ...valueText, flexShrink: 0, marginRight: 2 }}>@</span>
                 <input
                   type="text"
-                  value={promptAnswers[i]}
+                  value={handleInput}
+                  onChange={(e) => setHandleInput(e.target.value.replace(/\s/g, ""))}
+                  onBlur={() => void handleBlurHandle()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                  }}
+                  autoComplete="username"
+                  spellCheck={false}
+                  style={{ ...valueInput, flex: 1, minWidth: 0 }}
+                />
+              </div>
+              {handleShowsVerified ? (
+                <span
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                    marginLeft: "auto",
+                  }}
+                >
+                  <img
+                    src={SETTINGS_VERIFY_ICON}
+                    alt=""
+                    width={24}
+                    height={24}
+                    style={{ display: "block" }}
+                    aria-hidden
+                    decoding="async"
+                  />
+                </span>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        {(handleStatus === "invalid" && normalizeHandle(handleInput) !== user.handle) ||
+        handleStatus === "taken" ? (
+          <p
+            style={{
+              margin: 0,
+              fontSize: 12,
+              color: "#ff3b30",
+              lineHeight: 1.35,
+              paddingLeft: 4,
+            }}
+          >
+            {handleStatus === "taken"
+              ? "Already taken"
+              : validateHandleFormat(normalizeHandle(handleInput))}
+          </p>
+        ) : null}
+
+        {/* Motto (tagline) */}
+        <div style={hubCard}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                gap: 8,
+                width: "100%",
+              }}
+            >
+              <p style={{ ...labelText, margin: 0 }}>Tagline</p>
+              <SettingsCharCounter
+                ref={taglineCounterRef}
+                length={taglineInput.length}
+                max={MOTTO_MAX}
+                style={{
+                  ...labelText,
+                  margin: 0,
+                  textTransform: "none",
+                  whiteSpace: "nowrap",
+                }}
+              />
+            </div>
+            <AutoHeightTextarea
+              value={taglineInput}
+              onChange={(e) => setTaglineInput(e.target.value.slice(0, MOTTO_MAX))}
+              onBlur={handleSaveTagline}
+              onKeyDown={(e) =>
+                handleCharLimitKeyDown(e, MOTTO_MAX, taglineCounterRef.current)
+              }
+              onPaste={(e) => handleCharLimitPaste(e, MOTTO_MAX, taglineCounterRef.current)}
+              rows={1}
+              placeholder=""
+              maxLength={MOTTO_MAX}
+              style={{
+                ...valueInput,
+                resize: "none",
+                display: "block",
+                minHeight: 32,
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Email */}
+        <div style={hubCard}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <p style={{ ...labelText, margin: 0 }}>Email</p>
+            <p
+              style={{
+                ...valueText,
+                margin: 0,
+                wordBreak: "break-word",
+                color: user.email ? "var(--foreground)" : "var(--foreground-muted)",
+              }}
+            >
+              {user.email ?? "—"}
+            </p>
+          </div>
+        </div>
+
+        {isRealMode ? (
+          <button
+            type="button"
+            onClick={() => setPasswordOpen(true)}
+            style={{
+              ...hubCard,
+              cursor: "pointer",
+              textAlign: "left",
+              WebkitTapHighlightColor: "transparent",
+            }}
+            className="active:opacity-90"
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 8,
+                width: "100%",
+              }}
+            >
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+                <p style={{ ...labelText, margin: 0 }}>Password</p>
+                <p
+                  style={{
+                    ...valueText,
+                    margin: 0,
+                    letterSpacing: 2,
+                    userSelect: "none",
+                  }}
+                  aria-hidden
+                >
+                  ••••••••
+                </p>
+              </div>
+              <img
+                src={SETTINGS_ARROW_RIGHT_ICON}
+                alt=""
+                width={20}
+                height={20}
+                className="nav-btn-icon"
+                aria-hidden
+                style={{ display: "block", flexShrink: 0 }}
+                decoding="async"
+              />
+            </div>
+          </button>
+        ) : null}
+      </div>
+
+      <p
+        style={{
+          margin: `${PROMPTS_TITLE_TOP}px 0 0`,
+          fontFamily: "var(--font-sans), sans-serif",
+          fontSize: 16,
+          fontWeight: 400,
+          lineHeight: "normal",
+          letterSpacing: "-0.64px",
+          color: "var(--foreground)",
+        }}
+      >
+        Prompts
+      </p>
+
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: CARD_GAP,
+          marginTop: CARD_GAP,
+        }}
+      >
+        {PROMPT_OPTIONS.map((question, i) => {
+          const answer = promptAnswers[i] ?? "";
+          return (
+            <div key={question} style={hubCard}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    justifyContent: "space-between",
+                    gap: 8,
+                    width: "100%",
+                  }}
+                >
+                  <p
+                    style={{
+                      ...labelText,
+                      margin: 0,
+                      maxWidth: "14rem",
+                    }}
+                  >
+                    {question}
+                  </p>
+                  <SettingsCharCounter
+                    ref={(el) => {
+                      promptCounterRefs.current[i] = el;
+                    }}
+                    length={answer.length}
+                    max={MOTTO_MAX}
+                    style={{
+                      ...labelText,
+                      margin: 0,
+                      whiteSpace: "nowrap",
+                      textTransform: "none",
+                    }}
+                  />
+                </div>
+                <AutoHeightTextarea
+                  value={answer}
                   onChange={(e) => {
                     const next = [...promptAnswers];
-                    next[i] = e.target.value;
+                    next[i] = e.target.value.slice(0, MOTTO_MAX);
                     setPromptAnswers(next);
                   }}
                   onBlur={() => handleSavePrompt(i)}
-                  onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                  placeholder="Your answer..."
-                  maxLength={200}
-                  style={inputStyle}
+                  onKeyDown={(e) => {
+                    if (
+                      handleCharLimitKeyDown(
+                        e,
+                        MOTTO_MAX,
+                        promptCounterRefs.current[i] ?? null,
+                      )
+                    ) {
+                      return;
+                    }
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      (e.target as HTMLTextAreaElement).blur();
+                    }
+                  }}
+                  onPaste={(e) =>
+                    handleCharLimitPaste(
+                      e,
+                      MOTTO_MAX,
+                      promptCounterRefs.current[i] ?? null,
+                    )
+                  }
+                  placeholder="Your answer…"
+                  maxLength={MOTTO_MAX}
+                  rows={1}
+                  style={{
+                    ...valueInput,
+                    resize: "none",
+                    display: "block",
+                    minHeight: 32,
+                    color: answer.trim()
+                      ? "var(--foreground)"
+                      : "var(--foreground-muted)",
+                  }}
                 />
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <button type="button" onClick={handleSignOut} disabled={signingOut} style={actionBtnStyle}>
-            {signingOut ? "Signing out…" : "Sign out"}
-          </button>
-
-          {!showDeleteConfirm ? (
-            <button
-              type="button"
-              onClick={() => setShowDeleteConfirm(true)}
-              style={{ ...actionBtnStyle, color: "#e53e3e", borderColor: "rgba(229,62,62,0.2)" }}
-            >
-              Delete account
-            </button>
-          ) : (
-            <div
-              style={{
-                padding: 16,
-                borderRadius: "var(--radius-md)",
-                border: "1.5px solid rgba(229,62,62,0.3)",
-                backgroundColor: "rgba(229,62,62,0.04)",
-                display: "flex",
-                flexDirection: "column",
-                gap: 12,
-              }}
-            >
-              <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#e53e3e" }}>
-                This permanently deletes your account, workouts, and follows. This can&apos;t be undone.
-              </p>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  type="button"
-                  onClick={() => setShowDeleteConfirm(false)}
-                  style={{
-                    flex: 1,
-                    padding: "12px",
-                    borderRadius: "var(--radius-sm)",
-                    border: "1px solid var(--border-strong)",
-                    backgroundColor: "var(--surface)",
-                    color: "var(--foreground)",
-                    fontSize: 14,
-                    fontWeight: 700,
-                    fontFamily: "inherit",
-                    cursor: "pointer",
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDeleteAccount}
-                  disabled={deleting}
-                  style={{
-                    flex: 1,
-                    padding: "12px",
-                    borderRadius: "var(--radius-sm)",
-                    border: "none",
-                    backgroundColor: "#e53e3e",
-                    color: "#fff",
-                    fontSize: 14,
-                    fontWeight: 700,
-                    fontFamily: "inherit",
-                    cursor: deleting ? "not-allowed" : "pointer",
-                  }}
-                >
-                  {deleting ? "Deleting…" : "Yes, delete"}
-                </button>
-              </div>
             </div>
-          )}
-        </div>
-
-        <p
-          style={{
-            marginTop: 48,
-            textAlign: "center",
-            fontSize: 12,
-            color: "var(--foreground-faint)",
-          }}
-        >
-          To All You Athletes
-        </p>
+          );
+        })}
       </div>
 
-      {/* Toast */}
-      {toast && (
-        <div
+      <div
+        style={{
+          marginTop: FOOTER_TOP,
+          display: "flex",
+          flexDirection: "column",
+          gap: FOOTER_BTN_GAP,
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => void handleSignOut()}
+          disabled={signingOut}
           style={{
-            position: "fixed",
-            bottom: "max(24px, env(safe-area-inset-bottom))",
-            left: "50%",
-            transform: "translateX(-50%)",
-            padding: "12px 24px",
-            borderRadius: "var(--radius-full)",
-            backgroundColor: "var(--foreground)",
-            color: "var(--surface)",
-            fontSize: 14,
-            fontWeight: 700,
-            fontFamily: "inherit",
-            zIndex: 100,
-            animation: "fade-in-up 0.25s var(--ease-out-expo)",
+            ...pillBtn,
+            background: "var(--cta-bg)",
+            color: "var(--cta-color)",
+            opacity: signingOut ? 0.65 : 1,
+            cursor: signingOut ? "wait" : "pointer",
           }}
+          className="active:opacity-90"
         >
-          {toast}
-        </div>
-      )}
-    </main>
+          {signingOut ? "Signing out…" : "Logout"}
+        </button>
+
+        {!showDeleteConfirm ? (
+          <button
+            type="button"
+            onClick={() => setShowDeleteConfirm(true)}
+            style={{
+              ...pillBtn,
+              background: "transparent",
+              border: "2px solid var(--settings-hub-delete)",
+              color: "var(--settings-hub-delete)",
+            }}
+            className="active:opacity-92"
+          >
+            Delete account
+          </button>
+        ) : (
+          <div style={hubCard}>
+            <p
+              style={{
+                margin: "0 0 14px",
+                fontSize: 13,
+                fontWeight: 600,
+                color: "#ff3b30",
+                lineHeight: 1.45,
+              }}
+            >
+              This permanently deletes your account, workouts, and follows. This can&apos;t be undone.
+            </p>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(false)}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  borderRadius: 14,
+                  border: "1px solid var(--settings-card-border)",
+                  background: "transparent",
+                  color: "var(--foreground)",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  fontFamily: "inherit",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleDeleteAccount()}
+                disabled={deleting}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  borderRadius: 14,
+                  border: "none",
+                  backgroundColor: "#ff3b30",
+                  color: "#fff",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  fontFamily: "inherit",
+                  cursor: deleting ? "not-allowed" : "pointer",
+                }}
+              >
+                {deleting ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {passwordOpen ? (
+        <ChangePasswordSheet onClose={() => setPasswordOpen(false)} />
+      ) : null}
+    </SettingsShell>
   );
 }
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  fontSize: 12,
-  fontWeight: 700,
-  letterSpacing: "0.06em",
-  textTransform: "uppercase",
-  color: "var(--foreground-subtle)",
-  marginBottom: 8,
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "14px 16px",
-  borderRadius: "var(--radius-md)",
-  border: "1.5px solid var(--border-strong)",
-  backgroundColor: "var(--surface)",
-  fontSize: 15,
-  fontFamily: "inherit",
-  fontWeight: 500,
-  color: "var(--foreground)",
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const actionBtnStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "16px",
-  borderRadius: "var(--radius-md)",
-  border: "1.5px solid var(--border-strong)",
-  backgroundColor: "var(--surface)",
-  color: "var(--foreground)",
-  fontSize: 15,
-  fontWeight: 700,
-  fontFamily: "inherit",
-  cursor: "pointer",
-  textAlign: "center",
-};

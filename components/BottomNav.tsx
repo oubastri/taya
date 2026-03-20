@@ -69,19 +69,21 @@ export function BottomNav() {
           className="nav-item"
           data-active={isProfile || undefined}
         >
-          {user.avatarUrl ? (
-            <div className="nav-avatar" data-active={isProfile || undefined}>
-              <img src={user.avatarUrl} alt={user.name ?? "Profile"} />
-            </div>
-          ) : (
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <circle cx="12" cy="3" r="2" stroke="currentColor" strokeWidth="2" strokeLinecap="square" strokeLinejoin="miter" />
-              <path d="M5,15l1.586-5.549c.245-.859,1.03-1.451,1.923-1.451h6.983c.893,0,1.678,.592,1.923,1.451l1.586,5.549" stroke="currentColor" strokeWidth="2" strokeLinecap="square" strokeLinejoin="miter" />
-              <line x1="15" y1="23" x2="15" y2="12" stroke="currentColor" strokeWidth="2" strokeLinecap="square" />
-              <line x1="9" y1="17" x2="15" y2="17" stroke="currentColor" strokeWidth="2" strokeLinecap="square" />
-              <line x1="9" y1="12" x2="9" y2="23" stroke="currentColor" strokeWidth="2" strokeLinecap="square" />
-            </svg>
-          )}
+          <div className="nav-profile-slot">
+            {user.avatarUrl ? (
+              <div className="nav-avatar" data-active={isProfile || undefined}>
+                <img src={user.avatarUrl} alt={user.name ?? "Profile"} />
+              </div>
+            ) : (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <circle cx="12" cy="3" r="2" stroke="currentColor" strokeWidth="2" strokeLinecap="square" strokeLinejoin="miter" />
+                <path d="M5,15l1.586-5.549c.245-.859,1.03-1.451,1.923-1.451h6.983c.893,0,1.678,.592,1.923,1.451l1.586,5.549" stroke="currentColor" strokeWidth="2" strokeLinecap="square" strokeLinejoin="miter" />
+                <line x1="15" y1="23" x2="15" y2="12" stroke="currentColor" strokeWidth="2" strokeLinecap="square" />
+                <line x1="9" y1="17" x2="15" y2="17" stroke="currentColor" strokeWidth="2" strokeLinecap="square" />
+                <line x1="9" y1="12" x2="9" y2="23" stroke="currentColor" strokeWidth="2" strokeLinecap="square" />
+              </svg>
+            )}
+          </div>
         </Link>
       </div>
 

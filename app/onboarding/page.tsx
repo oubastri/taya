@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { getAdapter } from "@/lib/data-adapter";
 import { UserAvatar } from "@/components/UserAvatar";
 import { PROMPT_OPTIONS, type ProfilePrompt } from "@/types/user";
+import { normalizeHandle, validateHandleFormat } from "@/lib/handle";
 
 function toHandle(name: string): string {
   return name
@@ -47,13 +48,10 @@ export default function OnboardingPage() {
     e.preventDefault();
     setHandleError(null);
 
-    const clean = handle.trim().replace(/^@/, "").toLowerCase();
-    if (!clean) {
-      setHandleError("Handle can't be empty.");
-      return;
-    }
-    if (!/^[a-z0-9_]{2,20}$/.test(clean)) {
-      setHandleError("2–20 characters: letters, numbers, underscores only.");
+    const clean = normalizeHandle(handle);
+    const fmtErr = validateHandleFormat(clean);
+    if (fmtErr) {
+      setHandleError(fmtErr);
       return;
     }
 
