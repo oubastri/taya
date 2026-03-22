@@ -38,7 +38,7 @@ const SLOT_Y = "55%" as const;
 
 /**
  * Vertical slot swap: outgoing exits, then incoming enters (`wait` avoids two lines visible at once).
- * Center column fills its grid cell and flex-centers text (no translateX(-50%) — that fights variable widths).
+ * Motion layer is in-flow (relative) so slot height grows with wrapped text; minHeight is a floor only.
  */
 export function LandingSlotStrip({
   slotKey,
@@ -52,45 +52,30 @@ export function LandingSlotStrip({
   const reduce = useReducedMotion();
   const isCenter = anchor === "center";
 
+  /** In-flow height so wrapped text / descenders are not clipped; width fills the grid cell */
+  const flexRow = {
+    display: "flex" as const,
+    alignItems: "center" as const,
+    width: "100%" as const,
+    maxWidth: "100%" as const,
+    boxSizing: "border-box" as const,
+    ...(isCenter
+      ? { justifyContent: "center" as const }
+      : anchor === "right"
+        ? { justifyContent: "flex-end" as const }
+        : { justifyContent: "flex-start" as const }),
+  } satisfies CSSProperties;
+
   const motionPos = reduce
-    ? ({} as const)
-    : ({
-        position: "absolute" as const,
-        top: 0,
-        bottom: 0,
-        display: "flex",
-        alignItems: "center",
-        ...(isCenter
-          ? {
-              left: 0,
-              right: 0,
-              justifyContent: "center" as const,
-              width: "auto",
-            }
-          : anchor === "right"
-            ? {
-                left: "auto",
-                right: 0,
-                justifyContent: "flex-end" as const,
-                width: "max-content",
-                maxWidth: "100%",
-              }
-            : {
-                left: 0,
-                right: "auto",
-                justifyContent: "flex-start" as const,
-                width: "max-content",
-                maxWidth: "100%",
-              }),
-      } satisfies CSSProperties);
+    ? flexRow
+    : ({ position: "relative" as const, ...flexRow } satisfies CSSProperties);
 
   return (
     <div
       className={className}
       style={{
         position: "relative",
-        overflowX: "visible",
-        overflowY: "hidden",
+        overflow: "visible",
         minHeight,
         minWidth: minWidthProp,
         width: reduce ? "auto" : "100%",

@@ -20,10 +20,14 @@ const sans = 'var(--font-sans), system-ui, sans-serif';
 const PROFILE_ROTATE_MS = 2800;
 const ACTIVITY_ROTATE_MS = 3200;
 
-const HERO_FONT_SIZE = "clamp(22px, 4.2vw, 70px)";
-const AVATAR_PX = "clamp(44px, 9vw, 108px)";
-const SLOT_MIN_H = "clamp(48px, 10vw, 112px)";
-const ICON_BOX_PX = "clamp(44px, 9vw, 108px)";
+/** Tighter on narrow viewports so profile + activity stay side-by-side */
+const HERO_FONT_SIZE = "clamp(16px, 3.5vw, 70px)";
+const AVATAR_PX = "clamp(34px, 7vw, 108px)";
+const SLOT_MIN_H = "clamp(38px, 8.5vw, 112px)";
+const ICON_BOX_PX = "clamp(34px, 7vw, 108px)";
+const HERO_INNER_GAP = "clamp(6px, 1.4vw, 18px)";
+const HERO_COLUMN_GAP = "clamp(10px, 2.8vw, 40px)";
+const HERO_DEMO_TILE_RADIUS = "32%";
 
 /** Horizontal padding aligned with landing header */
 const PAGE_PAD_X = "max(20px, env(safe-area-inset-left))";
@@ -86,13 +90,16 @@ function shuffleOrder<T>(arr: T[], seed: number): T[] {
   return out;
 }
 
+/** ~50–58% of demo tile — keeps glyph smaller than the green box on phones */
 function useIconSizeForLanding() {
-  const [iconSize, setIconSize] = useState(52);
+  const [iconSize, setIconSize] = useState(48);
   useEffect(() => {
     const apply = () => {
       const w = window.innerWidth;
-      if (w < 480) setIconSize(30);
-      else if (w < 720) setIconSize(38);
+      if (w < 400) setIconSize(18);
+      else if (w < 480) setIconSize(22);
+      else if (w < 640) setIconSize(30);
+      else if (w < 720) setIconSize(36);
       else if (w < 1100) setIconSize(48);
       else setIconSize(56);
     };
@@ -103,24 +110,8 @@ function useIconSizeForLanding() {
   return iconSize;
 }
 
-/** Below this width, stack profile / activity vertically (readable on phones & narrow tablets). */
-const STACK_BREAKPOINT_PX = 760;
-
-function useStackedHero() {
-  const [stacked, setStacked] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia(`(max-width: ${STACK_BREAKPOINT_PX}px)`);
-    const on = () => setStacked(mq.matches);
-    on();
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
-  }, []);
-  return stacked;
-}
-
 export function LandingFigmaHero() {
   const iconSize = useIconSizeForLanding();
-  const stacked = useStackedHero();
 
   const activityOrder = useMemo(
     () => shuffleOrder([...LANDING_ACTIVITY_TYPES], 42),
@@ -154,7 +145,7 @@ export function LandingFigmaHero() {
     fontWeight: 500,
     letterSpacing: "-0.04em",
     color: "var(--foreground)",
-    lineHeight: 1.05,
+    lineHeight: 1.25,
   };
 
   const profileBlock = (
@@ -167,15 +158,21 @@ export function LandingFigmaHero() {
       <div
         style={{
           display: "flex",
+          flexDirection: "row",
+          flexWrap: "nowrap",
           alignItems: "center",
-          gap: "clamp(10px, 1.6vw, 18px)",
+          justifyContent: "flex-start",
+          gap: HERO_INNER_GAP,
+          width: "100%",
+          minWidth: 0,
+          overflow: "visible",
         }}
       >
         <div
           style={{
             width: AVATAR_PX,
             height: AVATAR_PX,
-            borderRadius: "50%",
+            borderRadius: HERO_DEMO_TILE_RADIUS,
             overflow: "hidden",
             flexShrink: 0,
             background: "var(--avatar-placeholder-bg)",
@@ -194,7 +191,13 @@ export function LandingFigmaHero() {
             }}
           />
         </div>
-        <span style={{ ...typeStyle, whiteSpace: "nowrap" }}>
+        <span
+          style={{
+            ...typeStyle,
+            whiteSpace: "nowrap",
+            flexShrink: 0,
+          }}
+        >
           {profile.handle}
         </span>
       </div>
@@ -211,12 +214,24 @@ export function LandingFigmaHero() {
       <div
         style={{
           display: "flex",
+          flexDirection: "row",
+          flexWrap: "nowrap",
           alignItems: "center",
-          gap: "clamp(10px, 1.6vw, 18px)",
-          flexWrap: "wrap",
+          justifyContent: "flex-end",
+          gap: HERO_INNER_GAP,
+          width: "100%",
+          minWidth: 0,
+          overflow: "visible",
         }}
       >
-        <span style={{ ...typeStyle }}>
+        <span
+          style={{
+            ...typeStyle,
+            whiteSpace: "nowrap",
+            flexShrink: 0,
+            textAlign: "right",
+          }}
+        >
           {connector && (
             <span style={{ color: "var(--foreground)" }}>{connector} </span>
           )}
@@ -226,7 +241,7 @@ export function LandingFigmaHero() {
           style={{
             width: ICON_BOX_PX,
             height: ICON_BOX_PX,
-            borderRadius: "32%",
+            borderRadius: HERO_DEMO_TILE_RADIUS,
             background: "var(--accent)",
             display: "flex",
             alignItems: "center",
@@ -240,30 +255,6 @@ export function LandingFigmaHero() {
     </LandingSlotStrip>
   );
 
-  if (stacked) {
-    return (
-      <section
-        aria-label="Example activity"
-        style={{
-          width: "100%",
-          paddingLeft: PAGE_PAD_X,
-          paddingRight: PAGE_PAD_RIGHT,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "stretch",
-          gap: "clamp(8px, 3vw, 16px)",
-        }}
-      >
-        <div style={{ alignSelf: "flex-start", width: "100%" }}>
-          {profileBlock}
-        </div>
-        <div style={{ alignSelf: "flex-end", width: "100%" }}>
-          {activityBlock}
-        </div>
-      </section>
-    );
-  }
-
   return (
     <section
       aria-label="Example activity"
@@ -275,9 +266,9 @@ export function LandingFigmaHero() {
         paddingRight: PAGE_PAD_RIGHT,
         minHeight: SLOT_MIN_H,
         display: "grid",
-        gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
+        gridTemplateColumns: "minmax(0, 0.88fr) minmax(0, 1.12fr)",
         alignItems: "center",
-        columnGap: "clamp(16px, 3vw, 40px)",
+        columnGap: HERO_COLUMN_GAP,
       }}
     >
       <div
@@ -298,6 +289,8 @@ export function LandingFigmaHero() {
           alignItems: "center",
           width: "100%",
           minWidth: 0,
+          position: "relative",
+          zIndex: 1,
         }}
       >
         {activityBlock}
