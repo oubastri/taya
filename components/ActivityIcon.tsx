@@ -35,12 +35,40 @@ export const ACTIVITY_COLORS: Record<ActivityType, string> = {
   other: "#8E8E93",
 };
 
-/** Activity types that have an SVG in /public/icons/{type}.svg */
-const ACTIVITY_WITH_ICON_FILE = new Set<ActivityType>([
-  "run", "walk", "cycle", "swim", "yoga", "lift", "hiit", "crossfit", "pilates",
-  "basketball", "tennis", "soccer", "climb", "surf", "hike",
-  "boxing", "dance", "golf", "martial_arts", "pickleball", "rowing", "ski", "spin", "stretch", "volleyball",
-]);
+/** Activity types backed by `/public/icons/{type}.svg` */
+export const ACTIVITY_TYPES_WITH_SVG_FILE: ActivityType[] = [
+  "run",
+  "walk",
+  "cycle",
+  "swim",
+  "yoga",
+  "lift",
+  "hiit",
+  "crossfit",
+  "pilates",
+  "basketball",
+  "tennis",
+  "soccer",
+  "climb",
+  "surf",
+  "hike",
+  "boxing",
+  "dance",
+  "golf",
+  "martial_arts",
+  "pickleball",
+  "rowing",
+  "ski",
+  "spin",
+  "stretch",
+  "volleyball",
+];
+
+const ACTIVITY_WITH_ICON_FILE = new Set<ActivityType>(ACTIVITY_TYPES_WITH_SVG_FILE);
+
+export function activityTypeToIconPath(type: ActivityType): string {
+  return `/icons/${type}.svg`;
+}
 
 interface ActivityIconProps {
   type: ActivityType;
@@ -49,6 +77,8 @@ interface ActivityIconProps {
   badge?: boolean;
   /** When true, render icon as white (e.g. on colored background). Only affects asset icons. */
   invert?: boolean;
+  /** Black silhouette; skips theme `.activity-icon-auto` invert (e.g. landing hero on green). */
+  monochromeBlack?: boolean;
   className?: string;
 }
 
@@ -57,6 +87,7 @@ export function ActivityIcon({
   size = 24,
   badge = false,
   invert = false,
+  monochromeBlack = false,
   className = "",
 }: ActivityIconProps) {
   const iconSize = badge ? Math.round(size * 0.52) : size;
@@ -72,13 +103,23 @@ export function ActivityIcon({
       height={iconSize}
       aria-hidden
       draggable={false}
-      className={showWhite ? undefined : "activity-icon-auto"}
+      className={
+        monochromeBlack
+          ? undefined
+          : showWhite
+            ? undefined
+            : "activity-icon-auto"
+      }
       style={{
         width: iconSize,
         height: iconSize,
         objectFit: "contain",
         pointerEvents: "none",
-        ...(showWhite ? { filter: "brightness(0) invert(1)" } : {}),
+        ...(monochromeBlack
+          ? { filter: "brightness(0)" }
+          : showWhite
+            ? { filter: "brightness(0) invert(1)" }
+            : {}),
       }}
     />
   ) : (
@@ -88,7 +129,9 @@ export function ActivityIcon({
       viewBox="0 0 24 24"
       fill="none"
       aria-hidden
-      style={{ color: showWhite ? "#fff" : "currentColor" }}
+      style={{
+        color: showWhite ? "#fff" : monochromeBlack ? "#000" : "currentColor",
+      }}
     >
       <OtherSparkle />
     </svg>

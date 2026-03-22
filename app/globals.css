@@ -105,6 +105,16 @@
   /* Mono badge border */
   --mono-border: #919191;
 
+  /* Figma auth / onboarding (Create account 457:3056) */
+  --figma-auth-field-bg: #ffffff;
+  --figma-auth-label: rgba(0, 0, 0, 0.4);
+  --figma-auth-placeholder: #e5e5e5;
+  --figma-auth-screen-title: #bebebe;
+  --figma-auth-back-bg: #ffffff;
+  --figma-auth-back-border: rgba(0, 0, 0, 0.06);
+  --figma-auth-back-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --figma-auth-progress-inactive: #d8d8d8;
+
   /* Settings hub (reference layout — light, Figma Settings 445:2420) */
   --settings-page-bg: #f2f2f2;
   --settings-card-bg: #ffffff;
@@ -221,6 +231,16 @@
   /* Mono badge border */
   --mono-border: rgba(255, 255, 255, 0.35);
 
+  /* Figma auth / onboarding — dark equivalents */
+  --figma-auth-field-bg: var(--surface-elevated);
+  --figma-auth-label: rgba(255, 255, 255, 0.4);
+  --figma-auth-placeholder: rgba(255, 255, 255, 0.22);
+  --figma-auth-screen-title: rgba(255, 255, 255, 0.32);
+  --figma-auth-back-bg: var(--surface-elevated);
+  --figma-auth-back-border: rgba(255, 255, 255, 0.1);
+  --figma-auth-back-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  --figma-auth-progress-inactive: rgba(255, 255, 255, 0.15);
+
   /* Settings hub (reference layout — dark) */
   --settings-page-bg: #000000;
   --settings-card-bg: #1c1c1e;
@@ -243,6 +263,98 @@
   --settings-logout-bg: #ffffff;
   --settings-logout-border: rgba(0, 0, 0, 0.06);
   --settings-logout-text: #ff3b30;
+}
+
+/* Figma-style auth inputs — placeholder color matches node 457:3069 */
+.figma-auth-input::placeholder {
+  color: var(--figma-auth-placeholder);
+}
+.figma-auth-input {
+  color: var(--foreground);
+}
+
+/* Auth modal over landing — full viewport on small screens, centered card on md+ */
+.auth-landing-scaffold {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+}
+
+.auth-landing-scaffold__bg {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .auth-landing-scaffold__bg {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    /* Avoid clipping the live landing preview; body scroll is already locked */
+    overflow: visible;
+  }
+
+  /* No filter here — brightness() on the live preview caused compositing glitches (fonts/layout). Dim via scrim only. */
+  .auth-landing-scaffold__bg > * {
+    pointer-events: none;
+    min-height: 100%;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .auth-landing-scaffold__scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    margin: 0;
+    padding: 0;
+    border: none;
+    cursor: pointer;
+    background: rgba(0, 0, 0, 0.48);
+  }
+}
+
+.auth-landing-scaffold__scrim {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .auth-landing-scaffold__scrim {
+    display: block;
+  }
+}
+
+.auth-landing-scaffold__panel {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  max-height: 100dvh;
+  overflow: auto;
+  overflow-x: hidden;
+  background: var(--background);
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (min-width: 640px) {
+  .auth-landing-scaffold {
+    align-items: center;
+    padding: 24px 16px;
+    box-sizing: border-box;
+  }
+
+  .auth-landing-scaffold__panel {
+    width: min(428px, calc(100vw - 32px));
+    height: auto;
+    max-height: min(90dvh, 920px);
+    border-radius: 28px;
+    box-shadow:
+      0 0 0 1px rgba(0, 0, 0, 0.06),
+      0 24px 64px rgba(0, 0, 0, 0.2);
+  }
 }
 
 html {

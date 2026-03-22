@@ -3,13 +3,63 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { useLogSheet } from "@/contexts/log-sheet";
 import { useUser } from "@/hooks/use-user";
+import { createClient } from "@/lib/supabase/client";
+import { loadUser } from "@/lib/storage";
+
+const isRealMode = process.env.NEXT_PUBLIC_DATA_MODE === "real";
+
+const AUTH_PATHS = ["/login", "/signup", "/forgot-password", "/onboarding"];
 
 export function BottomNav() {
   const { open } = useLogSheet();
   const { user } = useUser();
   const pathname = usePathname();
+  const [homeSignedIn, setHomeSignedIn] = useState<"unknown" | "yes" | "no">(
+    !isRealMode || pathname !== "/" ? "yes" : "unknown",
+  );
+  /** Mock `/`: null until checked; hide nav unless we know a persisted user exists */
+  const [mockHomeGuestNav, setMockHomeGuestNav] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!isRealMode || pathname !== "/") {
+      setHomeSignedIn("yes");
+      return;
+    }
+    setHomeSignedIn("unknown");
+    let cancelled = false;
+    void createClient().auth.getSession().then(({ data }) => {
+      if (!cancelled) setHomeSignedIn(data.session ? "yes" : "no");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname]);
+
+  useEffect(() => {
+    if (isRealMode) {
+      setMockHomeGuestNav(null);
+      return;
+    }
+    if (pathname !== "/") {
+      setMockHomeGuestNav(null);
+      return;
+    }
+    setMockHomeGuestNav(loadUser() === null);
+  }, [pathname]);
+
+  const hideForAuthRoute = AUTH_PATHS.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`),
+  );
+  const hideForGuestHome = isRealMode && pathname === "/" && homeSignedIn !== "yes";
+  const hideForMockGuestHome =
+    !isRealMode && pathname === "/" && mockHomeGuestNav !== false;
+
+  if (hideForAuthRoute || hideForGuestHome || hideForMockGuestHome) {
+    return null;
+  }
 
   const isHome = pathname === "/";
   const isAthletes = pathname === "/athletes" || pathname.startsWith("/athletes/");
@@ -18,7 +68,6 @@ export function BottomNav() {
 
   return (
     <nav aria-label="Main navigation" className="bottom-nav-wrapper">
-      {/* Main pill: Home · Athletes · Profile */}
       <div
         className="liquid-glass-nav"
         style={{ "--active-index": activeIndex >= 0 ? activeIndex : 0 } as React.CSSProperties}
@@ -28,7 +77,6 @@ export function BottomNav() {
           aria-hidden
           style={{ opacity: activeIndex >= 0 ? 1 : 0 }}
         />
-        {/* Home / Feed */}
         <Link
           href="/"
           aria-label="Home"
@@ -45,7 +93,6 @@ export function BottomNav() {
           />
         </Link>
 
-        {/* Athletes */}
         <Link
           href="/athletes"
           aria-label="Athletes"
@@ -62,7 +109,6 @@ export function BottomNav() {
           />
         </Link>
 
-        {/* Profile */}
         <Link
           href="/profile"
           aria-label="Profile"
@@ -87,7 +133,6 @@ export function BottomNav() {
         </Link>
       </div>
 
-      {/* Add button */}
       <button
         type="button"
         onClick={() => open()}
