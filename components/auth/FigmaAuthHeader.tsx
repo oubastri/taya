@@ -4,13 +4,19 @@ import { figmaPageTitle } from "./figmaAuthStyles";
 type FigmaAuthHeaderProps = {
   title: string;
   subtitle?: string;
+  /** When false, omit the wordmark (e.g. auth modal over landing). */
+  showWordmark?: boolean;
 };
 
-export function FigmaAuthHeader({ title, subtitle }: FigmaAuthHeaderProps) {
+export function FigmaAuthHeader({
+  title,
+  subtitle,
+  showWordmark = true,
+}: FigmaAuthHeaderProps) {
   return (
     <div style={{ marginBottom: 20 }}>
-      <TayaWordmark variant="figma" />
-      <p style={figmaPageTitle}>{title}</p>
+      {showWordmark ? <TayaWordmark variant="figma" /> : null}
+      <p style={{ ...figmaPageTitle, ...(showWordmark ? {} : { margin: 0 }) }}>{title}</p>
       {subtitle ? (
         <p
           style={{

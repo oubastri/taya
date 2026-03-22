@@ -75,7 +75,7 @@ export function LandingSlotStrip({
       className={className}
       style={{
         position: "relative",
-        overflow: "visible",
+        overflow: "hidden",
         minHeight,
         minWidth: minWidthProp,
         width: reduce ? "auto" : "100%",
@@ -112,7 +112,7 @@ export function LandingSlotStrip({
           }
           style={{
             ...motionPos,
-            willChange: reduce ? undefined : "transform, opacity",
+            minHeight,
           }}
         >
           {children}

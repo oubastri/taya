@@ -11,6 +11,8 @@ const GUTTER = 16;
 type AuthShellProps = {
   children: React.ReactNode;
   showBack?: boolean;
+  /** When `showBack`, use arrow (default) or the same close icon as other modals (`/icons/nav/close.svg`). */
+  dismissIcon?: "arrow" | "close";
   onBack?: () => void;
   title?: React.ReactNode;
   /**
@@ -22,12 +24,14 @@ type AuthShellProps = {
 export function AuthShell({
   children,
   showBack = true,
+  dismissIcon = "arrow",
   onBack,
   title,
   embedded = false,
 }: AuthShellProps) {
   const router = useRouter();
   const back = onBack ?? (() => router.back());
+  const isCloseDismiss = dismissIcon === "close";
 
   const header = (
     <header
@@ -46,6 +50,18 @@ export function AuthShell({
               zIndex: 4,
             }
           : {}),
+        ...(isCloseDismiss
+          ? {
+              width: "100%",
+              maxWidth: "100%",
+              marginLeft: 0,
+              marginRight: 0,
+              paddingTop: 0,
+              paddingBottom: 8,
+              paddingLeft: 0,
+              paddingRight: 0,
+            }
+          : {}),
       }}
     >
       <div
@@ -54,11 +70,11 @@ export function AuthShell({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          minHeight: 48,
+          minHeight: isCloseDismiss ? GUTTER + 48 : 48,
           maxWidth: embedded ? "none" : CONTENT_MAX,
           margin: embedded ? 0 : "0 auto",
-          paddingLeft: GUTTER,
-          paddingRight: GUTTER,
+          paddingLeft: isCloseDismiss ? 0 : GUTTER,
+          paddingRight: isCloseDismiss ? 0 : GUTTER,
           boxSizing: "border-box",
         }}
       >
@@ -66,18 +82,31 @@ export function AuthShell({
           <button
             type="button"
             onClick={back}
-            aria-label="Go back"
+            aria-label={isCloseDismiss ? "Close" : "Go back"}
             style={{
               ...figmaBackButton,
               position: "absolute",
-              left: GUTTER,
-              top: "50%",
-              transform: "translateY(-50%)",
+              ...(isCloseDismiss
+                ? {
+                    top: GUTTER,
+                    right: GUTTER,
+                    left: "auto",
+                    transform: "none",
+                  }
+                : {
+                    left: GUTTER,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                  }),
             }}
             className="active:scale-[0.97]"
           >
             <Image
-              src="/icons/nav/arrow-left.svg"
+              src={
+                dismissIcon === "close"
+                  ? "/icons/nav/close.svg"
+                  : "/icons/nav/arrow-left.svg"
+              }
               alt=""
               width={20}
               height={20}

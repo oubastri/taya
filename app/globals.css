@@ -337,6 +337,33 @@
   overflow-x: hidden;
   background: var(--background);
   -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+}
+
+.auth-landing-scaffold__panel--leaving {
+  overflow: hidden !important;
+  pointer-events: none;
+}
+
+.auth-landing-scaffold__route-host {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.auth-landing-scaffold__route {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 100%;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 @media (min-width: 640px) {
@@ -765,6 +792,107 @@ body.search-open .bottom-nav-wrapper {
 input::placeholder,
 textarea::placeholder {
   color: var(--input-placeholder);
+}
+
+/* Landing header nav — CSS responsive sizing + hover effects (avoids JS re-renders) */
+.landing-nav {
+  gap: 10px;
+}
+
+.landing-nav-auth-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+
+.landing-nav-auth-cta {
+  width: 100%;
+  min-width: 0;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+@media (max-width: 520px) {
+  .landing-nav {
+    gap: 8px;
+  }
+  .landing-nav-auth-pair {
+    gap: 8px;
+  }
+}
+
+.landing-nav-toggle {
+  width: 54px;
+  height: 54px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  transition: transform 0.2s var(--ease-out-expo), background 0.18s ease, box-shadow 0.2s var(--ease-out-expo);
+}
+
+@media (max-width: 520px) {
+  .landing-nav-toggle {
+    width: 46px;
+    height: 46px;
+  }
+}
+
+.landing-nav-toggle:hover {
+  background: var(--foreground);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+}
+
+.landing-nav-toggle:hover img {
+  filter: invert(1);
+}
+
+.landing-nav-login {
+  height: 54px;
+  font-size: 18px;
+  padding: 0 20px;
+  min-width: 132px;
+  background: var(--surface);
+  color: var(--foreground);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  transition: transform 0.2s var(--ease-out-expo), opacity 0.2s, box-shadow 0.2s var(--ease-out-expo), background 0.18s ease, color 0.18s ease;
+}
+
+@media (max-width: 520px) {
+  .landing-nav-login {
+    height: 46px;
+    font-size: 14px;
+    padding: 0 16px;
+    min-width: 108px;
+  }
+}
+
+.landing-nav-login:hover {
+  background: var(--foreground);
+  color: var(--surface);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+}
+
+.landing-nav-signup {
+  height: 54px;
+  font-size: 18px;
+  padding: 0 20px;
+  min-width: 132px;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.12);
+  transition: transform 0.2s var(--ease-out-expo), opacity 0.2s, box-shadow 0.2s var(--ease-out-expo);
+}
+
+@media (max-width: 520px) {
+  .landing-nav-signup {
+    height: 46px;
+    font-size: 14px;
+    padding: 0 16px;
+    min-width: 108px;
+  }
+}
+
+.landing-nav-signup:hover {
+  transform: scale(1.025);
+  box-shadow: 0 6px 28px rgba(0,0,0,0.22);
 }
 
 /* Scrollbar */

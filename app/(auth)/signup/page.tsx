@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { AuthLandingScaffold } from "@/components/auth/AuthLandingScaffold";
 import { AuthShell } from "@/components/auth/AuthShell";
+import { useAuthLandingRequestClose } from "@/components/auth/AuthLandingScaffold";
 import { FigmaAuthHeader } from "@/components/auth/FigmaAuthHeader";
 import { FigmaFieldCard } from "@/components/auth/FigmaFieldCard";
 import {
@@ -18,7 +18,11 @@ import {
 
 export default function SignupPage() {
   const router = useRouter();
-  const goBack = () => router.push("/");
+  const requestCloseModal = useAuthLandingRequestClose();
+  const goBack = () => {
+    if (requestCloseModal) requestCloseModal();
+    else router.push("/");
+  };
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -66,9 +70,8 @@ export default function SignupPage() {
   }
 
   return (
-    <AuthLandingScaffold>
-    <AuthShell embedded showBack onBack={goBack}>
-      <FigmaAuthHeader title="Create account" />
+    <AuthShell embedded showBack dismissIcon="close" onBack={goBack}>
+      <FigmaAuthHeader title="Create account" showWordmark={false} />
 
       {checkEmail ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -152,6 +155,5 @@ export default function SignupPage() {
         </Link>
       </div>
     </AuthShell>
-    </AuthLandingScaffold>
   );
 }

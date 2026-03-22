@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import AthletesGlobeView, {
   type AthletesGlobeUser,
 } from "@/components/athletes/AthletesGlobeView";
@@ -31,28 +37,11 @@ function buildLandingGlobeUsers(): AthletesGlobeUser[] {
 
 const sans = 'var(--font-sans), system-ui, sans-serif';
 
-function useNarrowNav(breakpointPx: number) {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia(`(max-width: ${breakpointPx}px)`);
-    const on = () => setNarrow(mq.matches);
-    on();
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
-  }, [breakpointPx]);
-  return narrow;
-}
-
 export default function HomeLanding() {
   const landingGlobeUsers = useMemo(() => buildLandingGlobeUsers(), []);
-  const narrowNav = useNarrowNav(520);
   const { theme, toggle: toggleTheme } = useTheme();
   const [exitingTheme, setExitingTheme] = useState<"light" | "dark" | null>(null);
   const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const [toggleHovered, setToggleHovered] = useState(false);
-  const [loginHovered, setLoginHovered] = useState(false);
-  const [signupHovered, setSignupHovered] = useState(false);
 
   const handleToggleTheme = useCallback(() => {
     setExitingTheme(theme);
@@ -66,11 +55,6 @@ export default function HomeLanding() {
       if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
     };
   }, []);
-
-  const btnSize = narrowNav ? 46 : 54;
-  const btnFontSize = narrowNav ? 14 : 18;
-  const btnPad = narrowNav ? "0 16px" : "0 20px";
-  const btnMinW = narrowNav ? 108 : 132;
 
   const headerScrim =
     "linear-gradient(to bottom, var(--background) 0%, var(--background) 12%, color-mix(in srgb, var(--background) 96%, transparent) 38%, color-mix(in srgb, var(--background) 78%, transparent) 62%, color-mix(in srgb, var(--background) 42%, transparent) 84%, transparent 100%)";
@@ -157,30 +141,22 @@ export default function HomeLanding() {
         </div>
         <nav
           aria-label="Account"
+          className="landing-nav"
           style={{
             display: "flex",
             alignItems: "center",
-            gap: narrowNav ? 8 : 10,
             flexShrink: 0,
           }}
         >
-          {/* Theme toggle — styled as a sibling to the Login/Sign up buttons */}
+          {/* Theme toggle — styled as a sibling to the Login / Create account buttons */}
           <button
             type="button"
             onClick={handleToggleTheme}
-            onMouseEnter={() => setToggleHovered(true)}
-            onMouseLeave={() => setToggleHovered(false)}
             aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            className="theme-toggle-btn active:opacity-85 active:scale-[0.98]"
+            className="theme-toggle-btn landing-nav-toggle active:opacity-85 active:scale-[0.98]"
             style={{
-              width: btnSize,
-              height: btnSize,
               borderRadius: 100,
-              background: toggleHovered ? "var(--foreground)" : "var(--surface)",
               border: "2px solid var(--foreground)",
-              boxShadow: toggleHovered
-                ? "0 4px 16px rgba(0,0,0,0.12)"
-                : "0 1px 2px rgba(0,0,0,0.04)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -189,8 +165,6 @@ export default function HomeLanding() {
               overflow: "hidden",
               padding: 0,
               flexShrink: 0,
-              transition:
-                "transform 0.2s var(--ease-out-expo), background 0.18s ease, box-shadow 0.2s var(--ease-out-expo)",
             }}
           >
             {exitingTheme && (
@@ -202,7 +176,6 @@ export default function HomeLanding() {
                 height={20}
                 aria-hidden
                 className="activity-icon-auto theme-icon-exit"
-                style={{ filter: toggleHovered ? "invert(1)" : undefined }}
               />
             )}
             <Image
@@ -213,76 +186,52 @@ export default function HomeLanding() {
               height={20}
               aria-hidden
               className="activity-icon-auto theme-icon-enter"
-              style={{ filter: toggleHovered ? "invert(1)" : undefined }}
             />
           </button>
 
-          <Link
-            href="/login"
-            className="active:opacity-85 active:scale-[0.98]"
-            onMouseEnter={() => setLoginHovered(true)}
-            onMouseLeave={() => setLoginHovered(false)}
-            style={{
-              fontFamily: sans,
-              fontSize: btnFontSize,
-              fontWeight: 400,
-              letterSpacing: "-0.02em",
-              borderRadius: 100,
-              textDecoration: "none",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              height: btnSize,
-              minWidth: btnMinW,
-              padding: btnPad,
-              WebkitTapHighlightColor: "transparent",
-              transition:
-                "transform 0.2s var(--ease-out-expo), opacity 0.2s, box-shadow 0.2s var(--ease-out-expo), background 0.18s ease, color 0.18s ease",
-              background: loginHovered ? "var(--foreground)" : "var(--surface)",
-              color: loginHovered ? "var(--surface)" : "var(--foreground)",
-              border: "2px solid var(--foreground)",
-              boxShadow: loginHovered
-                ? "0 4px 16px rgba(0,0,0,0.12)"
-                : "0 1px 2px rgba(0,0,0,0.04)",
-            }}
-          >
-            Login
-          </Link>
+          <div className="landing-nav-auth-pair">
+            <Link
+              href="/login"
+              className="landing-nav-login landing-nav-auth-cta active:opacity-85 active:scale-[0.98]"
+              style={{
+                fontFamily: sans,
+                fontWeight: 400,
+                letterSpacing: "-0.02em",
+                borderRadius: 100,
+                textDecoration: "none",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                WebkitTapHighlightColor: "transparent",
+                border: "2px solid var(--foreground)",
+              }}
+            >
+              Login
+            </Link>
 
-          <Link
-            href="/signup"
-            className="active:opacity-90 active:scale-[0.98]"
-            onMouseEnter={() => setSignupHovered(true)}
-            onMouseLeave={() => setSignupHovered(false)}
-            style={{
-              fontFamily: sans,
-              fontSize: btnFontSize,
-              fontWeight: 400,
-              letterSpacing: "-0.02em",
-              borderRadius: 100,
-              textDecoration: "none",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              height: btnSize,
-              minWidth: btnMinW,
-              padding: btnPad,
-              WebkitTapHighlightColor: "transparent",
-              transition:
-                "transform 0.2s var(--ease-out-expo), opacity 0.2s, box-shadow 0.2s var(--ease-out-expo)",
-              background: "var(--cta-bg)",
-              color: "var(--cta-color)",
-              border: "1px solid color-mix(in srgb, var(--foreground) 14%, transparent)",
-              boxShadow: signupHovered
-                ? "0 6px 28px rgba(0,0,0,0.22)"
-                : "0 2px 16px rgba(0,0,0,0.12)",
-              transform: signupHovered ? "scale(1.025)" : "scale(1)",
-              backdropFilter: "blur(14px) saturate(1.2)",
-              WebkitBackdropFilter: "blur(14px) saturate(1.2)",
-            }}
-          >
-            Sign up
-          </Link>
+            <Link
+              href="/signup"
+              className="landing-nav-signup landing-nav-auth-cta active:opacity-90 active:scale-[0.98]"
+              style={{
+                fontFamily: sans,
+                fontWeight: 400,
+                letterSpacing: "-0.02em",
+                borderRadius: 100,
+                textDecoration: "none",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                WebkitTapHighlightColor: "transparent",
+                background: "var(--cta-bg)",
+                color: "var(--cta-color)",
+                border: "1px solid color-mix(in srgb, var(--foreground) 14%, transparent)",
+                backdropFilter: "blur(14px) saturate(1.2)",
+                WebkitBackdropFilter: "blur(14px) saturate(1.2)",
+              }}
+            >
+              Create account
+            </Link>
+          </div>
         </nav>
       </header>
 

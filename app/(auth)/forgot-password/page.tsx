@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { AuthLandingScaffold } from "@/components/auth/AuthLandingScaffold";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { FigmaAuthHeader } from "@/components/auth/FigmaAuthHeader";
 import { FigmaFieldCard } from "@/components/auth/FigmaFieldCard";
@@ -46,9 +45,8 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <AuthLandingScaffold>
-    <AuthShell embedded showBack onBack={() => router.push("/login")}>
-      <FigmaAuthHeader title="Reset password" />
+    <AuthShell embedded showBack dismissIcon="close" onBack={() => router.push("/login")}>
+      <FigmaAuthHeader title="Reset password" showWordmark={false} />
 
       {sent ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -132,6 +130,5 @@ export default function ForgotPasswordPage() {
         </form>
       )}
     </AuthShell>
-    </AuthLandingScaffold>
   );
 }

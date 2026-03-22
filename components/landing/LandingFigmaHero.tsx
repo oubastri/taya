@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import type { CSSProperties } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { ActivityIcon } from "@/components/ActivityIcon";
 import { LandingSlotStrip } from "@/components/landing/LandingSlotStrip";
 import type { ActivityType } from "@/types/workout";
@@ -93,7 +93,7 @@ function shuffleOrder<T>(arr: T[], seed: number): T[] {
 /** ~50–58% of demo tile — keeps glyph smaller than the green box on phones */
 function useIconSizeForLanding() {
   const [iconSize, setIconSize] = useState(48);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const apply = () => {
       const w = window.innerWidth;
       if (w < 400) setIconSize(18);

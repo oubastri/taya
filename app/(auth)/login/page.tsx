@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { AuthLandingScaffold } from "@/components/auth/AuthLandingScaffold";
 import { AuthShell } from "@/components/auth/AuthShell";
+import { useAuthLandingRequestClose } from "@/components/auth/AuthLandingScaffold";
 import { FigmaAuthHeader } from "@/components/auth/FigmaAuthHeader";
 import { FigmaFieldCard } from "@/components/auth/FigmaFieldCard";
 import {
@@ -18,7 +18,11 @@ import {
 
 export default function LoginPage() {
   const router = useRouter();
-  const closeToHome = () => router.push("/");
+  const requestCloseModal = useAuthLandingRequestClose();
+  const closeToHome = () => {
+    if (requestCloseModal) requestCloseModal();
+    else router.push("/");
+  };
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -59,9 +63,8 @@ export default function LoginPage() {
   }
 
   return (
-    <AuthLandingScaffold>
-    <AuthShell embedded showBack onBack={closeToHome}>
-      <FigmaAuthHeader title="Log in" />
+    <AuthShell embedded showBack dismissIcon="close" onBack={closeToHome}>
+      <FigmaAuthHeader title="Log in" showWordmark={false} />
 
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <FigmaFieldCard label="Email">
@@ -129,6 +132,5 @@ export default function LoginPage() {
         </Link>
       </div>
     </AuthShell>
-    </AuthLandingScaffold>
   );
 }
