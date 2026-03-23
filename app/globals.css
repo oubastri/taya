@@ -822,38 +822,14 @@ textarea::placeholder {
   }
 }
 
-.landing-nav-toggle {
-  width: 54px;
-  height: 54px;
-  background: var(--surface);
-  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
-  transition: transform 0.2s var(--ease-out-expo), background 0.18s ease, box-shadow 0.2s var(--ease-out-expo);
-}
-
-@media (max-width: 520px) {
-  .landing-nav-toggle {
-    width: 46px;
-    height: 46px;
-  }
-}
-
-.landing-nav-toggle:hover {
-  background: var(--foreground);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
-}
-
-.landing-nav-toggle:hover img {
-  filter: invert(1);
-}
-
 .landing-nav-login {
   height: 54px;
   font-size: 18px;
   padding: 0 20px;
   min-width: 132px;
-  background: var(--surface);
+  background: var(--background);
   color: var(--foreground);
-  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  box-shadow: none;
   transition: transform 0.2s var(--ease-out-expo), opacity 0.2s, box-shadow 0.2s var(--ease-out-expo), background 0.18s ease, color 0.18s ease;
 }
 
@@ -867,9 +843,10 @@ textarea::placeholder {
 }
 
 .landing-nav-login:hover {
-  background: var(--foreground);
-  color: var(--surface);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  background: #000;
+  color: #fff;
+  box-shadow: none;
+  border-color: #000 !important;
 }
 
 .landing-nav-signup {

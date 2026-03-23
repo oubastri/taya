@@ -148,23 +148,29 @@ export default function HomeLanding() {
             flexShrink: 0,
           }}
         >
-          {/* Theme toggle — styled as a sibling to the Login / Create account buttons */}
+          {/* Theme toggle — same control as FeedHome */}
           <button
             type="button"
             onClick={handleToggleTheme}
             aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            className="theme-toggle-btn landing-nav-toggle active:opacity-85 active:scale-[0.98]"
+            className="theme-toggle-btn"
             style={{
-              borderRadius: 100,
-              border: "2px solid var(--foreground)",
+              width: 54,
+              height: 54,
+              borderRadius: "100px",
+              backdropFilter: "blur(24px) saturate(1.8)",
+              WebkitBackdropFilter: "blur(24px) saturate(1.8)",
+              background: "var(--glass-btn-bg)",
+              border: "1px solid var(--glass-btn-border)",
+              boxShadow: "var(--glass-btn-shadow)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               cursor: "pointer",
               WebkitTapHighlightColor: "transparent",
               overflow: "hidden",
-              padding: 0,
               flexShrink: 0,
+              padding: 0,
             }}
           >
             {exitingTheme && (
@@ -172,8 +178,8 @@ export default function HomeLanding() {
                 key={`exit-${exitingTheme}`}
                 src={`/icons/dark-light-mode/${exitingTheme === "dark" ? "sun" : "moon"}.svg`}
                 alt=""
-                width={20}
-                height={20}
+                width={22}
+                height={22}
                 aria-hidden
                 className="activity-icon-auto theme-icon-exit"
               />
@@ -182,8 +188,8 @@ export default function HomeLanding() {
               key={`enter-${theme}`}
               src={`/icons/dark-light-mode/${theme === "dark" ? "sun" : "moon"}.svg`}
               alt=""
-              width={20}
-              height={20}
+              width={22}
+              height={22}
               aria-hidden
               className="activity-icon-auto theme-icon-enter"
             />
@@ -229,7 +235,7 @@ export default function HomeLanding() {
                 WebkitBackdropFilter: "blur(14px) saturate(1.2)",
               }}
             >
-              Create account
+              Join TAYA
             </Link>
           </div>
         </nav>

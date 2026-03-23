@@ -35,6 +35,28 @@ const DOT_RADIUS  = 1.8;   // dot radius in CSS px at z=1, before depth scaling
 // the screen (no seam ever visible).  See zoomMinRef below.
 const ZOOM_MAX = 4;
 
+/** Landing: idle drift — pauses while dragging / momentum / wheel ease */
+const LAND_SPIN_PX_PER_SEC = 12;
+const LAND_SPIN_RAMP_MS = 280;
+const LAND_SPIN_AMP_ATTACK = 14;
+const LAND_SPIN_AMP_RELEASE = 22;
+
+/**
+ * Persists landing pan + idle drift across HomeLanding unmount/remount
+ * (e.g. navigating to /login or /signup and closing back to /).
+ */
+type LandingGlobeDriftSnapshot = {
+  px: number;
+  py: number;
+  z: number;
+  landSpinAmp: number;
+  landSpinAngle: number;
+  vx: number;
+  vy: number;
+  landSpinRampStartAt: number | null;
+};
+let landingGlobeDriftSnapshot: LandingGlobeDriftSnapshot | null = null;
+
 // ── Bowl warp ── screen-space distortion that makes the grid look like a dish
 const BOWL_K     = 0.55;  // how far edges are pushed outward (fraction × r²)
 const BOWL_SCALE = 0.35;  // edge avatars are (1 + BOWL_SCALE × r²) times larger
@@ -761,6 +783,39 @@ export default function AthletesGlobeView({
 }: AthletesGlobeViewProps) {
   const [searchOpen, setSearchOpen] = useState(false);
 
+  const modeRef = useRef(mode);
+  const hydratedRef = useRef(hydrated);
+  modeRef.current = mode;
+  hydratedRef.current = hydrated;
+
+  const landSpinRampStartRef = useRef<number | null>(null);
+  const landSpinPrevTRef = useRef(0);
+  const landSpinAmpRef = useRef(0);
+  const landSpinAngleRef = useRef(0);
+  const landSpinVelTargetRef = useRef({ vx: LAND_SPIN_PX_PER_SEC, vy: 0 });
+  const reduceMotionRef = useRef(false);
+
+  const pickLandingDriftDirection = useCallback(() => {
+    landSpinAngleRef.current += Math.PI * (0.38 + Math.random() * 0.82);
+    const sp = LAND_SPIN_PX_PER_SEC;
+    const a = landSpinAngleRef.current;
+    const vert = 0.36 + Math.random() * 0.38;
+    landSpinVelTargetRef.current = {
+      vx: Math.cos(a) * sp,
+      vy: Math.sin(a) * sp * vert,
+    };
+  }, []);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    reduceMotionRef.current = mq.matches;
+    const onChange = () => {
+      reduceMotionRef.current = mq.matches;
+    };
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
   // Hide bottom nav while search sheet is open (in-app athletes tab only)
   useEffect(() => {
     if (mode !== "app") return;
@@ -803,6 +858,10 @@ export default function AthletesGlobeView({
   const zoomMinRef = useRef(0.5);
   const imagesRef = useRef(new Map<string, HTMLImageElement>());
   const rafDrawRef = useRef<number | null>(null);
+  const ptrs = useRef(new Map<number, { x: number; y: number }>());
+  const rafPanRef = useRef<number | null>(null);
+  const rafZoomRef = useRef<number | null>(null);
+  const rafWheelRef = useRef<number | null>(null);
 
   // Live grid data — always up to date for the draw loop and pointer handlers
   const gridRef = useRef({
@@ -843,7 +902,7 @@ export default function AthletesGlobeView({
     zoomMinRef.current = zoomMin;
     // Fixed target avatar size on landing (~84 px) consistent across devices.
     const TARGET_Z = 68 / AVATAR_SIZE; // z ≈ 0.62
-    const z = clamp(TARGET_Z, zoomMin, ZOOM_MAX);
+    const zDefault = clamp(TARGET_Z, zoomMin, ZOOM_MAX);
 
     // Center on the centroid of all avatar positions so avatars are always
     // in view on landing rather than the geometric center of an empty world.
@@ -854,12 +913,25 @@ export default function AthletesGlobeView({
       worldCx = bpos.reduce((s, p) => s + p.x + AVATAR_SIZE / 2, 0) / bpos.length;
       worldCy = bpos.reduce((s, p) => s + p.y + AVATAR_SIZE / 2, 0) / bpos.length;
     }
+
+    if (mode === "landing" && landingGlobeDriftSnapshot) {
+      const snap = landingGlobeDriftSnapshot;
+      const z = clamp(snap.z, zoomMin, ZOOM_MAX);
+      viewRef.current = { px: snap.px, py: snap.py, z };
+      landSpinAmpRef.current = snap.landSpinAmp;
+      landSpinAngleRef.current = snap.landSpinAngle;
+      landSpinVelTargetRef.current = { vx: snap.vx, vy: snap.vy };
+      landSpinRampStartRef.current = snap.landSpinRampStartAt;
+      landSpinPrevTRef.current = performance.now();
+      return;
+    }
+
     viewRef.current = {
-      px: vw / 2 - worldCx * z,
-      py: vh / 2 - worldCy * z,
-      z,
+      px: vw / 2 - worldCx * zDefault,
+      py: vh / 2 - worldCy * zDefault,
+      z: zDefault,
     };
-  }, [hydrated]);
+  }, [hydrated, mode]);
 
   // ── Canvas DPR resize + perpetual draw loop ──────────────────────────────
   useEffect(() => {
@@ -1033,6 +1105,68 @@ export default function AthletesGlobeView({
       const dpr = window.devicePixelRatio || 1;
       const cssW = avatar.width / dpr;
       const cssH = avatar.height / dpr;
+
+      const now = performance.now();
+      const prevSpinT = landSpinPrevTRef.current || now;
+      const spinDt = Math.min(0.1, Math.max(0, (now - prevSpinT) / 1000));
+      landSpinPrevTRef.current = now;
+
+      const baseLandSpin =
+        modeRef.current === "landing" &&
+        hydratedRef.current &&
+        !reduceMotionRef.current &&
+        ptrs.current.size === 0;
+
+      const noMomentum =
+        rafPanRef.current === null &&
+        rafZoomRef.current === null &&
+        rafWheelRef.current === null;
+
+      const canRampDrift = baseLandSpin && noMomentum;
+
+      if (!canRampDrift) {
+        landSpinRampStartRef.current = null;
+      } else if (landSpinRampStartRef.current === null) {
+        landSpinRampStartRef.current = now;
+      }
+
+      let goalAmp = 0;
+      if (canRampDrift && landSpinRampStartRef.current !== null) {
+        goalAmp = Math.min(1, (now - landSpinRampStartRef.current) / LAND_SPIN_RAMP_MS);
+      }
+
+      const ampSmooth = canRampDrift ? LAND_SPIN_AMP_ATTACK : LAND_SPIN_AMP_RELEASE;
+      landSpinAmpRef.current +=
+        (goalAmp - landSpinAmpRef.current) * Math.min(1, spinDt * ampSmooth);
+
+      const amp = landSpinAmpRef.current;
+      if (amp > 0.0004 && spinDt > 0) {
+        const t = landSpinVelTargetRef.current;
+        const w = amp * amp;
+        const wobVx = Math.sin(now * 0.00106) * 4.8 * w;
+        const wobVy = Math.cos(now * 0.00088) * 3.8 * w;
+        const v = viewRef.current;
+        viewRef.current = {
+          ...v,
+          px: v.px + (t.vx * amp + wobVx) * spinDt,
+          py: v.py + (t.vy * amp + wobVy) * spinDt,
+        };
+      }
+
+      if (modeRef.current === "landing" && hydratedRef.current) {
+        const v = viewRef.current;
+        landingGlobeDriftSnapshot = {
+          px: v.px,
+          py: v.py,
+          z: v.z,
+          landSpinAmp: landSpinAmpRef.current,
+          landSpinAngle: landSpinAngleRef.current,
+          vx: landSpinVelTargetRef.current.vx,
+          vy: landSpinVelTargetRef.current.vy,
+          landSpinRampStartAt: landSpinRampStartRef.current,
+        };
+      }
+
       const { px, py, z } = viewRef.current;
       const {
         TILE_W: tw,
@@ -1094,16 +1228,12 @@ export default function AthletesGlobeView({
   }, []);
 
   // ── Inertia refs ─────────────────────────────────────────────────────────
-  const ptrs = useRef(new Map<number, { x: number; y: number }>());
   const prevPinchDist = useRef(0);
   const velRef = useRef({ x: 0, y: 0 });
   const ptrHistory = useRef<Array<{ x: number; y: number; t: number }>>([]);
   const pinchHistory = useRef<Array<{ dist: number; t: number }>>([]);
   const zoomVelRef = useRef(1);
   const zoomMidRef = useRef({ x: 0, y: 0 });
-  const rafPanRef = useRef<number | null>(null);
-  const rafZoomRef = useRef<number | null>(null);
-  const rafWheelRef = useRef<number | null>(null);
   const wheelTargetRef = useRef<number | null>(null);
   const wheelCursorRef = useRef({ x: 0, y: 0 });
   const didDragRef = useRef(false);
@@ -1275,6 +1405,9 @@ export default function AthletesGlobeView({
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
       stopInertia();
+      if (modeRef.current === "landing") {
+        pickLandingDriftDirection();
+      }
       ptrHistory.current = [];
       pinchHistory.current = [];
       didDragRef.current = false;
@@ -1285,7 +1418,7 @@ export default function AthletesGlobeView({
         prevPinchDist.current = Math.hypot(b.x - a.x, b.y - a.y);
       }
     },
-    [stopInertia],
+    [stopInertia, pickLandingDriftDirection],
   );
 
   const onPointerMove = useCallback(
