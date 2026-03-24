@@ -387,6 +387,8 @@
 html {
   min-height: 100%;
   -webkit-text-size-adjust: 100%;
+  /* Avoid horizontal jump when vertical scrollbar appears/disappears (e.g. slot animations). */
+  scrollbar-gutter: stable;
 }
 
 /* Custom cursor — only while Athletes tab is mounted (immersive globe). See CustomCursor.tsx */
@@ -794,16 +796,93 @@ textarea::placeholder {
   color: var(--input-placeholder);
 }
 
-/* Landing header nav — CSS responsive sizing + hover effects (avoids JS re-renders) */
-.landing-nav {
-  gap: 10px;
+/* Landing header — desktop: wordmark | CTAs; mobile: tappable title toggles theme */
+.landing-header {
+  flex-shrink: 0;
+  position: relative;
+  z-index: 20;
+  padding-top: max(env(safe-area-inset-top), 20px);
+  padding-left: max(20px, env(safe-area-inset-left));
+  padding-right: max(20px, env(safe-area-inset-right));
+  padding-bottom: 20px;
+  margin-bottom: -8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 10px;
+  row-gap: 14px;
 }
 
+.landing-header__wordmark {
+  min-width: 0;
+  align-self: start;
+}
+
+.landing-header__actions-bar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.landing-header__auth {
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .landing-header {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    row-gap: 20px;
+    column-gap: 0;
+  }
+
+  .landing-header__wordmark {
+    grid-column: 1;
+    grid-row: 1;
+    width: 100%;
+    display: block;
+    text-align: left;
+  }
+
+  /* Bigger title on small screens; overrides inline h1 size from TayaWordmark */
+  .landing-header__wordmark > h1 {
+    font-size: clamp(42px, 11.5vw, 62px) !important;
+    line-height: 1.06 !important;
+    text-align: left;
+  }
+
+  .landing-header__actions-bar {
+    grid-column: 1;
+    grid-row: 2;
+    width: 100%;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .landing-header__auth {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+
+/* Landing — headline doubles as theme control */
+.taya-wordmark-theme-toggle {
+  border-radius: 4px;
+  transition: opacity 0.15s ease;
+}
+.taya-wordmark-theme-toggle:active {
+  opacity: 0.88;
+}
+
+/* Landing auth CTAs — equal columns; full width on mobile second row */
 .landing-nav-auth-pair {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 10px;
   align-items: stretch;
+  width: 100%;
 }
 
 .landing-nav-auth-cta {
@@ -814,11 +893,8 @@ textarea::placeholder {
 }
 
 @media (max-width: 520px) {
-  .landing-nav {
-    gap: 8px;
-  }
   .landing-nav-auth-pair {
-    gap: 8px;
+    gap: 10px;
   }
 }
 
@@ -864,6 +940,17 @@ textarea::placeholder {
     font-size: 14px;
     padding: 0 16px;
     min-width: 108px;
+  }
+}
+
+/* Full-width mobile row: slightly larger tap targets than the compact header chip layout */
+@media (max-width: 640px) {
+  .landing-header__auth .landing-nav-login,
+  .landing-header__auth .landing-nav-signup {
+    height: 50px;
+    font-size: 15px;
+    padding: 0 18px;
+    min-width: 0;
   }
 }
 

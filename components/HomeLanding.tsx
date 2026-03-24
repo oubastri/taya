@@ -1,14 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useMemo } from "react";
 import AthletesGlobeView, {
   type AthletesGlobeUser,
 } from "@/components/athletes/AthletesGlobeView";
@@ -40,21 +33,10 @@ const sans = 'var(--font-sans), system-ui, sans-serif';
 export default function HomeLanding() {
   const landingGlobeUsers = useMemo(() => buildLandingGlobeUsers(), []);
   const { theme, toggle: toggleTheme } = useTheme();
-  const [exitingTheme, setExitingTheme] = useState<"light" | "dark" | null>(null);
-  const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleToggleTheme = useCallback(() => {
-    setExitingTheme(theme);
-    if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
-    exitTimerRef.current = setTimeout(() => setExitingTheme(null), 200);
     toggleTheme();
-  }, [theme, toggleTheme]);
-
-  useEffect(() => {
-    return () => {
-      if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
-    };
-  }, []);
+  }, [toggleTheme]);
 
   const headerScrim =
     "linear-gradient(to bottom, var(--background) 0%, var(--background) 12%, color-mix(in srgb, var(--background) 96%, transparent) 38%, color-mix(in srgb, var(--background) 78%, transparent) 62%, color-mix(in srgb, var(--background) 42%, transparent) 84%, transparent 100%)";
@@ -118,127 +100,65 @@ export default function HomeLanding() {
         />
       </div>
 
-      <header
-        style={{
-          flexShrink: 0,
-          position: "relative",
-          zIndex: 20,
-          paddingTop: "max(env(safe-area-inset-top), 20px)",
-          paddingLeft: "max(20px, env(safe-area-inset-left))",
-          paddingRight: "max(20px, env(safe-area-inset-right))",
-          paddingBottom: 20,
-          marginBottom: -8,
-          display: "flex",
-          flexWrap: "wrap",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          gap: 16,
-          rowGap: 14,
-        }}
-      >
-        <div style={{ flex: "1 1 200px", minWidth: 0 }}>
-          <TayaWordmark variant="landing" />
-        </div>
-        <nav
-          aria-label="Account"
-          className="landing-nav"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            flexShrink: 0,
-          }}
-        >
-          {/* Theme toggle — same control as FeedHome */}
-          <button
-            type="button"
-            onClick={handleToggleTheme}
-            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            className="theme-toggle-btn"
-            style={{
-              width: 54,
-              height: 54,
-              borderRadius: "100px",
-              backdropFilter: "blur(24px) saturate(1.8)",
-              WebkitBackdropFilter: "blur(24px) saturate(1.8)",
-              background: "var(--glass-btn-bg)",
-              border: "1px solid var(--glass-btn-border)",
-              boxShadow: "var(--glass-btn-shadow)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              WebkitTapHighlightColor: "transparent",
-              overflow: "hidden",
-              flexShrink: 0,
-              padding: 0,
+      <header className="landing-header">
+        <div className="landing-header__wordmark">
+          <TayaWordmark
+            variant="landing"
+            themeToggle={{
+              onToggle: handleToggleTheme,
+              ariaLabel:
+                theme === "dark" ? "Switch to light mode" : "Switch to dark mode",
             }}
-          >
-            {exitingTheme && (
-              <Image
-                key={`exit-${exitingTheme}`}
-                src={`/icons/dark-light-mode/${exitingTheme === "dark" ? "sun" : "moon"}.svg`}
-                alt=""
-                width={22}
-                height={22}
-                aria-hidden
-                className="activity-icon-auto theme-icon-exit"
-              />
-            )}
-            <Image
-              key={`enter-${theme}`}
-              src={`/icons/dark-light-mode/${theme === "dark" ? "sun" : "moon"}.svg`}
-              alt=""
-              width={22}
-              height={22}
-              aria-hidden
-              className="activity-icon-auto theme-icon-enter"
-            />
-          </button>
+          />
+        </div>
 
-          <div className="landing-nav-auth-pair">
-            <Link
-              href="/login"
-              className="landing-nav-login landing-nav-auth-cta active:opacity-85 active:scale-[0.98]"
-              style={{
-                fontFamily: sans,
-                fontWeight: 400,
-                letterSpacing: "-0.02em",
-                borderRadius: 100,
-                textDecoration: "none",
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                WebkitTapHighlightColor: "transparent",
-                border: "2px solid var(--foreground)",
-              }}
-            >
-              Login
-            </Link>
+        <div className="landing-header__actions-bar">
+          <nav className="landing-header__auth" aria-label="Account">
+            <div className="landing-nav-auth-pair">
+              <Link
+                href="/login"
+                className="landing-nav-login landing-nav-auth-cta active:opacity-85 active:scale-[0.98]"
+                style={{
+                  fontFamily: sans,
+                  fontWeight: 400,
+                  letterSpacing: "-0.02em",
+                  borderRadius: 100,
+                  textDecoration: "none",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  WebkitTapHighlightColor: "transparent",
+                  border: "2px solid var(--foreground)",
+                }}
+              >
+                Login
+              </Link>
 
-            <Link
-              href="/signup"
-              className="landing-nav-signup landing-nav-auth-cta active:opacity-90 active:scale-[0.98]"
-              style={{
-                fontFamily: sans,
-                fontWeight: 400,
-                letterSpacing: "-0.02em",
-                borderRadius: 100,
-                textDecoration: "none",
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                WebkitTapHighlightColor: "transparent",
-                background: "var(--cta-bg)",
-                color: "var(--cta-color)",
-                border: "1px solid color-mix(in srgb, var(--foreground) 14%, transparent)",
-                backdropFilter: "blur(14px) saturate(1.2)",
-                WebkitBackdropFilter: "blur(14px) saturate(1.2)",
-              }}
-            >
-              Join TAYA
-            </Link>
-          </div>
-        </nav>
+              <Link
+                href="/signup"
+                className="landing-nav-signup landing-nav-auth-cta active:opacity-90 active:scale-[0.98]"
+                style={{
+                  fontFamily: sans,
+                  fontWeight: 400,
+                  letterSpacing: "-0.02em",
+                  borderRadius: 100,
+                  textDecoration: "none",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  WebkitTapHighlightColor: "transparent",
+                  background: "var(--cta-bg)",
+                  color: "var(--cta-color)",
+                  border: "1px solid color-mix(in srgb, var(--foreground) 14%, transparent)",
+                  backdropFilter: "blur(14px) saturate(1.2)",
+                  WebkitBackdropFilter: "blur(14px) saturate(1.2)",
+                }}
+              >
+                Join TAYA
+              </Link>
+            </div>
+          </nav>
+        </div>
       </header>
 
       <main

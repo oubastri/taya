@@ -12,9 +12,9 @@ export type LandingSlotAnchor = "left" | "center" | "right";
 type LandingSlotStripProps = {
   slotKey: string;
   children: ReactNode;
-  /** Min height so percent-based slide does not collapse layout */
+  /** Fixed strip height (shell + absolute layers share this box) */
   minHeight: string | number;
-  /** Horizontal anchor for the strip; animated layers are absolutely positioned so width stays stable */
+  /** Horizontal alignment inside the strip */
   anchor: LandingSlotAnchor;
   /** Optional floor width (needed for center anchor so the box does not collapse to 0) */
   minWidth?: string | number;
@@ -37,8 +37,8 @@ const SLOT_OPACITY_EXIT = 0.08;
 const SLOT_Y = "55%" as const;
 
 /**
- * Vertical slot swap: outgoing exits, then incoming enters (`wait` avoids two lines visible at once).
- * Motion layer is in-flow (relative) so slot height grows with wrapped text; minHeight is a floor only.
+ * Vertical slot swap with `mode="wait"`. Motion layers are position:absolute inside a fixed-height
+ * shell so enter/exit don’t change flow width/height (reduces landing grid/header jitter).
  */
 export function LandingSlotStrip({
   slotKey,
@@ -52,23 +52,26 @@ export function LandingSlotStrip({
   const reduce = useReducedMotion();
   const isCenter = anchor === "center";
 
-  /** In-flow height so wrapped text / descenders are not clipped; width fills the grid cell */
-  const flexRow = {
-    display: "flex" as const,
-    alignItems: "center" as const,
-    width: "100%" as const,
-    maxWidth: "100%" as const,
-    boxSizing: "border-box" as const,
-    ...(isCenter
-      ? { justifyContent: "center" as const }
+  const justify =
+    isCenter
+      ? ("center" as const)
       : anchor === "right"
-        ? { justifyContent: "flex-end" as const }
-        : { justifyContent: "flex-start" as const }),
-  } satisfies CSSProperties;
+        ? ("flex-end" as const)
+        : ("flex-start" as const);
 
-  const motionPos = reduce
-    ? flexRow
-    : ({ position: "relative" as const, ...flexRow } satisfies CSSProperties);
+  const layerStyle: CSSProperties = {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    width: "100%",
+    height: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: justify,
+    boxSizing: "border-box",
+    maxWidth: "100%",
+    overflow: "hidden",
+  };
 
   return (
     <div
@@ -76,6 +79,8 @@ export function LandingSlotStrip({
       style={{
         position: "relative",
         overflow: "hidden",
+        /* Fixed block size: in-flow min-height alone let AnimatePresence / motion reflow siblings */
+        height: minHeight,
         minHeight,
         minWidth: minWidthProp,
         width: reduce ? "auto" : "100%",
@@ -85,6 +90,7 @@ export function LandingSlotStrip({
       <AnimatePresence initial={false} mode="wait">
         <motion.div
           key={slotKey}
+          layout={false}
           initial={reduce ? false : { y: `-${SLOT_Y}`, opacity: 0 }}
           animate={
             reduce
@@ -110,10 +116,7 @@ export function LandingSlotStrip({
                   },
                 }
           }
-          style={{
-            ...motionPos,
-            minHeight,
-          }}
+          style={layerStyle}
         >
           {children}
         </motion.div>

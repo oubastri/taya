@@ -20,12 +20,12 @@ const sans = 'var(--font-sans), system-ui, sans-serif';
 const PROFILE_ROTATE_MS = 2800;
 const ACTIVITY_ROTATE_MS = 3200;
 
-/** Tighter on narrow viewports so profile + activity stay side-by-side */
-const HERO_FONT_SIZE = "clamp(16px, 3.5vw, 70px)";
-const AVATAR_PX = "clamp(34px, 7vw, 108px)";
-const SLOT_MIN_H = "clamp(38px, 8.5vw, 112px)";
-const ICON_BOX_PX = "clamp(34px, 7vw, 108px)";
-const HERO_INNER_GAP = "clamp(6px, 1.4vw, 18px)";
+/** Tighter on narrow viewports so profile + activity stay side-by-side; min bumped for mobile legibility */
+const HERO_FONT_SIZE = "clamp(17px, 4.1vw, 70px)";
+const AVATAR_PX = "clamp(42px, 9.2vw, 108px)";
+const SLOT_MIN_H = "clamp(46px, 10.2vw, 112px)";
+const ICON_BOX_PX = "clamp(42px, 9.2vw, 108px)";
+const HERO_INNER_GAP = "clamp(7px, 1.55vw, 18px)";
 const HERO_COLUMN_GAP = "clamp(10px, 2.8vw, 40px)";
 const HERO_DEMO_TILE_RADIUS = "32%";
 
@@ -35,26 +35,26 @@ const PAGE_PAD_RIGHT = "max(20px, env(safe-area-inset-right))";
 
 /** Shared with landing globe / demos — profile strip + spatial view */
 export const LANDING_DEMO_PROFILE_ROWS: { src: string; handle: string }[] = [
-  { src: "/profilephotos/user1.png", handle: "@paulito" },
-  { src: "/profilephotos/user2.png", handle: "@mara_runs" },
-  { src: "/profilephotos/user3.png", handle: "@jas_lift" },
-  { src: "/profilephotos/user4.png", handle: "@zoetrails" },
-  { src: "/profilephotos/user5.png", handle: "@swimdean" },
-  { src: "/profilephotos/user6.jpg", handle: "@court_volley" },
-  { src: "/profilephotos/user7.jpg", handle: "@nicospin" },
-  { src: "/profilephotos/user8.jpg", handle: "@alex_box" },
-  { src: "/profilephotos/user9.jpg", handle: "@gracie_golf" },
-  { src: "/profilephotos/user10.jpg", handle: "@luis_surf" },
-  { src: "/profilephotos/user11.jpg", handle: "@han_hiit" },
-  { src: "/profilephotos/user12.jpg", handle: "@rowan_row" },
-  { src: "/profilephotos/user13.jpg", handle: "@skikiwi" },
-  { src: "/profilephotos/user14.jpg", handle: "@mia_dance" },
-  { src: "/profilephotos/user15.jpg", handle: "@zenyuki" },
-  { src: "/profilephotos/user16.jpg", handle: "@carter_cf" },
-  { src: "/profilephotos/user17.jpg", handle: "@pete_pickle" },
-  { src: "/profilephotos/user18.jpg", handle: "@tess_tennis" },
-  { src: "/profilephotos/user19.jpg", handle: "@liv_hike" },
-  { src: "/profilephotos/user20.jpg", handle: "@mo_mobility" },
+  { src: "/profilephotos/user1.png", handle: "@pjo" },
+  { src: "/profilephotos/user2.png", handle: "@mara.zip" },
+  { src: "/profilephotos/user3.png", handle: "@jasprr" },
+  { src: "/profilephotos/user4.png", handle: "@zo3e" },
+  { src: "/profilephotos/user5.png", handle: "@dnvn" },
+  { src: "/profilephotos/user6.jpg", handle: "@vickks" },
+  { src: "/profilephotos/user7.jpg", handle: "@nico.tm" },
+  { src: "/profilephotos/user8.jpg", handle: "@uh.lex" },
+  { src: "/profilephotos/user9.jpg", handle: "@graci3st" },
+  { src: "/profilephotos/user10.jpg", handle: "@luisito" },
+  { src: "/profilephotos/user11.jpg", handle: "@han_raw" },
+  { src: "/profilephotos/user12.jpg", handle: "@rowanjpg" },
+  { src: "/profilephotos/user13.jpg", handle: "@kiyoxx" },
+  { src: "/profilephotos/user14.jpg", handle: "@miawmiaw" },
+  { src: "/profilephotos/user15.jpg", handle: "@zen.yuki" },
+  { src: "/profilephotos/user16.jpg", handle: "@crt3r" },
+  { src: "/profilephotos/user17.jpg", handle: "@pete2go" },
+  { src: "/profilephotos/user18.jpg", handle: "@tesssss" },
+  { src: "/profilephotos/user19.jpg", handle: "@livvyxo" },
+  { src: "/profilephotos/user20.jpg", handle: "@mokochan" },
 ];
 
 function activityConnectorHighlight(type: ActivityType): {
@@ -96,10 +96,10 @@ function useIconSizeForLanding() {
   useLayoutEffect(() => {
     const apply = () => {
       const w = window.innerWidth;
-      if (w < 400) setIconSize(18);
-      else if (w < 480) setIconSize(22);
-      else if (w < 640) setIconSize(30);
-      else if (w < 720) setIconSize(36);
+      if (w < 400) setIconSize(22);
+      else if (w < 480) setIconSize(26);
+      else if (w < 640) setIconSize(34);
+      else if (w < 720) setIconSize(38);
       else if (w < 1100) setIconSize(48);
       else setIconSize(56);
     };
@@ -153,7 +153,7 @@ export function LandingFigmaHero() {
       anchor="left"
       slotKey={profile.handle}
       minHeight={SLOT_MIN_H}
-      style={{ width: "100%" }}
+      style={{ width: "100%", minWidth: 0 }}
     >
       <div
         style={{
@@ -165,7 +165,7 @@ export function LandingFigmaHero() {
           gap: HERO_INNER_GAP,
           width: "100%",
           minWidth: 0,
-          overflow: "visible",
+          overflow: "hidden",
         }}
       >
         <div
@@ -183,7 +183,7 @@ export function LandingFigmaHero() {
             alt=""
             width={220}
             height={220}
-            sizes="(max-width: 768px) 96px, 220px"
+            sizes="(max-width: 768px) 120px, 220px"
             style={{
               width: "100%",
               height: "100%",
@@ -195,7 +195,10 @@ export function LandingFigmaHero() {
           style={{
             ...typeStyle,
             whiteSpace: "nowrap",
-            flexShrink: 0,
+            flexShrink: 1,
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
           }}
         >
           {profile.handle}
@@ -221,14 +224,17 @@ export function LandingFigmaHero() {
           gap: HERO_INNER_GAP,
           width: "100%",
           minWidth: 0,
-          overflow: "visible",
+          overflow: "hidden",
         }}
       >
         <span
           style={{
             ...typeStyle,
             whiteSpace: "nowrap",
-            flexShrink: 0,
+            flexShrink: 1,
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
             textAlign: "right",
           }}
         >
@@ -266,6 +272,7 @@ export function LandingFigmaHero() {
         paddingRight: PAGE_PAD_RIGHT,
         minHeight: SLOT_MIN_H,
         display: "grid",
+        /* Fixed tracks only (no content-sized column) — profile handle ellipsis inside cell */
         gridTemplateColumns: "minmax(0, 0.88fr) minmax(0, 1.12fr)",
         alignItems: "center",
         columnGap: HERO_COLUMN_GAP,
@@ -278,6 +285,7 @@ export function LandingFigmaHero() {
           alignItems: "center",
           width: "100%",
           minWidth: 0,
+          overflow: "hidden",
         }}
       >
         {profileBlock}
@@ -289,8 +297,7 @@ export function LandingFigmaHero() {
           alignItems: "center",
           width: "100%",
           minWidth: 0,
-          position: "relative",
-          zIndex: 1,
+          overflow: "hidden",
         }}
       >
         {activityBlock}

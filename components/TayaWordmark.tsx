@@ -1,7 +1,14 @@
+export type TayaWordmarkThemeToggle = {
+  onToggle: () => void;
+  ariaLabel: string;
+};
+
 type TayaWordmarkProps = {
   /** `feed` matches the feed header; `hero` is larger for landing; `figma` matches auth onboarding (457:3158); `landing` matches Figma MVP hero (468:3297) */
   variant?: "feed" | "hero" | "figma" | "landing";
   className?: string;
+  /** When set, the title is a control that calls `onToggle` (e.g. landing page theme switch). */
+  themeToggle?: TayaWordmarkThemeToggle;
 };
 
 const feedType: React.CSSProperties = {
@@ -32,7 +39,11 @@ const landingType: React.CSSProperties = {
   lineHeight: 1.02,
 };
 
-export function TayaWordmark({ variant = "feed", className }: TayaWordmarkProps) {
+export function TayaWordmark({
+  variant = "feed",
+  className,
+  themeToggle,
+}: TayaWordmarkProps) {
   const type =
     variant === "hero"
       ? heroType
@@ -41,6 +52,11 @@ export function TayaWordmark({ variant = "feed", className }: TayaWordmarkProps)
         : variant === "landing"
           ? landingType
           : feedType;
+  const title = (
+    <>
+      To All You <span style={{ color: "var(--accent)" }}>Athletes</span>
+    </>
+  );
   return (
     <h1
       className={className}
@@ -54,7 +70,33 @@ export function TayaWordmark({ variant = "feed", className }: TayaWordmarkProps)
         ...type,
       }}
     >
-      To All You <span style={{ color: "var(--accent)" }}>Athletes</span>
+      {themeToggle ? (
+        <button
+          type="button"
+          onClick={themeToggle.onToggle}
+          aria-label={themeToggle.ariaLabel}
+          className="taya-wordmark-theme-toggle"
+          style={{
+            display: "block",
+            width: "100%",
+            margin: 0,
+            padding: 0,
+            border: "none",
+            background: "none",
+            cursor: "pointer",
+            font: "inherit",
+            color: "inherit",
+            letterSpacing: "inherit",
+            textAlign: "inherit",
+            lineHeight: "inherit",
+            WebkitTapHighlightColor: "transparent",
+          }}
+        >
+          {title}
+        </button>
+      ) : (
+        title
+      )}
     </h1>
   );
 }
