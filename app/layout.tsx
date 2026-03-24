@@ -1,18 +1,18 @@
 import type { Metadata, Viewport } from "next";
 import { Lexend_Deca, B612_Mono } from "next/font/google";
 import "./globals.css";
-import { DayDetailSheetProvider } from "@/contexts/day-detail-sheet";
 import { LogSheetProvider } from "@/contexts/log-sheet";
 import { ToastProvider } from "@/contexts/toast";
 import { BottomNav } from "@/components/BottomNav";
-import { DayDetailSheet } from "@/components/DayDetailSheet";
 import { LogSheet } from "@/components/LogSheet";
 import { DevPanel } from "@/components/DevPanel";
+import { Observability } from "@/components/Observability";
 
 const lexendDeca = Lexend_Deca({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-sans",
+  weight: ["400", "500", "600", "700"],
 });
 
 const b612Mono = B612_Mono({
@@ -61,13 +61,11 @@ export default function RootLayout({
       <body className={`min-h-full antialiased ${lexendDeca.className}`}>
         <ToastProvider>
           <LogSheetProvider>
-            <DayDetailSheetProvider>
-              {children}
-              <BottomNav />
-              <DayDetailSheet />
-              <LogSheet />
-              <DevPanel />
-            </DayDetailSheetProvider>
+            {children}
+            <BottomNav />
+            <LogSheet />
+            <DevPanel />
+            <Observability />
           </LogSheetProvider>
         </ToastProvider>
       </body>

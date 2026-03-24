@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { loadLikersForEntity } from "@/lib/load-likers";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -24,6 +31,7 @@ import {
 import type { FeedItem } from "@/hooks/use-friends";
 import type { LikePerson } from "@/types/likes";
 import { UserAvatar } from "@/components/UserAvatar";
+import { useTheme } from "@/hooks/use-theme";
 
 /** Sticky top bar — stays pinned while profile content scrolls */
 const PROFILE_STICKY_TOP_BAR: CSSProperties = {
@@ -97,6 +105,15 @@ export default function ProfilePage() {
   const { workouts, stats, hydrated: wh, deleteWorkout } = useWorkouts();
   const { friends } = useFriends();
   const { openForEdit } = useLogSheet();
+  const { theme, toggle: toggleTheme } = useTheme();
+  const [exitingTheme, setExitingTheme] = useState<"light" | "dark" | null>(null);
+  const themeExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleToggleTheme = useCallback(() => {
+    setExitingTheme(theme);
+    if (themeExitTimerRef.current) clearTimeout(themeExitTimerRef.current);
+    themeExitTimerRef.current = setTimeout(() => setExitingTheme(null), 200);
+    toggleTheme();
+  }, [theme, toggleTheme]);
   const [section, setSection] = useState<ProfileSection>("about");
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState("");
@@ -170,6 +187,12 @@ export default function ProfilePage() {
     document.body.classList.add("search-open");
     return () => document.body.classList.remove("search-open");
   }, [socialSheet]);
+
+  useEffect(() => {
+    return () => {
+      if (themeExitTimerRef.current) clearTimeout(themeExitTimerRef.current);
+    };
+  }, []);
 
   const handleNameBlur = () => {
     if (nameInput.trim()) updateUser({ name: nameInput.trim() });
@@ -314,6 +337,34 @@ export default function ProfilePage() {
         }}
       >
         <header style={{ ...PROFILE_STICKY_TOP_BAR, justifyContent: "flex-end" }}>
+          <button
+            type="button"
+            onClick={handleToggleTheme}
+            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            className="theme-toggle-btn active:scale-95"
+            style={{ ...PROFILE_GLASS_CIRCLE_STYLE, overflow: "hidden" }}
+          >
+            {exitingTheme && (
+              <Image
+                key={`exit-${exitingTheme}`}
+                src={`/icons/dark-light-mode/${exitingTheme === "dark" ? "sun" : "moon"}.svg`}
+                alt=""
+                width={22}
+                height={22}
+                aria-hidden
+                className={`activity-icon-auto theme-icon-exit`}
+              />
+            )}
+            <Image
+              key={`enter-${theme}`}
+              src={`/icons/dark-light-mode/${theme === "dark" ? "sun" : "moon"}.svg`}
+              alt=""
+              width={22}
+              height={22}
+              aria-hidden
+              className={`activity-icon-auto theme-icon-enter`}
+            />
+          </button>
           <button
             type="button"
             onClick={() => router.push("/settings")}

@@ -6,15 +6,38 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
 } from "react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { AthletesCounter } from "@/components/AthletesCounter";
 import { CustomCursor } from "@/components/CustomCursor";
+import { useTheme } from "@/hooks/use-theme";
+import { SHEET_EXIT_MS, SHEET_SPRING } from "@/lib/sheetMotion";
 import type { FriendData } from "@/types/user";
 
 // ─── constants ───────────────────────────────────────────────────────────────
 const NAV_HEIGHT = 54;
 const FONT = '"Lexend Deca", -apple-system, sans-serif';
+
+const APP_TOP_BAR_GLASS_BTN: CSSProperties = {
+  width: NAV_HEIGHT,
+  height: NAV_HEIGHT,
+  borderRadius: "100px",
+  backdropFilter: "blur(24px) saturate(1.8)",
+  WebkitBackdropFilter: "blur(24px) saturate(1.8)",
+  background: "var(--glass-btn-bg)",
+  border: "1px solid var(--glass-btn-border)",
+  boxShadow: "var(--glass-btn-shadow)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  cursor: "pointer",
+  WebkitTapHighlightColor: "transparent",
+  padding: 0,
+  flexShrink: 0,
+};
 
 const AVATAR_SIZE = 110;   // rounded-square side length
 const AVATAR_RADIUS = 32;  // corner radius
@@ -98,6 +121,8 @@ export type AthletesGlobeViewProps = {
   dotsOverlayAboveChrome?: boolean;
   /** Rendered between avatar and dot canvases (fixed, pointer-events: none). */
   chromeOverlay?: ReactNode;
+  /** App mode: open the search sheet once on mount (e.g. dev menu `?sheet=search`). */
+  openSearchOnMount?: boolean;
 };
 
 // Push overlapping avatar positions apart so neither the image nor the text
@@ -405,7 +430,6 @@ function SearchSheet({
   const sheetRef = useRef<HTMLDivElement>(null);
   const scrimRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef({ active: false, startY: 0, dy: 0 });
-  const SPRING = "0.38s cubic-bezier(0.32, 0.72, 0, 1)";
 
   // Trigger enter animation on next paint
   useEffect(() => {
@@ -429,7 +453,7 @@ function SearchSheet({
 
   const close = useCallback(() => {
     setOpen(false);
-    setTimeout(onClose, 380);
+    window.setTimeout(onClose, SHEET_EXIT_MS);
   }, [onClose]);
 
   useEffect(() => {
@@ -461,25 +485,25 @@ function SearchSheet({
       // Dismiss: animate sheet and scrim out in px so units match
       const vh = window.innerHeight;
       if (sheetRef.current) {
-        sheetRef.current.style.transition = `transform ${SPRING}`;
+        sheetRef.current.style.transition = `transform ${SHEET_SPRING}`;
         sheetRef.current.style.transform = `translateX(-50%) translateY(${vh}px)`;
       }
       if (scrimRef.current) {
-        scrimRef.current.style.transition = `opacity 0.38s ease`;
+        scrimRef.current.style.transition = `opacity ${SHEET_SPRING}`;
         scrimRef.current.style.opacity = "0";
       }
-      setTimeout(onClose, 380);
+      window.setTimeout(onClose, SHEET_EXIT_MS);
     } else {
       // Snap back
       if (sheetRef.current) {
-        sheetRef.current.style.transition = `transform ${SPRING}`;
+        sheetRef.current.style.transition = `transform ${SHEET_SPRING}`;
         sheetRef.current.style.transform = "translateX(-50%) translateY(0)";
-        setTimeout(() => {
+        window.setTimeout(() => {
           if (sheetRef.current) {
             sheetRef.current.style.transition = "";
             sheetRef.current.style.transform = "";
           }
-        }, 380);
+        }, SHEET_EXIT_MS);
       }
     }
   };
@@ -506,7 +530,7 @@ function SearchSheet({
           zIndex: 99,
           background: "var(--overlay)",
           opacity: open ? 1 : 0,
-          transition: `opacity ${SPRING}`,
+          transition: `opacity ${SHEET_SPRING}`,
         }}
       />
 
@@ -522,8 +546,6 @@ function SearchSheet({
           height: "85svh",
           zIndex: 100,
           background: "var(--sheet-bg)",
-          backdropFilter: "blur(40px) saturate(1.8)",
-          WebkitBackdropFilter: "blur(40px) saturate(1.8)",
           borderRadius: "32px 32px 0 0",
           boxShadow: "var(--sheet-shadow)",
           display: "flex",
@@ -531,7 +553,7 @@ function SearchSheet({
           overflow: "hidden",
           fontFamily: "var(--font-sans), sans-serif",
           transform: open ? "translateX(-50%)" : "translateX(-50%) translateY(100%)",
-          transition: `transform ${SPRING}`,
+          transition: `transform ${SHEET_SPRING}`,
         }}
       >
         {/* Drag handle */}
@@ -780,8 +802,31 @@ export default function AthletesGlobeView({
   showAvatarLabels = true,
   dotsOverlayAboveChrome = false,
   chromeOverlay = null,
+  openSearchOnMount = false,
 }: AthletesGlobeViewProps) {
+  const router = useRouter();
+  const { theme, toggle: toggleTheme } = useTheme();
+  const [exitingTheme, setExitingTheme] = useState<"light" | "dark" | null>(null);
+  const themeExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleToggleTheme = useCallback(() => {
+    setExitingTheme(theme);
+    if (themeExitTimerRef.current) clearTimeout(themeExitTimerRef.current);
+    themeExitTimerRef.current = setTimeout(() => setExitingTheme(null), 200);
+    toggleTheme();
+  }, [theme, toggleTheme]);
+
   const [searchOpen, setSearchOpen] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (themeExitTimerRef.current) clearTimeout(themeExitTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (mode !== "app" || !openSearchOnMount) return;
+    setSearchOpen(true);
+  }, [mode, openSearchOnMount]);
 
   const modeRef = useRef(mode);
   const hydratedRef = useRef(hydrated);
@@ -1612,45 +1657,85 @@ export default function AthletesGlobeView({
             </div>
           </div>
 
-          {/* ── search button ────────────────────────────────────────────────── */}
-          <button
-            type="button"
-            onClick={() => setSearchOpen(true)}
+          {/* ── theme, settings, search (L→R: theme, settings, search at screen edge) ── */}
+          <div
             style={{
               position: "fixed",
               top: "max(env(safe-area-inset-top), 20px)",
               right: 16,
               zIndex: 50,
-              width: NAV_HEIGHT,
-              height: NAV_HEIGHT,
-              borderRadius: "100px",
-              backdropFilter: "blur(24px) saturate(1.8)",
-              WebkitBackdropFilter: "blur(24px) saturate(1.8)",
-              background: "var(--glass-btn-bg)",
-              border: "1px solid var(--glass-btn-border)",
-              boxShadow: "var(--glass-btn-shadow)",
               display: "flex",
+              flexDirection: "row",
               alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              WebkitTapHighlightColor: "transparent",
+              gap: 8,
             }}
-            aria-label="Search people"
           >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="var(--glass-btn-icon)"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              aria-hidden
+            <button
+              type="button"
+              onClick={handleToggleTheme}
+              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              className="theme-toggle-btn active:scale-95"
+              style={{ ...APP_TOP_BAR_GLASS_BTN, overflow: "hidden" }}
             >
-              <circle cx="11" cy="11" r="7" />
-              <line x1="16.5" y1="16.5" x2="22" y2="22" />
-            </svg>
-          </button>
+              {exitingTheme && (
+                <Image
+                  key={`exit-${exitingTheme}`}
+                  src={`/icons/dark-light-mode/${exitingTheme === "dark" ? "sun" : "moon"}.svg`}
+                  alt=""
+                  width={22}
+                  height={22}
+                  aria-hidden
+                  className={`activity-icon-auto theme-icon-exit`}
+                />
+              )}
+              <Image
+                key={`enter-${theme}`}
+                src={`/icons/dark-light-mode/${theme === "dark" ? "sun" : "moon"}.svg`}
+                alt=""
+                width={22}
+                height={22}
+                aria-hidden
+                className={`activity-icon-auto theme-icon-enter`}
+              />
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push("/settings")}
+              aria-label="Settings"
+              style={APP_TOP_BAR_GLASS_BTN}
+              className="active:scale-95"
+            >
+              <Image
+                src="/icons/nav/dots.svg"
+                alt=""
+                width={20}
+                height={20}
+                aria-hidden
+                className="nav-btn-icon"
+              />
+            </button>
+            <button
+              type="button"
+              onClick={() => setSearchOpen(true)}
+              style={APP_TOP_BAR_GLASS_BTN}
+              className="active:scale-95"
+              aria-label="Search people"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="var(--glass-btn-icon)"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                aria-hidden
+              >
+                <circle cx="11" cy="11" r="7" />
+                <line x1="16.5" y1="16.5" x2="22" y2="22" />
+              </svg>
+            </button>
+          </div>
 
           {/* ── search sheet ─────────────────────────────────────────────────── */}
           {searchOpen && (

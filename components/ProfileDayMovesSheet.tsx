@@ -1,8 +1,7 @@
 "use client";
 
 import { useRef, type CSSProperties, type ReactNode } from "react";
-
-const SPRING = "0.38s cubic-bezier(0.32, 0.72, 0, 1)";
+import { SHEET_EXIT_MS, SHEET_SPRING } from "@/lib/sheetMotion";
 
 export function formatProfileDaySheetDateLabel(dateStr: string): string {
   const today = new Date().toISOString().slice(0, 10);
@@ -58,23 +57,23 @@ export function ProfileDayMovesSheet({
     if (dy > 90) {
       const vh = window.innerHeight;
       if (sheetRef.current) {
-        sheetRef.current.style.transition = `transform ${SPRING}`;
+        sheetRef.current.style.transition = `transform ${SHEET_SPRING}`;
         sheetRef.current.style.transform = `translateX(-50%) translateY(${vh}px)`;
       }
       if (scrimRef.current) {
-        scrimRef.current.style.transition = "opacity 0.38s ease";
+        scrimRef.current.style.transition = `opacity ${SHEET_SPRING}`;
         scrimRef.current.style.opacity = "0";
       }
-      onClose();
+      window.setTimeout(onClose, SHEET_EXIT_MS);
     } else if (sheetRef.current) {
-      sheetRef.current.style.transition = `transform ${SPRING}`;
+      sheetRef.current.style.transition = `transform ${SHEET_SPRING}`;
       sheetRef.current.style.transform = "translateX(-50%) translateY(0)";
-      setTimeout(() => {
+      window.setTimeout(() => {
         if (sheetRef.current) {
           sheetRef.current.style.transition = "";
           sheetRef.current.style.transform = "";
         }
-      }, 400);
+      }, SHEET_EXIT_MS);
     }
   };
 
@@ -90,7 +89,7 @@ export function ProfileDayMovesSheet({
           zIndex: 99,
           background: "var(--overlay)",
           opacity: open ? 1 : 0,
-          transition: `opacity ${SPRING}`,
+          transition: `opacity ${SHEET_SPRING}`,
         }}
       />
       <div
@@ -106,8 +105,6 @@ export function ProfileDayMovesSheet({
           maxWidth: 428,
           zIndex: 100,
           background: "var(--sheet-bg)",
-          backdropFilter: "blur(40px) saturate(1.8)",
-          WebkitBackdropFilter: "blur(40px) saturate(1.8)",
           borderRadius: "32px 32px 0 0",
           boxShadow: "var(--sheet-shadow)",
           display: "flex",
@@ -115,7 +112,7 @@ export function ProfileDayMovesSheet({
           overflow: "hidden",
           maxHeight: "82svh",
           transform: open ? "translateX(-50%)" : "translateX(-50%) translateY(100%)",
-          transition: `transform ${SPRING}`,
+          transition: `transform ${SHEET_SPRING}`,
         }}
       >
         <div

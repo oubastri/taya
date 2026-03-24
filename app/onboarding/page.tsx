@@ -1,23 +1,47 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { getAdapter } from "@/lib/data-adapter";
-import { UserAvatar } from "@/components/UserAvatar";
 import { PROMPT_OPTIONS, type ProfilePrompt } from "@/types/user";
+import { OnboardingPhotoPlaceholder } from "@/components/onboarding/OnboardingPhotoPlaceholder";
 import { normalizeHandle, validateHandleFormat } from "@/lib/handle";
 import { AuthShell } from "@/components/auth/AuthShell";
-import { FigmaAuthHeader } from "@/components/auth/FigmaAuthHeader";
-import { FigmaFieldCard } from "@/components/auth/FigmaFieldCard";
+import { TayaWordmark } from "@/components/TayaWordmark";
 import {
-  figmaFieldCard,
-  figmaFieldInput,
-  figmaFieldLabel,
   figmaPrimaryBtn,
   figmaPrimaryBtnDisabled,
   figmaErrorText,
+  figmaPageTitle,
 } from "@/components/auth/figmaAuthStyles";
+import { AutoHeightTextarea } from "@/components/settings/AutoHeightTextarea";
+import { SettingsCharCounter } from "@/components/settings/SettingsCharCounter";
+import {
+  hubCard,
+  labelText,
+  valueText,
+  valueInput,
+  fieldErrorText,
+} from "@/components/settings/settingsHubStyles";
+import {
+  handleCharLimitKeyDown,
+  handleCharLimitPaste,
+} from "@/components/settings/settingsCharLimitHandlers";
+
+const SETTINGS_PROFILE_EDIT_ICON = "/icons/nav/edit.svg?v=5";
+const SETTINGS_VERIFY_ICON = "/icons/nav/verify.svg?v=6";
+const PROFILE_AVATAR = 84;
+const EDIT_FAB = 32;
+const MOTTO_MAX = 52;
+
+/** Matches `components/FeedHome.tsx` feed header so the wordmark sits in the same place. */
+const FEED_HEADER_STYLE: React.CSSProperties = {
+  padding: "max(env(safe-area-inset-top), 20px) 20px 56px",
+  position: "relative",
+  width: "100%",
+  boxSizing: "border-box",
+};
 
 function toHandle(name: string): string {
   return name
@@ -27,10 +51,12 @@ function toHandle(name: string): string {
     .slice(0, 20);
 }
 
-type Step = "name" | "handle" | "photo" | "location" | "tagline" | "prompts";
+type Step = "name" | "handle" | "photo" | "tagline" | "prompts";
 
-const TOTAL_STEPS = 6;
+const TOTAL_STEPS = 5;
 const isMockMode = process.env.NEXT_PUBLIC_DATA_MODE !== "real";
+
+type HandleUiStatus = "idle" | "checking" | "ok" | "taken" | "invalid";
 
 const backBtnStyle: React.CSSProperties = {
   background: "none",
@@ -85,8 +111,32 @@ function OnboardingFrame({
   children: React.ReactNode;
 }) {
   return (
-    <AuthShell showBack={false}>
-      <FigmaAuthHeader title={title} subtitle={subtitle} />
+    <AuthShell
+      showBack={false}
+      hideHeader
+      beforeBody={
+        <header style={FEED_HEADER_STYLE}>
+          <TayaWordmark variant="feed" />
+        </header>
+      }
+    >
+      <div style={{ marginBottom: 20 }}>
+        <p style={{ ...figmaPageTitle, margin: 0 }}>{title}</p>
+        {subtitle ? (
+          <p
+            style={{
+              margin: "10px 0 0",
+              fontSize: 15,
+              fontWeight: 400,
+              color: "var(--foreground-muted)",
+              lineHeight: 1.5,
+              fontFamily: "var(--font-sans), sans-serif",
+            }}
+          >
+            {subtitle}
+          </p>
+        ) : null}
+      </div>
       <ProgressRow step={step} />
       {children}
     </AuthShell>
@@ -96,23 +146,82 @@ function OnboardingFrame({
 export default function OnboardingPage() {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
+  const taglineCounterRef = useRef<HTMLParagraphElement>(null);
+  const promptCounterRefs = useRef<(HTMLParagraphElement | null)[]>([]);
+
   const [step, setStep] = useState<Step>("name");
-  const [name, setName] = useState("");
-  const [handle, setHandle] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [handleInput, setHandleInput] = useState("");
   const [cleanHandle, setCleanHandle] = useState("");
   const [handleError, setHandleError] = useState<string | null>(null);
+  const [handleStatus, setHandleStatus] = useState<HandleUiStatus>("idle");
+  const [onboardingUserId, setOnboardingUserId] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [location, setLocation] = useState("");
   const [tagline, setTagline] = useState("");
   const [promptAnswers, setPromptAnswers] = useState<string[]>(["", "", "", ""]);
   const [loading, setLoading] = useState(false);
 
+  const fullName = [firstName.trim(), lastName.trim()].filter(Boolean).join(" ");
+
+  useEffect(() => {
+    if (isMockMode) return;
+    void createClient()
+      .auth.getUser()
+      .then(({ data }) => setOnboardingUserId(data.user?.id ?? null));
+  }, []);
+
+  const checkHandleFree = useCallback(
+    async (clean: string): Promise<boolean> => {
+      if (!onboardingUserId) return true;
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("handle", clean)
+        .neq("id", onboardingUserId)
+        .maybeSingle();
+      return !data;
+    },
+    [onboardingUserId],
+  );
+
+  useEffect(() => {
+    if (isMockMode) {
+      const clean = normalizeHandle(handleInput);
+      const fmtErr = validateHandleFormat(clean);
+      if (fmtErr) {
+        setHandleStatus("invalid");
+        return;
+      }
+      setHandleStatus(clean ? "ok" : "idle");
+      return;
+    }
+
+    const clean = normalizeHandle(handleInput);
+    const fmtErr = validateHandleFormat(clean);
+    if (fmtErr) {
+      setHandleStatus("invalid");
+      return;
+    }
+
+    let cancelled = false;
+    setHandleStatus("checking");
+    const t = window.setTimeout(async () => {
+      const free = await checkHandleFree(clean);
+      if (!cancelled) setHandleStatus(free ? "ok" : "taken");
+    }, 420);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [handleInput, checkHandleFree]);
+
   function handleNameNext(e: React.FormEvent) {
     e.preventDefault();
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    setHandle(toHandle(trimmed));
+    if (!firstName.trim()) return;
+    setHandleInput(toHandle(`${firstName} ${lastName}`));
     setStep("handle");
   }
 
@@ -120,7 +229,7 @@ export default function OnboardingPage() {
     e.preventDefault();
     setHandleError(null);
 
-    const clean = normalizeHandle(handle);
+    const clean = normalizeHandle(handleInput);
     const fmtErr = validateHandleFormat(clean);
     if (fmtErr) {
       setHandleError(fmtErr);
@@ -142,7 +251,9 @@ export default function OnboardingPage() {
         .eq("handle", clean)
         .maybeSingle();
 
-      if (existing) {
+      const { data: userData } = await supabase.auth.getUser();
+      const uid = userData.user?.id;
+      if (existing && (!uid || existing.id !== uid)) {
         setHandleError("That handle is already taken. Try another one.");
         return;
       }
@@ -173,10 +284,9 @@ export default function OnboardingPage() {
         const adapter = getAdapter();
         adapter.setUser({
           id: "me",
-          name: name.trim(),
+          name: fullName,
           handle: cleanHandle,
           avatarUrl: photoPreview ?? undefined,
-          location: location.trim() || undefined,
           tagline: tagline.trim() || undefined,
           prompts: prompts.length > 0 ? prompts : undefined,
         });
@@ -209,12 +319,11 @@ export default function OnboardingPage() {
       }
 
       const updates: Record<string, unknown> = {
-        name: name.trim(),
+        name: fullName,
         handle: cleanHandle,
         onboarding_completed: true,
       };
       if (avatarUrl) updates.avatar_url = avatarUrl;
-      if (location.trim()) updates.location = location.trim();
       if (tagline.trim()) updates.tagline = tagline.trim();
       if (prompts.length > 0) updates.prompts = prompts;
 
@@ -232,6 +341,9 @@ export default function OnboardingPage() {
     }
   }
 
+  const handleShowsVerified =
+    validateHandleFormat(normalizeHandle(handleInput)) === null && handleStatus === "ok";
+
   if (step === "name") {
     return (
       <OnboardingFrame
@@ -240,19 +352,34 @@ export default function OnboardingPage() {
         subtitle="This is how your friends will see you in the feed."
       >
         <form onSubmit={handleNameNext} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <FigmaFieldCard label="Name">
-            <input
-              type="text"
-              autoFocus
-              autoComplete="given-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="figma-auth-input"
-              style={figmaFieldInput}
-              placeholder="Your name"
-            />
-          </FigmaFieldCard>
-          <button type="submit" disabled={!name.trim()} style={primaryPill(!name.trim())}>
+          <div style={hubCard}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <p style={{ ...labelText, margin: 0 }}>First name</p>
+              <input
+                type="text"
+                autoFocus
+                autoComplete="given-name"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                style={{ ...valueInput, display: "block" }}
+                placeholder=""
+              />
+            </div>
+          </div>
+          <div style={hubCard}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <p style={{ ...labelText, margin: 0 }}>Last name</p>
+              <input
+                type="text"
+                autoComplete="family-name"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                style={{ ...valueInput, display: "block" }}
+                placeholder=""
+              />
+            </div>
+          </div>
+          <button type="submit" disabled={!firstName.trim()} style={primaryPill(!firstName.trim())}>
             Continue
           </button>
         </form>
@@ -268,56 +395,89 @@ export default function OnboardingPage() {
         subtitle="This is your unique username. You can change it later."
       >
         <form onSubmit={handleHandleNext} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div
-            style={{
-              ...figmaFieldCard,
-              ...(handleError ? { boxShadow: "inset 0 0 0 1px #ff3a3a" } : {}),
-            }}
-          >
-            <p style={figmaFieldLabel}>Handle</p>
-            <div style={{ position: "relative" }}>
-              <span
+          <div style={hubCard}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <p style={{ ...labelText, margin: 0 }}>Handle</p>
+              <div
                 style={{
-                  position: "absolute",
-                  left: 0,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  fontSize: 24,
-                  fontWeight: 400,
-                  color: "var(--figma-auth-label)",
-                  pointerEvents: "none",
-                  userSelect: "none",
-                  letterSpacing: "-0.96px",
+                  display: "flex",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  width: "100%",
+                  gap: 12,
+                  minHeight: 32,
                 }}
               >
-                @
-              </span>
-              <input
-                type="text"
-                autoFocus
-                autoCapitalize="off"
-                autoCorrect="off"
-                autoComplete="off"
-                value={handle}
-                onChange={(e) => {
-                  setHandleError(null);
-                  setHandle(e.target.value.replace(/^@/, "").toLowerCase().replace(/[^a-z0-9_]/g, ""));
-                }}
-                placeholder="yourhandle"
-                className="figma-auth-input"
-                style={{ ...figmaFieldInput, paddingLeft: 26 }}
-              />
+                <div style={{ display: "flex", alignItems: "center", minWidth: 0, flex: 1 }}>
+                  <span style={{ ...valueText, flexShrink: 0, marginRight: 2 }}>@</span>
+                  <input
+                    type="text"
+                    autoFocus
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    autoComplete="off"
+                    value={handleInput}
+                    onChange={(e) => {
+                      setHandleError(null);
+                      setHandleInput(e.target.value.replace(/\s/g, ""));
+                    }}
+                    spellCheck={false}
+                    style={{ ...valueInput, flex: 1, minWidth: 0 }}
+                  />
+                </div>
+                {handleShowsVerified ? (
+                  <span
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                      marginLeft: "auto",
+                    }}
+                  >
+                    <img
+                      src={SETTINGS_VERIFY_ICON}
+                      alt=""
+                      width={24}
+                      height={24}
+                      style={{ display: "block" }}
+                      aria-hidden
+                      decoding="async"
+                    />
+                  </span>
+                ) : null}
+              </div>
+              {handleError ||
+              ((handleStatus === "invalid" && normalizeHandle(handleInput).length > 0) ||
+                handleStatus === "taken") ? (
+                <p role="alert" style={{ ...fieldErrorText, marginTop: 4 }}>
+                  {handleError ??
+                    (handleStatus === "taken"
+                      ? "Already taken"
+                      : validateHandleFormat(normalizeHandle(handleInput)) ?? "")}
+                </p>
+              ) : null}
             </div>
           </div>
 
-          {handleError ? <p style={figmaErrorText}>{handleError}</p> : null}
-
           <button
             type="submit"
-            disabled={loading || !handle.trim()}
-            style={primaryPill(loading || !handle.trim())}
+            disabled={
+              loading ||
+              !handleInput.trim() ||
+              handleStatus === "invalid" ||
+              handleStatus === "taken" ||
+              handleStatus === "checking"
+            }
+            style={primaryPill(
+              loading ||
+                !handleInput.trim() ||
+                handleStatus === "invalid" ||
+                handleStatus === "taken" ||
+                handleStatus === "checking",
+            )}
           >
-            {loading ? "Checking…" : "Continue"}
+            {loading ? "Checking…" : handleStatus === "checking" ? "Checking…" : "Continue"}
           </button>
 
           <button type="button" onClick={() => setStep("name")} style={backBtnStyle}>
@@ -333,56 +493,79 @@ export default function OnboardingPage() {
       <OnboardingFrame
         step={3}
         title="Add a photo"
-        subtitle="Optional — helps friends recognize you in the feed."
+        subtitle="You know you want to upload a pic. Choose something vibey."
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={figmaFieldCard}>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              marginTop: 8,
+              marginBottom: 8,
+              width: "100%",
+            }}
+          >
+            <div
+              style={{
+                position: "relative",
+                width: PROFILE_AVATAR,
+                height: PROFILE_AVATAR,
+              }}
+            >
               <div
-                role="button"
-                tabIndex={0}
-                onClick={() => fileRef.current?.click()}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") fileRef.current?.click();
-                }}
                 style={{
-                  width: 120,
-                  height: 120,
-                  borderRadius: 44,
+                  width: PROFILE_AVATAR,
+                  height: PROFILE_AVATAR,
+                  borderRadius: 32,
                   overflow: "hidden",
-                  cursor: "pointer",
-                  border: "2px dashed var(--figma-auth-progress-inactive)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: "transparent",
                 }}
               >
                 {photoPreview ? (
                   <img
                     src={photoPreview}
-                    alt="Preview"
+                    alt=""
                     style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                   />
                 ) : (
-                  <UserAvatar name={name} size="lg" />
+                  <OnboardingPhotoPlaceholder
+                    firstName={firstName}
+                    lastName={lastName}
+                    size={PROFILE_AVATAR}
+                  />
                 )}
               </div>
               <button
                 type="button"
+                aria-label={photoPreview ? "Change profile photo" : "Add profile photo"}
                 onClick={() => fileRef.current?.click()}
                 style={{
-                  background: "none",
+                  position: "absolute",
+                  right: -4,
+                  bottom: -4,
+                  width: EDIT_FAB,
+                  height: EDIT_FAB,
+                  borderRadius: "50%",
                   border: "none",
-                  color: "var(--accent)",
-                  fontSize: 15,
-                  fontWeight: 600,
-                  fontFamily: "inherit",
+                  padding: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                   cursor: "pointer",
-                  padding: "4px 8px",
+                  background: "var(--accent)",
+                  WebkitTapHighlightColor: "transparent",
                 }}
+                className="active:scale-95"
               >
-                {photoPreview ? "Change photo" : "Choose photo"}
+                <img
+                  src={SETTINGS_PROFILE_EDIT_ICON}
+                  alt=""
+                  width={16}
+                  height={16}
+                  style={{ display: "block", filter: "brightness(0) invert(1)" }}
+                  aria-hidden
+                  decoding="async"
+                />
               </button>
               <input
                 ref={fileRef}
@@ -394,7 +577,7 @@ export default function OnboardingPage() {
             </div>
           </div>
 
-          <button type="button" onClick={() => setStep("location")} style={primaryPill(false)}>
+          <button type="button" onClick={() => setStep("tagline")} style={primaryPill(false)}>
             Continue
           </button>
 
@@ -406,26 +589,59 @@ export default function OnboardingPage() {
     );
   }
 
-  if (step === "location") {
+  if (step === "tagline") {
     return (
       <OnboardingFrame
         step={4}
-        title="Where are you based?"
-        subtitle="Optional — shows on your profile so others can find local athletes."
+        title="What's your athlete motto?"
+        subtitle="The line you live by."
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <FigmaFieldCard label="Location">
-            <input
-              type="text"
-              autoFocus
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              className="figma-auth-input"
-              style={figmaFieldInput}
-              placeholder="e.g. Los Angeles"
-            />
-          </FigmaFieldCard>
-          <button type="button" onClick={() => setStep("tagline")} style={primaryPill(false)}>
+          <div style={hubCard}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  justifyContent: "space-between",
+                  gap: 8,
+                  width: "100%",
+                }}
+              >
+                <p style={{ ...labelText, margin: 0 }}>Motto</p>
+                <SettingsCharCounter
+                  ref={taglineCounterRef}
+                  length={tagline.length}
+                  max={MOTTO_MAX}
+                  style={{
+                    ...labelText,
+                    margin: 0,
+                    textTransform: "none",
+                    whiteSpace: "nowrap",
+                  }}
+                />
+              </div>
+              <AutoHeightTextarea
+                value={tagline}
+                onChange={(e) => setTagline(e.target.value.slice(0, MOTTO_MAX))}
+                onKeyDown={(e) =>
+                  handleCharLimitKeyDown(e, MOTTO_MAX, taglineCounterRef.current)
+                }
+                onPaste={(e) => handleCharLimitPaste(e, MOTTO_MAX, taglineCounterRef.current)}
+                rows={1}
+                placeholder=""
+                maxLength={MOTTO_MAX}
+                style={{
+                  ...valueInput,
+                  resize: "none",
+                  display: "block",
+                  minHeight: 32,
+                  color: tagline.trim() ? "var(--foreground)" : "var(--foreground-muted)",
+                }}
+              />
+            </div>
+          </div>
+          <button type="button" onClick={() => setStep("prompts")} style={primaryPill(false)}>
             Continue
           </button>
           <button type="button" onClick={() => setStep("photo")} style={backBtnStyle}>
@@ -436,72 +652,98 @@ export default function OnboardingPage() {
     );
   }
 
-  if (step === "tagline") {
-    return (
-      <OnboardingFrame
-        step={5}
-        title="Add a tagline"
-        subtitle="Optional — a motto or phrase that represents your athletic journey."
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <FigmaFieldCard label="Tagline">
-            <input
-              type="text"
-              autoFocus
-              value={tagline}
-              onChange={(e) => setTagline(e.target.value)}
-              className="figma-auth-input"
-              style={figmaFieldInput}
-              placeholder="e.g. All day I dream about sports."
-              maxLength={120}
-            />
-          </FigmaFieldCard>
-          <button type="button" onClick={() => setStep("prompts")} style={primaryPill(false)}>
-            Continue
-          </button>
-          <button type="button" onClick={() => setStep("location")} style={backBtnStyle}>
-            Back
-          </button>
-        </div>
-      </OnboardingFrame>
-    );
-  }
-
   return (
     <OnboardingFrame
-      step={6}
+      step={5}
       title="Profile prompts"
-      subtitle="Optional — answer any that speak to you. These show on your About page."
+      subtitle="Add personality to your profile. Don't overthink it. Whatever pops into your head first."
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {PROMPT_OPTIONS.map((question, i) => (
-          <div key={question} style={figmaFieldCard}>
-            <p
-              style={{
-                ...figmaFieldLabel,
-                textTransform: "none",
-                letterSpacing: "-0.02em",
-                lineHeight: 1.35,
-                whiteSpace: "normal",
-              }}
-            >
-              {question}
-            </p>
-            <input
-              type="text"
-              value={promptAnswers[i]}
-              onChange={(e) => {
-                const next = [...promptAnswers];
-                next[i] = e.target.value;
-                setPromptAnswers(next);
-              }}
-              placeholder="Your answer…"
-              maxLength={200}
-              className="figma-auth-input"
-              style={figmaFieldInput}
-            />
-          </div>
-        ))}
+        {PROMPT_OPTIONS.map((question, i) => {
+          const answer = promptAnswers[i] ?? "";
+          return (
+            <div key={question} style={hubCard}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    justifyContent: "space-between",
+                    gap: 8,
+                    width: "100%",
+                  }}
+                >
+                  <p
+                    style={{
+                      ...labelText,
+                      margin: 0,
+                      maxWidth: "14rem",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.04em",
+                      lineHeight: 1.35,
+                      whiteSpace: "normal",
+                    }}
+                  >
+                    {question}
+                  </p>
+                  <SettingsCharCounter
+                    ref={(el) => {
+                      promptCounterRefs.current[i] = el;
+                    }}
+                    length={answer.length}
+                    max={MOTTO_MAX}
+                    style={{
+                      ...labelText,
+                      margin: 0,
+                      whiteSpace: "nowrap",
+                      textTransform: "none",
+                    }}
+                  />
+                </div>
+                <AutoHeightTextarea
+                  value={answer}
+                  onChange={(e) => {
+                    const next = [...promptAnswers];
+                    next[i] = e.target.value.slice(0, MOTTO_MAX);
+                    setPromptAnswers(next);
+                  }}
+                  onKeyDown={(e) => {
+                    if (
+                      handleCharLimitKeyDown(
+                        e,
+                        MOTTO_MAX,
+                        promptCounterRefs.current[i] ?? null,
+                      )
+                    ) {
+                      return;
+                    }
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      (e.target as HTMLTextAreaElement).blur();
+                    }
+                  }}
+                  onPaste={(e) =>
+                    handleCharLimitPaste(
+                      e,
+                      MOTTO_MAX,
+                      promptCounterRefs.current[i] ?? null,
+                    )
+                  }
+                  placeholder="Your answer…"
+                  maxLength={MOTTO_MAX}
+                  rows={1}
+                  style={{
+                    ...valueInput,
+                    resize: "none",
+                    display: "block",
+                    minHeight: 32,
+                    color: answer.trim() ? "var(--foreground)" : "var(--foreground-muted)",
+                  }}
+                />
+              </div>
+            </div>
+          );
+        })}
 
         {handleError ? <p style={figmaErrorText}>{handleError}</p> : null}
 

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useDayDetailSheet } from "@/contexts/day-detail-sheet";
 import { useLogSheet } from "@/contexts/log-sheet";
 import type { Workout } from "@/types/workout";
 import { toDateKey } from "@/types/workout";
@@ -47,7 +46,6 @@ export function ProfileCalendar({
   onAttemptSelectFuture,
 }: ProfileCalendarProps) {
   const { open: openLogSheet } = useLogSheet();
-  const { open: openDayDetail } = useDayDetailSheet();
   const now = new Date();
   const [year, setYear] = useState(() => {
     if (pickDate && selectedDateKey) {
@@ -298,7 +296,7 @@ export function ProfileCalendar({
                 } else {
                   bg = "var(--chip-bg)";
                   border = "none";
-                  color = "var(--cal-day-muted)";
+                  color = "var(--foreground)";
                 }
               } else if (isToday) {
                 bg = "var(--chip-bg)";
@@ -332,8 +330,7 @@ export function ProfileCalendar({
                   return;
                 }
                 if (readOnly) return;
-                if (hasWorkout) openDayDetail(dk);
-                else openLogSheet(dk);
+                openLogSheet(dk);
               };
 
               const dayNum = date.getDate();

@@ -1,5 +1,7 @@
 "use client";
 
+import { motion, useReducedMotion } from "framer-motion";
+
 export type FeedMode = "team" | "stadium";
 
 const LABELS: Record<FeedMode, string> = {
@@ -7,23 +9,29 @@ const LABELS: Record<FeedMode, string> = {
   stadium: "WORLD",
 };
 
-const ICONS: Record<FeedMode, string> = {
-  team: "/icons/tabbar/friend-selected.svg",
-  stadium: "/icons/tabbar/globe-selected.svg",
-};
-
 interface FeedToggleProps {
   value: FeedMode;
   onChange: (value: FeedMode) => void;
 }
 
-/** Matches the log sheet “Today” date chip (pill, mono label, trailing chevron). */
+/** Pill chip: mono label + trailing swap affordance. */
 export function FeedToggle({ value, onChange }: FeedToggleProps) {
+  const reduceMotion = useReducedMotion();
   const toggle = () => onChange(value === "team" ? "stadium" : "team");
 
+  const layoutTransition = reduceMotion
+    ? { duration: 0 }
+    : { type: "spring" as const, stiffness: 380, damping: 34, mass: 0.85 };
+
+  const iconTransition = reduceMotion
+    ? { duration: 0 }
+    : { type: "spring" as const, stiffness: 320, damping: 26, mass: 0.6 };
+
   return (
-    <button
+    <motion.button
       type="button"
+      layout
+      transition={{ layout: layoutTransition }}
       onClick={toggle}
       aria-label={
         value === "team"
@@ -46,18 +54,30 @@ export function FeedToggle({ value, onChange }: FeedToggleProps) {
         letterSpacing: "-0.48px",
         WebkitTapHighlightColor: "transparent",
         lineHeight: "normal",
-        transition: "background 0.18s, color 0.18s",
+        transition: "background 0.18s ease, color 0.18s ease",
       }}
       className="active:opacity-90"
+      whileTap={reduceMotion ? undefined : { scale: 0.97 }}
     >
-      <img
-        src={ICONS[value]}
+      <motion.span
+        layout="position"
+        style={{ display: "inline-block", whiteSpace: "nowrap" }}
+        transition={{ layout: layoutTransition }}
+      >
+        {LABELS[value]}
+      </motion.span>
+      <motion.img
+        src="/icons/nav/swap.svg"
         alt=""
         width={14}
         height={14}
         aria-hidden
         draggable={false}
         className="activity-icon-auto"
+        animate={{
+          rotate: value === "stadium" ? 180 : 0,
+        }}
+        transition={iconTransition}
         style={{
           display: "block",
           width: 14,
@@ -65,23 +85,9 @@ export function FeedToggle({ value, onChange }: FeedToggleProps) {
           flexShrink: 0,
           opacity: 0.9,
           objectFit: "contain",
+          transformOrigin: "50% 50%",
         }}
       />
-      {LABELS[value]}
-      <svg
-        width="10"
-        height="10"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden
-        style={{ opacity: 0.85, flexShrink: 0 }}
-      >
-        <path d="M6 9l6 6 6-6" />
-      </svg>
-    </button>
+    </motion.button>
   );
 }

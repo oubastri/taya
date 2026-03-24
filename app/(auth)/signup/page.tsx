@@ -15,6 +15,7 @@ import {
   figmaErrorText,
   figmaFooterText,
 } from "@/components/auth/figmaAuthStyles";
+import { LegalFooterLinks } from "@/components/LegalFooterLinks";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -154,6 +155,8 @@ export default function SignupPage() {
           Login
         </Link>
       </div>
+
+      <LegalFooterLinks />
     </AuthShell>
   );
 }

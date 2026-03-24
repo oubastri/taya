@@ -1,8 +1,15 @@
 "use client";
 
-import { useMemo, useState, useCallback, useRef } from "react";
+import {
+  useMemo,
+  useState,
+  useCallback,
+  useRef,
+  type CSSProperties,
+} from "react";
 import { loadLikersForEntity } from "@/lib/load-likers";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useUser } from "@/hooks/use-user";
 import { useWorkouts } from "@/hooks/use-workouts";
 import { useFriends } from "@/hooks/use-friends";
@@ -27,7 +34,26 @@ function FeedSkeleton() {
   );
 }
 
+const FEED_HEADER_GLASS_BTN: CSSProperties = {
+  width: 54,
+  height: 54,
+  borderRadius: "100px",
+  backdropFilter: "blur(24px) saturate(1.8)",
+  WebkitBackdropFilter: "blur(24px) saturate(1.8)",
+  background: "var(--glass-btn-bg)",
+  border: "1px solid var(--glass-btn-border)",
+  boxShadow: "var(--glass-btn-shadow)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  cursor: "pointer",
+  WebkitTapHighlightColor: "transparent",
+  padding: 0,
+  flexShrink: 0,
+};
+
 export default function FeedHome() {
+  const router = useRouter();
   const { user, hydrated: uh } = useUser();
   const { workouts, hydrated: wh } = useWorkouts();
   const { friends, getFeedWorkouts, getAllFeedWorkouts, hydrated: fh } =
@@ -156,52 +182,62 @@ export default function FeedHome() {
       >
         <TayaWordmark variant="feed" />
 
-        <button
-          type="button"
-          onClick={handleToggleTheme}
-          aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-          className="theme-toggle-btn"
+        <div
           style={{
             position: "absolute",
             top: "max(env(safe-area-inset-top), 20px)",
             right: 20,
-            width: 54,
-            height: 54,
-            borderRadius: "100px",
-            backdropFilter: "blur(24px) saturate(1.8)",
-            WebkitBackdropFilter: "blur(24px) saturate(1.8)",
-            background: "var(--glass-btn-bg)",
-            border: "1px solid var(--glass-btn-border)",
-            boxShadow: "var(--glass-btn-shadow)",
             display: "flex",
+            flexDirection: "row",
             alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            WebkitTapHighlightColor: "transparent",
-            overflow: "hidden",
+            gap: 8,
           }}
         >
-          {exitingTheme && (
+          <button
+            type="button"
+            onClick={handleToggleTheme}
+            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            className="theme-toggle-btn active:scale-95"
+            style={{ ...FEED_HEADER_GLASS_BTN, overflow: "hidden" }}
+          >
+            {exitingTheme && (
+              <Image
+                key={`exit-${exitingTheme}`}
+                src={`/icons/dark-light-mode/${exitingTheme === "dark" ? "sun" : "moon"}.svg`}
+                alt=""
+                width={22}
+                height={22}
+                aria-hidden
+                className={`activity-icon-auto theme-icon-exit`}
+              />
+            )}
             <Image
-              key={`exit-${exitingTheme}`}
-              src={`/icons/dark-light-mode/${exitingTheme === "dark" ? "sun" : "moon"}.svg`}
+              key={`enter-${theme}`}
+              src={`/icons/dark-light-mode/${theme === "dark" ? "sun" : "moon"}.svg`}
               alt=""
               width={22}
               height={22}
               aria-hidden
-              className={`activity-icon-auto theme-icon-exit`}
+              className={`activity-icon-auto theme-icon-enter`}
             />
-          )}
-          <Image
-            key={`enter-${theme}`}
-            src={`/icons/dark-light-mode/${theme === "dark" ? "sun" : "moon"}.svg`}
-            alt=""
-            width={22}
-            height={22}
-            aria-hidden
-            className={`activity-icon-auto theme-icon-enter`}
-          />
-        </button>
+          </button>
+          <button
+            type="button"
+            onClick={() => router.push("/settings")}
+            aria-label="Settings"
+            style={FEED_HEADER_GLASS_BTN}
+            className="active:scale-95"
+          >
+            <Image
+              src="/icons/nav/dots.svg"
+              alt=""
+              width={20}
+              height={20}
+              aria-hidden
+              className="nav-btn-icon"
+            />
+          </button>
+        </div>
       </header>
 
       <div

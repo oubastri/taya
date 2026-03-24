@@ -19,6 +19,7 @@ import {
   toDateKey,
 } from "@/types/workout";
 import type { ActivityType } from "@/types/workout";
+import { SHEET_EXIT_MS, SHEET_SPRING } from "@/lib/sheetMotion";
 
 const DEFAULT_TOP_5: ActivityType[] = [
   "run",
@@ -29,7 +30,6 @@ const DEFAULT_TOP_5: ActivityType[] = [
 ];
 
 const MAX_DESCRIPTION_LENGTH = 150;
-const SPRING = "0.38s cubic-bezier(0.32, 0.72, 0, 1)";
 /** Cross-fade + slide between log form and inline date picker */
 const LOG_VIEW_TRANSITION = `0.36s cubic-bezier(0.32, 0.72, 0, 1)`;
 const CLOSE_BTN = 54;
@@ -86,6 +86,8 @@ export function LogSheet() {
   const { isOpen, close, initialDateKey, workoutToEdit } = useLogSheet();
   const { workouts, addWorkout, updateWorkout } = useWorkouts();
 
+  /** Slide/scrim animation (SearchSheet-style); `isOpen` stays true until exit finishes. */
+  const [panelOpen, setPanelOpen] = useState(false);
   const [selected, setSelected] = useState<ActivityType | null>(null);
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(() => toDateKey(new Date()));
@@ -292,6 +294,24 @@ export function LogSheet() {
     }
   }, [isOpen, initialDateKey, workoutToEdit]);
 
+  useEffect(() => {
+    if (!isOpen) {
+      setPanelOpen(false);
+      return;
+    }
+    setPanelOpen(false);
+    let cancelled = false;
+    const outer = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!cancelled) setPanelOpen(true);
+      });
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(outer);
+    };
+  }, [isOpen]);
+
   const openInlineDatePicker = useCallback(() => {
     datePickerSnapshotRef.current = date;
     setDraftDate(date);
@@ -329,8 +349,11 @@ export function LogSheet() {
   }, [datePickerFutureErr]);
 
   const handleClose = useCallback(() => {
-    close();
-    setTimeout(reset, 400);
+    setPanelOpen(false);
+    window.setTimeout(() => {
+      close();
+      window.setTimeout(reset, 50);
+    }, SHEET_EXIT_MS);
   }, [close, reset]);
 
   const handleSubmit = () => {
@@ -371,27 +394,27 @@ export function LogSheet() {
     if (dy > 90) {
       const vh = window.innerHeight;
       if (sheetRef.current) {
-        sheetRef.current.style.transition = `transform ${SPRING}`;
+        sheetRef.current.style.transition = `transform ${SHEET_SPRING}`;
         sheetRef.current.style.transform = `translateX(-50%) translateY(${vh}px)`;
       }
       if (scrimRef.current) {
-        scrimRef.current.style.transition = `opacity 0.38s ease`;
+        scrimRef.current.style.transition = `opacity ${SHEET_SPRING}`;
         scrimRef.current.style.opacity = "0";
       }
-      setTimeout(() => {
+      window.setTimeout(() => {
         close();
-        setTimeout(reset, 50);
-      }, 380);
+        window.setTimeout(reset, 50);
+      }, SHEET_EXIT_MS);
     } else {
       if (sheetRef.current) {
-        sheetRef.current.style.transition = `transform ${SPRING}`;
+        sheetRef.current.style.transition = `transform ${SHEET_SPRING}`;
         sheetRef.current.style.transform = "translateX(-50%) translateY(0)";
-        setTimeout(() => {
+        window.setTimeout(() => {
           if (sheetRef.current) {
             sheetRef.current.style.transition = "";
             sheetRef.current.style.transform = "";
           }
-        }, 380);
+        }, SHEET_EXIT_MS);
       }
     }
   };
@@ -414,9 +437,9 @@ export function LogSheet() {
           inset: 0,
           zIndex: 100,
           background: "var(--overlay)",
-          opacity: isOpen ? 1 : 0,
+          opacity: panelOpen ? 1 : 0,
           pointerEvents: isOpen ? "auto" : "none",
-          transition: `opacity ${SPRING}`,
+          transition: `opacity ${SHEET_SPRING}`,
         }}
       />
 
@@ -440,8 +463,6 @@ export function LogSheet() {
           maxWidth: 428,
           zIndex: 101,
           background: "var(--sheet-bg)",
-          backdropFilter: "blur(40px) saturate(1.8)",
-          WebkitBackdropFilter: "blur(40px) saturate(1.8)",
           borderRadius: "32px 32px 0 0",
           boxShadow: "var(--sheet-shadow)",
           display: "flex",
@@ -450,10 +471,10 @@ export function LogSheet() {
           maxHeight: datePickerOpen
             ? "min(94svh, calc(100dvh - 8px))"
             : "90svh",
-          transform: isOpen
+          transform: panelOpen
             ? "translateX(-50%)"
             : "translateX(-50%) translateY(100%)",
-          transition: `transform ${SPRING}`,
+          transition: `transform ${SHEET_SPRING}`,
           pointerEvents: isOpen ? "auto" : "none",
         }}
       >

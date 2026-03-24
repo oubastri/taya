@@ -10,8 +10,8 @@ import {
   pillBtn,
   fieldErrorText,
 } from "@/components/settings/settingsHubStyles";
+import { SHEET_EXIT_MS, SHEET_SPRING } from "@/lib/sheetMotion";
 
-const SPRING = "0.38s cubic-bezier(0.32, 0.72, 0, 1)";
 const NAV_HEIGHT = 54;
 
 interface ChangePasswordSheetProps {
@@ -52,7 +52,7 @@ export function ChangePasswordSheet({ onClose }: ChangePasswordSheetProps) {
   const close = useCallback(() => {
     reset();
     setOpen(false);
-    setTimeout(onClose, 380);
+    window.setTimeout(onClose, SHEET_EXIT_MS);
   }, [onClose]);
 
   useEffect(() => {
@@ -107,27 +107,27 @@ export function ChangePasswordSheet({ onClose }: ChangePasswordSheetProps) {
     if (dy > 90) {
       const vh = window.innerHeight;
       if (sheetRef.current) {
-        sheetRef.current.style.transition = `transform ${SPRING}`;
+        sheetRef.current.style.transition = `transform ${SHEET_SPRING}`;
         sheetRef.current.style.transform = `translateX(-50%) translateY(${vh}px)`;
       }
       if (scrimRef.current) {
-        scrimRef.current.style.transition = "opacity 0.38s ease";
+        scrimRef.current.style.transition = `opacity ${SHEET_SPRING}`;
         scrimRef.current.style.opacity = "0";
       }
-      setTimeout(() => {
+      window.setTimeout(() => {
         reset();
         onClose();
-      }, 380);
+      }, SHEET_EXIT_MS);
     } else {
       if (sheetRef.current) {
-        sheetRef.current.style.transition = `transform ${SPRING}`;
+        sheetRef.current.style.transition = `transform ${SHEET_SPRING}`;
         sheetRef.current.style.transform = "translateX(-50%) translateY(0)";
-        setTimeout(() => {
+        window.setTimeout(() => {
           if (sheetRef.current) {
             sheetRef.current.style.transition = "";
             sheetRef.current.style.transform = "";
           }
-        }, 380);
+        }, SHEET_EXIT_MS);
       }
     }
   };
@@ -193,7 +193,7 @@ export function ChangePasswordSheet({ onClose }: ChangePasswordSheetProps) {
           zIndex: 99,
           background: "var(--overlay)",
           opacity: open ? 1 : 0,
-          transition: `opacity ${SPRING}`,
+          transition: `opacity ${SHEET_SPRING}`,
         }}
       />
 
@@ -210,8 +210,6 @@ export function ChangePasswordSheet({ onClose }: ChangePasswordSheetProps) {
           maxHeight: "85svh",
           zIndex: 100,
           background: "var(--sheet-bg)",
-          backdropFilter: "blur(40px) saturate(1.8)",
-          WebkitBackdropFilter: "blur(40px) saturate(1.8)",
           borderRadius: "32px 32px 0 0",
           boxShadow: "var(--sheet-shadow)",
           display: "flex",
@@ -219,7 +217,7 @@ export function ChangePasswordSheet({ onClose }: ChangePasswordSheetProps) {
           overflow: "hidden",
           fontFamily: "var(--font-sans), sans-serif",
           transform: open ? "translateX(-50%)" : "translateX(-50%) translateY(100%)",
-          transition: `transform ${SPRING}`,
+          transition: `transform ${SHEET_SPRING}`,
         }}
       >
         <div

@@ -47,8 +47,8 @@
   --glass-btn-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.06), 0 4px 20px rgba(0, 0, 0, 0.08);
   --glass-btn-icon: rgba(0, 0, 0, 0.6);
 
-  /* Sheets (frosted glass slide-up panels) */
-  --sheet-bg: rgba(255, 255, 255, 0.82);
+  /* Bottom sheets — solid panel (light: white; dark: see [data-theme="dark"]) */
+  --sheet-bg: #ffffff;
   --sheet-shadow: 0 -1px 0 rgba(0, 0, 0, 0.07), 0 -12px 48px rgba(0, 0, 0, 0.13);
   --drag-handle: rgba(0, 0, 0, 0.16);
 
@@ -173,8 +173,8 @@
   --glass-btn-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.06), 0 4px 20px rgba(0, 0, 0, 0.35);
   --glass-btn-icon: rgba(255, 255, 255, 0.72);
 
-  /* Sheets */
-  --sheet-bg: rgba(26, 26, 26, 0.92);
+  /* Bottom sheets — solid panel aligned with --surface */
+  --sheet-bg: #1a1a1a;
   --sheet-shadow: 0 -1px 0 rgba(255, 255, 255, 0.06), 0 -12px 48px rgba(0, 0, 0, 0.6);
   --drag-handle: rgba(255, 255, 255, 0.15);
 

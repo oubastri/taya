@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/hooks/use-user";
 import { useFriends } from "@/hooks/use-friends";
@@ -22,6 +22,11 @@ import {
   pillBtn,
   fieldErrorText,
 } from "@/components/settings/settingsHubStyles";
+import { LegalFooterLinks } from "@/components/LegalFooterLinks";
+import {
+  handleCharLimitKeyDown,
+  handleCharLimitPaste,
+} from "@/components/settings/settingsCharLimitHandlers";
 
 const PROFILE_AVATAR = 84;
 const EDIT_FAB = 32;
@@ -32,55 +37,6 @@ const AVATAR_TO_FIRST_CARD = 30;
 const PROMPTS_TITLE_TOP = 32;
 const FOOTER_TOP = 40;
 const FOOTER_BTN_GAP = 8;
-
-function playCharLimitShake(el: HTMLElement | null) {
-  if (!el) return;
-  el.classList.remove("settings-char-limit-shake");
-  void el.offsetWidth;
-  el.classList.add("settings-char-limit-shake");
-}
-
-const CHAR_LIMIT_PASS_KEYS = new Set([
-  "Backspace",
-  "Delete",
-  "Tab",
-  "Escape",
-  "ArrowLeft",
-  "ArrowRight",
-  "ArrowUp",
-  "ArrowDown",
-  "Home",
-  "End",
-]);
-
-/** True if input was blocked and counter shook (at hard limit). */
-function handleCharLimitKeyDown(
-  e: KeyboardEvent<HTMLTextAreaElement>,
-  max: number,
-  counterEl: HTMLElement | null,
-): boolean {
-  const el = e.currentTarget;
-  if (el.value.length < max) return false;
-  if (e.ctrlKey || e.metaKey || e.altKey) return false;
-  if (CHAR_LIMIT_PASS_KEYS.has(e.key)) return false;
-  const s0 = el.selectionStart;
-  const s1 = el.selectionEnd;
-  if (s0 !== null && s1 !== null && s0 !== s1) return false;
-  if (e.key === "Enter" || e.key.length === 1) {
-    playCharLimitShake(counterEl);
-    e.preventDefault();
-    return true;
-  }
-  return false;
-}
-
-function handleCharLimitPaste(e: ClipboardEvent<HTMLTextAreaElement>, max: number, counterEl: HTMLElement | null) {
-  const el = e.currentTarget;
-  if (el.value.length < max) return;
-  if (el.selectionStart !== el.selectionEnd) return;
-  playCharLimitShake(counterEl);
-  e.preventDefault();
-}
 
 /** Password row chevron — `public/icons/nav/arrow-right.svg` (from :icons set) */
 const SETTINGS_ARROW_RIGHT_ICON = "/icons/nav/arrow-right.svg?v=7";
@@ -108,12 +64,9 @@ export default function SettingsPage() {
   const [handleInput, setHandleInput] = useState("");
   const [handleStatus, setHandleStatus] = useState<HandleUiStatus>("idle");
   const [uploading, setUploading] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [nameFieldError, setNameFieldError] = useState<string | null>(null);
   const [handleBlurError, setHandleBlurError] = useState<string | null>(null);
   const [avatarFieldError, setAvatarFieldError] = useState<string | null>(null);
-  const [deleteFieldError, setDeleteFieldError] = useState<string | null>(null);
 
   const [promptAnswers, setPromptAnswers] = useState<string[]>(() =>
     PROMPT_OPTIONS.map(() => ""),
@@ -270,26 +223,6 @@ export default function SettingsPage() {
 
     setHandleBlurError(null);
     updateUser({ handle: clean });
-  }
-
-  async function handleDeleteAccount() {
-    setDeleting(true);
-    try {
-      if (isRealMode) {
-        const supabase = createClient();
-        const { error } = await supabase.rpc("delete_own_account");
-        if (error) {
-          setDeleteFieldError("Failed to delete account.");
-          return;
-        }
-        await supabase.auth.signOut();
-        clearAuthCache();
-      }
-      router.push("/login");
-      router.refresh();
-    } finally {
-      setDeleting(false);
-    }
   }
 
   async function handleSignOut() {
@@ -754,86 +687,10 @@ export default function SettingsPage() {
         >
           {signingOut ? "Signing out…" : "Logout"}
         </button>
+      </div>
 
-        {!showDeleteConfirm ? (
-          <button
-            type="button"
-            onClick={() => {
-              setDeleteFieldError(null);
-              setShowDeleteConfirm(true);
-            }}
-            style={{
-              ...pillBtn,
-              background: "transparent",
-              border: "2px solid var(--settings-hub-delete)",
-              color: "var(--settings-hub-delete)",
-            }}
-            className="active:opacity-92"
-          >
-            Delete account
-          </button>
-        ) : (
-          <div style={hubCard}>
-            <p
-              style={{
-                margin: "0 0 14px",
-                fontSize: 13,
-                fontWeight: 600,
-                color: "#ff3b30",
-                lineHeight: 1.45,
-              }}
-            >
-              This permanently deletes your account, workouts, and follows. This can&apos;t be undone.
-            </p>
-            {deleteFieldError ? (
-              <p role="alert" style={{ ...fieldErrorText, margin: "0 0 12px" }}>
-                {deleteFieldError}
-              </p>
-            ) : null}
-            <div style={{ display: "flex", gap: 10 }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setDeleteFieldError(null);
-                  setShowDeleteConfirm(false);
-                }}
-                style={{
-                  flex: 1,
-                  padding: "12px",
-                  borderRadius: 14,
-                  border: "1px solid var(--settings-card-border)",
-                  background: "transparent",
-                  color: "var(--foreground)",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  fontFamily: "inherit",
-                  cursor: "pointer",
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleDeleteAccount()}
-                disabled={deleting}
-                style={{
-                  flex: 1,
-                  padding: "12px",
-                  borderRadius: 14,
-                  border: "none",
-                  backgroundColor: "#ff3b30",
-                  color: "#fff",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  fontFamily: "inherit",
-                  cursor: deleting ? "not-allowed" : "pointer",
-                }}
-              >
-                {deleting ? "Deleting…" : "Delete"}
-              </button>
-            </div>
-          </div>
-        )}
+      <div style={{ marginTop: FOOTER_TOP }}>
+        <LegalFooterLinks />
       </div>
 
       {passwordOpen ? (

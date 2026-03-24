@@ -10,6 +10,10 @@ const GUTTER = 16;
 
 type AuthShellProps = {
   children: React.ReactNode;
+  /** When true, the sticky top bar is omitted (e.g. onboarding uses a feed-style header in `beforeBody`). */
+  hideHeader?: boolean;
+  /** Full-width block rendered after the optional header, before the max-width body (e.g. feed wordmark row). */
+  beforeBody?: React.ReactNode;
   showBack?: boolean;
   /** When `showBack`, use arrow (default) or the same close icon as other modals (`/icons/nav/close.svg`). */
   dismissIcon?: "arrow" | "close";
@@ -23,6 +27,8 @@ type AuthShellProps = {
 
 export function AuthShell({
   children,
+  hideHeader = false,
+  beforeBody,
   showBack = true,
   dismissIcon = "arrow",
   onBack,
@@ -158,7 +164,8 @@ export function AuthShell({
           background: "var(--background)",
         }}
       >
-        {header}
+        {!hideHeader ? header : null}
+        {beforeBody}
         {body}
       </div>
     );
@@ -171,7 +178,8 @@ export function AuthShell({
         background: "var(--background)",
       }}
     >
-      {header}
+      {!hideHeader ? header : null}
+      {beforeBody}
       {body}
     </main>
   );

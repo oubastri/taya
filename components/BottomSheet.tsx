@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-
-const DURATION_MS = 320;
+import { SHEET_EXIT_MS, SHEET_SPRING } from "@/lib/sheetMotion";
 
 type Props = {
   isOpen: boolean;
@@ -13,33 +12,32 @@ type Props = {
 
 /** Above bottom nav (nav uses z-index 50). */
 export function BottomSheet({ isOpen, onClose, children, title }: Props) {
-  const [entered, setEntered] = useState(false);
-  const [isClosing, setIsClosing] = useState(false);
-
-  const close = useCallback(() => {
-    setIsClosing(true);
-    const t = setTimeout(() => {
-      onClose();
-      setIsClosing(false);
-      setEntered(false);
-    }, DURATION_MS);
-    return () => clearTimeout(t);
-  }, [onClose]);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (!isOpen) return;
-    setEntered(false);
-    setIsClosing(false);
-    const t = requestAnimationFrame(() => {
-      requestAnimationFrame(() => setEntered(true));
+    if (!isOpen) {
+      setOpen(false);
+      return;
+    }
+    setOpen(false);
+    let cancelled = false;
+    const outer = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!cancelled) setOpen(true);
+      });
     });
-    return () => cancelAnimationFrame(t);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(outer);
+    };
   }, [isOpen]);
 
-  if (!isOpen && !isClosing) return null;
+  const close = useCallback(() => {
+    setOpen(false);
+    window.setTimeout(onClose, SHEET_EXIT_MS);
+  }, [onClose]);
 
-  const sheetVisible = entered && !isClosing;
-  const backdropVisible = entered && !isClosing;
+  if (!isOpen && !open) return null;
 
   return (
     <div
@@ -53,16 +51,21 @@ export function BottomSheet({ isOpen, onClose, children, title }: Props) {
       aria-label={title ?? "Sheet"}
     >
       <div
-        className="absolute inset-0 bg-black/25 transition-opacity duration-300 ease-out"
-        style={{ opacity: backdropVisible ? 1 : 0 }}
+        className="absolute inset-0"
+        style={{
+          background: "var(--overlay)",
+          opacity: open ? 1 : 0,
+          transition: `opacity ${SHEET_SPRING}`,
+        }}
         onClick={close}
         aria-hidden
       />
 
       <div
-        className="relative z-10 flex max-h-[85vh] flex-col rounded-t-3xl bg-[var(--surface)] pb-[env(safe-area-inset-bottom)] transition-transform duration-300 ease-out"
+        className="relative z-10 flex max-h-[85vh] flex-col rounded-t-3xl bg-[var(--sheet-bg)] pb-[env(safe-area-inset-bottom)]"
         style={{
-          transform: sheetVisible ? "translateY(0)" : "translateY(100%)",
+          transform: open ? "translateY(0)" : "translateY(100%)",
+          transition: `transform ${SHEET_SPRING}`,
           borderTop: "1px solid var(--border)",
         }}
       >

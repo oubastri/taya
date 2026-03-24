@@ -14,6 +14,7 @@ import {
   figmaErrorText,
   figmaFooterText,
 } from "@/components/auth/figmaAuthStyles";
+import { LegalFooterLinks } from "@/components/LegalFooterLinks";
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
@@ -129,6 +130,8 @@ export default function ForgotPasswordPage() {
           </Link>
         </form>
       )}
+
+      <LegalFooterLinks />
     </AuthShell>
   );
 }
