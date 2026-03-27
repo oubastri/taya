@@ -66,10 +66,9 @@ export const pillBtn: CSSProperties = {
   boxSizing: "border-box",
 };
 
+/** Pair with global class `app-cta` for theme + hover (background/color live via CSS). */
 export const pillBtnPrimary: CSSProperties = {
   ...pillBtn,
-  background: "var(--cta-bg)",
-  color: "var(--cta-color)",
 };
 
 export const fieldErrorText: CSSProperties = {

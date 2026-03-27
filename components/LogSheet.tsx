@@ -804,20 +804,20 @@ export function LogSheet() {
           <button
             type="button"
             onClick={handleSubmit}
+            className={`app-cta ${selected ? "" : "app-cta--inactive"}`}
             style={{
               width: "100%",
               height: 54,
               borderRadius: 50,
               border: "none",
-              backgroundColor: "var(--cta-bg)",
-              color: "var(--cta-color)",
               fontFamily: "var(--font-sans), sans-serif",
               fontSize: 16,
               fontWeight: 500,
               letterSpacing: "-0.03em",
               cursor: selected ? "pointer" : "default",
               WebkitTapHighlightColor: "transparent",
-              transition: "opacity 0.2s",
+              transition:
+                "opacity 0.2s ease, background-color var(--duration-fast) var(--ease-out-expo), box-shadow var(--duration-fast) var(--ease-out-expo), transform var(--duration-fast) var(--ease-out-expo)",
               opacity: selected ? 1 : 0.3,
             }}
           >

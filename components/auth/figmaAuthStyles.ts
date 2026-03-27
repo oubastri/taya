@@ -60,8 +60,6 @@ export const figmaPrimaryBtn: CSSProperties = {
   fontSize: 16,
   fontWeight: 400,
   lineHeight: "normal",
-  color: "var(--cta-color)",
-  background: "var(--cta-bg)",
   cursor: "pointer",
   backdropFilter: "blur(14.524px)",
   WebkitBackdropFilter: "blur(14.524px)",

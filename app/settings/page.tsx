@@ -678,12 +678,10 @@ export default function SettingsPage() {
           disabled={signingOut}
           style={{
             ...pillBtn,
-            background: "var(--cta-bg)",
-            color: "var(--cta-color)",
             opacity: signingOut ? 0.65 : 1,
             cursor: signingOut ? "wait" : "pointer",
           }}
-          className="active:opacity-90"
+          className="app-cta active:opacity-90"
         >
           {signingOut ? "Signing out…" : "Logout"}
         </button>

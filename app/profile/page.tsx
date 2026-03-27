@@ -4,12 +4,10 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type CSSProperties,
 } from "react";
 import { loadLikersForEntity } from "@/lib/load-likers";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/hooks/use-user";
 import { useWorkouts } from "@/hooks/use-workouts";
@@ -31,7 +29,7 @@ import {
 import type { FeedItem } from "@/hooks/use-friends";
 import type { LikePerson } from "@/types/likes";
 import { UserAvatar } from "@/components/UserAvatar";
-import { useTheme } from "@/hooks/use-theme";
+import { AccountMenu } from "@/components/AccountMenu";
 
 /** Sticky top bar — stays pinned while profile content scrolls */
 const PROFILE_STICKY_TOP_BAR: CSSProperties = {
@@ -59,9 +57,6 @@ const PROFILE_GLASS_CIRCLE_STYLE: CSSProperties = {
   borderRadius: "100px",
   backdropFilter: "blur(24px) saturate(1.8)",
   WebkitBackdropFilter: "blur(24px) saturate(1.8)",
-  background: "var(--glass-btn-bg)",
-  border: "1px solid var(--glass-btn-border)",
-  boxShadow: "var(--glass-btn-shadow)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -105,15 +100,6 @@ export default function ProfilePage() {
   const { workouts, stats, hydrated: wh, deleteWorkout } = useWorkouts();
   const { friends } = useFriends();
   const { openForEdit } = useLogSheet();
-  const { theme, toggle: toggleTheme } = useTheme();
-  const [exitingTheme, setExitingTheme] = useState<"light" | "dark" | null>(null);
-  const themeExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const handleToggleTheme = useCallback(() => {
-    setExitingTheme(theme);
-    if (themeExitTimerRef.current) clearTimeout(themeExitTimerRef.current);
-    themeExitTimerRef.current = setTimeout(() => setExitingTheme(null), 200);
-    toggleTheme();
-  }, [theme, toggleTheme]);
   const [section, setSection] = useState<ProfileSection>("about");
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState("");
@@ -187,12 +173,6 @@ export default function ProfilePage() {
     document.body.classList.add("search-open");
     return () => document.body.classList.remove("search-open");
   }, [socialSheet]);
-
-  useEffect(() => {
-    return () => {
-      if (themeExitTimerRef.current) clearTimeout(themeExitTimerRef.current);
-    };
-  }, []);
 
   const handleNameBlur = () => {
     if (nameInput.trim()) updateUser({ name: nameInput.trim() });
@@ -337,50 +317,7 @@ export default function ProfilePage() {
         }}
       >
         <header style={{ ...PROFILE_STICKY_TOP_BAR, justifyContent: "flex-end" }}>
-          <button
-            type="button"
-            onClick={handleToggleTheme}
-            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            className="theme-toggle-btn active:scale-95"
-            style={{ ...PROFILE_GLASS_CIRCLE_STYLE, overflow: "hidden" }}
-          >
-            {exitingTheme && (
-              <Image
-                key={`exit-${exitingTheme}`}
-                src={`/icons/dark-light-mode/${exitingTheme === "dark" ? "sun" : "moon"}.svg`}
-                alt=""
-                width={22}
-                height={22}
-                aria-hidden
-                className={`activity-icon-auto theme-icon-exit`}
-              />
-            )}
-            <Image
-              key={`enter-${theme}`}
-              src={`/icons/dark-light-mode/${theme === "dark" ? "sun" : "moon"}.svg`}
-              alt=""
-              width={22}
-              height={22}
-              aria-hidden
-              className={`activity-icon-auto theme-icon-enter`}
-            />
-          </button>
-          <button
-            type="button"
-            onClick={() => router.push("/settings")}
-            aria-label="Settings"
-            style={PROFILE_GLASS_CIRCLE_STYLE}
-            className="active:scale-95"
-          >
-            <Image
-              src="/icons/nav/dots.svg"
-              alt=""
-              width={20}
-              height={20}
-              aria-hidden
-              className="nav-btn-icon"
-            />
-          </button>
+          <AccountMenu triggerStyle={PROFILE_GLASS_CIRCLE_STYLE} />
         </header>
 
         <div style={{ marginTop: 36, marginBottom: 36 }}>
@@ -474,7 +411,7 @@ export default function ProfilePage() {
           )}
         </div>
 
-        <div style={{ marginBottom: section === "about" ? 36 : 48 }}>
+        <div style={{ marginBottom: 48 }}>
           <ProfileSegmentedControl value={section} onChange={setSection} />
         </div>
 
@@ -487,18 +424,6 @@ export default function ProfilePage() {
           }}
         >
           {section === "about" && (
-            <ProfileAboutSection
-              prompts={user.prompts}
-              promptLikeIds={promptLikeIds}
-              getLike={getLike}
-              toggleLike={toggleLike}
-              likeIfNeeded={likeIfNeeded}
-              resolveLikers={resolveLikers}
-              currentUserId={user.id}
-            />
-          )}
-
-          {section === "moves" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
               <p
                 style={{
@@ -521,6 +446,7 @@ export default function ProfilePage() {
                   backgroundColor: "var(--surface)",
                   borderRadius: 32,
                   padding: 16,
+                  marginBottom: 16,
                 }}
               >
                 <ProfileCalendar
@@ -530,6 +456,20 @@ export default function ProfilePage() {
                 />
               </div>
 
+              <ProfileAboutSection
+                prompts={user.prompts}
+                promptLikeIds={promptLikeIds}
+                getLike={getLike}
+                toggleLike={toggleLike}
+                likeIfNeeded={likeIfNeeded}
+                resolveLikers={resolveLikers}
+                currentUserId={user.id}
+              />
+            </div>
+          )}
+
+          {section === "moves" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
               {movesByMonth.length === 0 ? (
                 <p
                   style={{

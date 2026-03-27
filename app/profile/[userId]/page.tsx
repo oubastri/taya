@@ -22,6 +22,7 @@ import {
 import type { FeedItem } from "@/hooks/use-friends";
 import type { LikePerson } from "@/types/likes";
 import { UserAvatar } from "@/components/UserAvatar";
+import { ProfileFollowButton } from "@/components/ProfileFollowButton";
 import type { Workout } from "@/types/workout";
 
 /** Matches athletes tab search control (`app/athletes/page.tsx`) */
@@ -52,9 +53,6 @@ const PROFILE_GLASS_CIRCLE_STYLE: React.CSSProperties = {
   borderRadius: "100px",
   backdropFilter: "blur(24px) saturate(1.8)",
   WebkitBackdropFilter: "blur(24px) saturate(1.8)",
-  background: "var(--glass-btn-bg)",
-  border: "1px solid var(--glass-btn-border)",
-  boxShadow: "var(--glass-btn-shadow)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -287,7 +285,7 @@ export default function UserProfilePage() {
             onClick={() => router.back()}
             aria-label="Go back"
             style={PROFILE_GLASS_CIRCLE_STYLE}
-            className="active:scale-95"
+            className="app-glass-icon-btn active:scale-95"
           >
             <Image
               src="/icons/nav/arrow-left.svg"
@@ -357,7 +355,7 @@ export default function UserProfilePage() {
             onClick={() => router.back()}
             aria-label="Go back"
             style={PROFILE_GLASS_CIRCLE_STYLE}
-            className="active:scale-95"
+            className="app-glass-icon-btn active:scale-95"
           >
             <Image
               src="/icons/nav/arrow-left.svg"
@@ -369,36 +367,10 @@ export default function UserProfilePage() {
             />
           </button>
 
-          <button
-            type="button"
-            onClick={() => (isFollowing ? unfollow(friend.id) : follow(friend.id))}
-            style={{
-              minWidth: 78,
-              width: "max-content",
-              height: 48,
-              padding: "8px 16px",
-              borderRadius: 33,
-              border: isFollowing ? "1px solid var(--border-strong)" : "none",
-              backgroundColor: isFollowing ? "var(--surface)" : "var(--accent)",
-              color: isFollowing ? "var(--foreground)" : "#000",
-              fontFamily: "var(--font-sans), sans-serif",
-              fontSize: 14,
-              fontWeight: 500,
-              letterSpacing: "normal",
-              lineHeight: "normal",
-              cursor: "pointer",
-              WebkitTapHighlightColor: "transparent",
-              backdropFilter: "blur(10px)",
-              WebkitBackdropFilter: "blur(10px)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              boxSizing: "border-box",
-            }}
-            className="active:scale-95"
-          >
-            {isFollowing ? "Following" : "Follow"}
-          </button>
+          <ProfileFollowButton
+            following={isFollowing}
+            onToggle={() => (isFollowing ? unfollow(friend.id) : follow(friend.id))}
+          />
         </header>
 
         <div style={{ marginTop: 36, marginBottom: 36 }}>
@@ -459,7 +431,7 @@ export default function UserProfilePage() {
           )}
         </div>
 
-        <div style={{ marginBottom: section === "about" ? 36 : 48 }}>
+        <div style={{ marginBottom: 48 }}>
           <ProfileSegmentedControl value={section} onChange={setSection} />
         </div>
 
@@ -472,18 +444,6 @@ export default function UserProfilePage() {
           }}
         >
           {section === "about" && (
-            <ProfileAboutSection
-              prompts={friend.prompts}
-              promptLikeIds={promptLikeIds}
-              getLike={getLike}
-              toggleLike={toggleLike}
-              likeIfNeeded={likeIfNeeded}
-              resolveLikers={resolveLikers}
-              currentUserId={me.id}
-            />
-          )}
-
-          {section === "moves" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
               <p
                 style={{
@@ -506,6 +466,7 @@ export default function UserProfilePage() {
                   backgroundColor: "var(--surface)",
                   borderRadius: 32,
                   padding: 16,
+                  marginBottom: 16,
                 }}
               >
                 <ProfileCalendar
@@ -516,6 +477,20 @@ export default function UserProfilePage() {
                 />
               </div>
 
+              <ProfileAboutSection
+                prompts={friend.prompts}
+                promptLikeIds={promptLikeIds}
+                getLike={getLike}
+                toggleLike={toggleLike}
+                likeIfNeeded={likeIfNeeded}
+                resolveLikers={resolveLikers}
+                currentUserId={me.id}
+              />
+            </div>
+          )}
+
+          {section === "moves" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
               {movesByMonth.length === 0 ? (
                 <p
                   style={{

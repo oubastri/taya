@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import AthletesGlobeView, {
   type AthletesGlobeUser,
 } from "@/components/athletes/AthletesGlobeView";
@@ -10,8 +10,6 @@ import {
   LANDING_DEMO_PROFILE_ROWS,
 } from "@/components/landing/LandingFigmaHero";
 import { TayaWordmark } from "@/components/TayaWordmark";
-import { useTheme } from "@/hooks/use-theme";
-
 function buildLandingGlobeUsers(): AthletesGlobeUser[] {
   return LANDING_DEMO_PROFILE_ROWS.map((row, i) => {
     const handle = row.handle.replace(/^@/, "");
@@ -32,11 +30,6 @@ const sans = 'var(--font-sans), system-ui, sans-serif';
 
 export default function HomeLanding() {
   const landingGlobeUsers = useMemo(() => buildLandingGlobeUsers(), []);
-  const { theme, toggle: toggleTheme } = useTheme();
-
-  const handleToggleTheme = useCallback(() => {
-    toggleTheme();
-  }, [toggleTheme]);
 
   const headerScrim =
     "linear-gradient(to bottom, var(--background) 0%, var(--background) 12%, color-mix(in srgb, var(--background) 96%, transparent) 38%, color-mix(in srgb, var(--background) 78%, transparent) 62%, color-mix(in srgb, var(--background) 42%, transparent) 84%, transparent 100%)";
@@ -102,14 +95,7 @@ export default function HomeLanding() {
 
       <header className="landing-header">
         <div className="landing-header__wordmark">
-          <TayaWordmark
-            variant="landing"
-            themeToggle={{
-              onToggle: handleToggleTheme,
-              ariaLabel:
-                theme === "dark" ? "Switch to light mode" : "Switch to dark mode",
-            }}
-          />
+          <TayaWordmark variant="landing" />
         </div>
 
         <div className="landing-header__actions-bar">
@@ -136,7 +122,7 @@ export default function HomeLanding() {
 
               <Link
                 href="/signup"
-                className="landing-nav-signup landing-nav-auth-cta active:opacity-90 active:scale-[0.98]"
+                className="app-cta landing-nav-signup landing-nav-auth-cta active:opacity-90 active:scale-[0.98]"
                 style={{
                   fontFamily: sans,
                   fontWeight: 400,
@@ -147,8 +133,6 @@ export default function HomeLanding() {
                   alignItems: "center",
                   justifyContent: "center",
                   WebkitTapHighlightColor: "transparent",
-                  background: "var(--cta-bg)",
-                  color: "var(--cta-color)",
                   border: "1px solid color-mix(in srgb, var(--foreground) 14%, transparent)",
                   backdropFilter: "blur(14px) saturate(1.2)",
                   WebkitBackdropFilter: "blur(14px) saturate(1.2)",

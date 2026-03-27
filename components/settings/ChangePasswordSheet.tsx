@@ -463,12 +463,10 @@ export function ChangePasswordSheet({ onClose }: ChangePasswordSheetProps) {
                 onClick={() => submit()}
                 style={{
                   ...pillBtn,
-                  background: "var(--cta-bg)",
-                  color: "var(--cta-color)",
                   cursor: busy ? "not-allowed" : "pointer",
                   opacity: busy || !current || !next || !confirm ? 0.45 : 1,
                 }}
-                className="active:opacity-90"
+                className="app-cta active:opacity-90"
               >
                 {busy ? "Updating…" : "Update password"}
               </button>

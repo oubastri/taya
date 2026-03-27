@@ -1,14 +1,7 @@
-export type TayaWordmarkThemeToggle = {
-  onToggle: () => void;
-  ariaLabel: string;
-};
-
 type TayaWordmarkProps = {
   /** `feed` matches the feed header; `hero` is larger for landing; `figma` matches auth onboarding (457:3158); `landing` matches Figma MVP hero (468:3297) */
   variant?: "feed" | "hero" | "figma" | "landing";
   className?: string;
-  /** When set, the title is a control that calls `onToggle` (e.g. landing page theme switch). */
-  themeToggle?: TayaWordmarkThemeToggle;
 };
 
 const feedType: React.CSSProperties = {
@@ -42,7 +35,6 @@ const landingType: React.CSSProperties = {
 export function TayaWordmark({
   variant = "feed",
   className,
-  themeToggle,
 }: TayaWordmarkProps) {
   const type =
     variant === "hero"
@@ -52,11 +44,6 @@ export function TayaWordmark({
         : variant === "landing"
           ? landingType
           : feedType;
-  const title = (
-    <>
-      To All You <span style={{ color: "var(--accent)" }}>Athletes</span>
-    </>
-  );
   return (
     <h1
       className={className}
@@ -70,33 +57,7 @@ export function TayaWordmark({
         ...type,
       }}
     >
-      {themeToggle ? (
-        <button
-          type="button"
-          onClick={themeToggle.onToggle}
-          aria-label={themeToggle.ariaLabel}
-          className="taya-wordmark-theme-toggle"
-          style={{
-            display: "block",
-            width: "100%",
-            margin: 0,
-            padding: 0,
-            border: "none",
-            background: "none",
-            cursor: "pointer",
-            font: "inherit",
-            color: "inherit",
-            letterSpacing: "inherit",
-            textAlign: "inherit",
-            lineHeight: "inherit",
-            WebkitTapHighlightColor: "transparent",
-          }}
-        >
-          {title}
-        </button>
-      ) : (
-        title
-      )}
+      To All You <span style={{ color: "var(--accent)" }}>Athletes</span>
     </h1>
   );
 }

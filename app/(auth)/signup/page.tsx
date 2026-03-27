@@ -142,7 +142,7 @@ export default function SignupPage() {
               marginTop: 8,
               ...(loading ? figmaPrimaryBtnDisabled : {}),
             }}
-            className="active:opacity-90"
+            className="app-cta active:opacity-90"
           >
             {loading ? "Creating account…" : "Create account"}
           </button>

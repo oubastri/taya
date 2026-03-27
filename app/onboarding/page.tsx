@@ -379,7 +379,12 @@ export default function OnboardingPage() {
               />
             </div>
           </div>
-          <button type="submit" disabled={!firstName.trim()} style={primaryPill(!firstName.trim())}>
+          <button
+            type="submit"
+            disabled={!firstName.trim()}
+            className="app-cta"
+            style={primaryPill(!firstName.trim())}
+          >
             Continue
           </button>
         </form>
@@ -462,6 +467,7 @@ export default function OnboardingPage() {
 
           <button
             type="submit"
+            className="app-cta"
             disabled={
               loading ||
               !handleInput.trim() ||
@@ -577,7 +583,7 @@ export default function OnboardingPage() {
             </div>
           </div>
 
-          <button type="button" onClick={() => setStep("tagline")} style={primaryPill(false)}>
+          <button type="button" className="app-cta" onClick={() => setStep("tagline")} style={primaryPill(false)}>
             Continue
           </button>
 
@@ -641,7 +647,7 @@ export default function OnboardingPage() {
               />
             </div>
           </div>
-          <button type="button" onClick={() => setStep("prompts")} style={primaryPill(false)}>
+          <button type="button" className="app-cta" onClick={() => setStep("prompts")} style={primaryPill(false)}>
             Continue
           </button>
           <button type="button" onClick={() => setStep("photo")} style={backBtnStyle}>
@@ -747,7 +753,13 @@ export default function OnboardingPage() {
 
         {handleError ? <p style={figmaErrorText}>{handleError}</p> : null}
 
-        <button type="button" onClick={handleFinish} disabled={loading} style={primaryPill(loading)}>
+        <button
+          type="button"
+          className="app-cta"
+          onClick={handleFinish}
+          disabled={loading}
+          style={primaryPill(loading)}
+        >
           {loading ? "Saving…" : "Let's go"}
         </button>
 

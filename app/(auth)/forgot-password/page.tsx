@@ -110,7 +110,7 @@ export default function ForgotPasswordPage() {
               marginTop: 8,
               ...(loading ? figmaPrimaryBtnDisabled : {}),
             }}
-            className="active:opacity-90"
+              className="app-cta active:opacity-90"
           >
             {loading ? "Sending…" : "Send reset link"}
           </button>

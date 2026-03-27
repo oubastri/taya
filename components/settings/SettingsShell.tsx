@@ -99,7 +99,7 @@ export function SettingsShell({
                 top: "50%",
                 transform: "translateY(-50%)",
               }}
-              className="active:scale-[0.97]"
+              className="app-glass-icon-btn active:scale-[0.97]"
             >
               <Image
                 src="/icons/nav/arrow-left.svg"

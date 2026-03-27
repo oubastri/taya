@@ -29,7 +29,7 @@ export function IconButton({
   href,
   onClick,
   size = 44,
-  className = "active:opacity-80",
+  className = "transition-[background-color,border-color,transform,box-shadow] duration-200 ease-out hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-card)] active:opacity-80",
 }: IconButtonProps) {
   const style = { ...baseStyle, width: size, height: size };
 

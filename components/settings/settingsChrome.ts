@@ -18,15 +18,13 @@ export const SETTINGS_STICKY_TOP_BAR: CSSProperties = {
   borderBottom: "none",
 };
 
+/** Pair with global class `app-glass-icon-btn` for surface + hover. */
 export const SETTINGS_GLASS_BACK: CSSProperties = {
   width: 38,
   height: 38,
   borderRadius: "100px",
   backdropFilter: "blur(24px) saturate(1.8)",
   WebkitBackdropFilter: "blur(24px) saturate(1.8)",
-  background: "var(--glass-btn-bg)",
-  border: "1px solid var(--glass-btn-border)",
-  boxShadow: "var(--glass-btn-shadow)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",

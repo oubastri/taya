@@ -1,30 +1,58 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  THEME_DEV_STORAGE_KEY,
+  THEME_USER_STORAGE_KEY,
+  getResolvedTheme,
+  applyThemeToDocument,
+  THEME_REFRESH_EVENT,
+  isDevThemeChrome,
+  setUserThemePreference,
+} from "@/lib/app-theme";
 
 export type Theme = "light" | "dark";
-
-const STORAGE_KEY = "taya-theme";
 
 export function useTheme() {
   const [theme, setTheme] = useState<Theme>("light");
 
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
-    const initial: Theme =
-      stored ?? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-    setTheme(initial);
-    document.documentElement.setAttribute("data-theme", initial);
+    const sync = () => {
+      const t = getResolvedTheme();
+      setTheme(t);
+      applyThemeToDocument(t);
+    };
+
+    sync();
+
+    const mql = window.matchMedia("(prefers-color-scheme: dark)");
+    const onSchemeChange = () => {
+      if (isDevThemeChrome()) {
+        const o = localStorage.getItem(THEME_DEV_STORAGE_KEY);
+        if (o === "light" || o === "dark") return;
+      }
+      const user = localStorage.getItem(THEME_USER_STORAGE_KEY);
+      if (user === "light" || user === "dark") return;
+      sync();
+    };
+    mql.addEventListener("change", onSchemeChange);
+
+    const onRefresh = () => sync();
+    window.addEventListener(THEME_REFRESH_EVENT, onRefresh);
+    window.addEventListener("storage", onRefresh);
+
+    return () => {
+      mql.removeEventListener("change", onSchemeChange);
+      window.removeEventListener(THEME_REFRESH_EVENT, onRefresh);
+      window.removeEventListener("storage", onRefresh);
+    };
   }, []);
 
-  function toggle() {
-    setTheme((prev) => {
-      const next: Theme = prev === "light" ? "dark" : "light";
-      localStorage.setItem(STORAGE_KEY, next);
-      document.documentElement.setAttribute("data-theme", next);
-      return next;
-    });
-  }
+  const toggleTheme = () => {
+    const next = getResolvedTheme() === "dark" ? "light" : "dark";
+    setUserThemePreference(next);
+    setTheme(next);
+  };
 
-  return { theme, toggle };
+  return { theme, toggleTheme };
 }

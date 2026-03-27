@@ -43,6 +43,10 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
+const devThemeChrome =
+  process.env.NODE_ENV === "development" ||
+  process.env.NEXT_PUBLIC_DEV_MENU === "1";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -51,10 +55,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${lexendDeca.variable} ${b612Mono.variable}`} suppressHydrationWarning>
       <head>
-        {/* Apply saved theme before first paint — must live in <head>, not as sibling of <body> */}
+        {/* Theme before paint: dev override → saved user choice (`taya-theme`) → system */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('taya-theme')||( window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t);}catch(e){}})();`,
+            __html: `(function(){try{var dev=${devThemeChrome ? "true" : "false"};var d=localStorage.getItem('taya-theme-dev');var u=localStorage.getItem('taya-theme');var t;if(dev&&(d==='light'||d==='dark'))t=d;else if(u==='light'||u==='dark')t=u;else t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();`,
           }}
         />
       </head>

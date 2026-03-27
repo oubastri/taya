@@ -5,6 +5,11 @@ import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
 import { getAdapter, isRealMode } from "@/lib/data-adapter";
 import { useLogSheet } from "@/contexts/log-sheet";
+import {
+  getDevThemeMode,
+  setDevThemeOverride,
+  type DevThemeMode,
+} from "@/lib/app-theme";
 
 const isMockMode = !isRealMode;
 
@@ -60,6 +65,7 @@ export function DevPanel() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [profileIdInput, setProfileIdInput] = useState("");
+  const [devThemeMode, setDevThemeMode] = useState<DevThemeMode>("system");
   const { open: openLogSheet } = useLogSheet();
 
   const visible = showDevChrome();
@@ -93,6 +99,11 @@ export function DevPanel() {
   useEffect(() => {
     setOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!open || !visible) return;
+    setDevThemeMode(getDevThemeMode());
+  }, [open, visible]);
 
   if (!visible) return null;
 
@@ -258,6 +269,37 @@ export function DevPanel() {
               # switch: .env.local → restart npm run dev
             </span>
           </pre>
+
+          <div style={{ color: T.dim, margin: "10px 0 4px", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em" }}>
+            # theme
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 10 }}>
+            {(["system", "light", "dark"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => {
+                  setDevThemeMode(mode);
+                  setDevThemeOverride(mode);
+                }}
+                style={{
+                  ...btnBase,
+                  width: "auto",
+                  flex: "1 1 30%",
+                  minWidth: "fit-content",
+                  borderColor:
+                    devThemeMode === mode ? T.border : T.borderDim,
+                  color: devThemeMode === mode ? T.accent : T.accentMuted,
+                  textAlign: "center",
+                }}
+              >
+                {mode === "system" ? "system" : mode}
+              </button>
+            ))}
+          </div>
+          <div style={{ color: T.dim, fontSize: 10, marginTop: -6, marginBottom: 10 }}>
+            app uses device light/dark · override for testing only
+          </div>
 
           <div style={{ color: T.dim, margin: "10px 0 4px", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em" }}>
             # sheets

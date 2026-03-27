@@ -10,9 +10,8 @@ export function AddWorkoutButton({ onClick, label = "Add move" }: Props) {
     <button
       type="button"
       onClick={onClick}
-      className="font-sans font-medium text-white transition-all duration-200 ease-out hover:scale-[1.02] hover:opacity-90 active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
+      className="app-cta font-sans font-medium active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--foreground)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
       style={{
-        background: "#000000",
         padding: "12px 24px",
         borderRadius: "9999px",
         letterSpacing: "-0.02em",

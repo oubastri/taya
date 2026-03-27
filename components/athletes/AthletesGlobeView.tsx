@@ -9,11 +9,8 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { AthletesCounter } from "@/components/AthletesCounter";
 import { CustomCursor } from "@/components/CustomCursor";
-import { useTheme } from "@/hooks/use-theme";
 import { SHEET_EXIT_MS, SHEET_SPRING } from "@/lib/sheetMotion";
 import type { FriendData } from "@/types/user";
 
@@ -27,9 +24,6 @@ const APP_TOP_BAR_GLASS_BTN: CSSProperties = {
   borderRadius: "100px",
   backdropFilter: "blur(24px) saturate(1.8)",
   WebkitBackdropFilter: "blur(24px) saturate(1.8)",
-  background: "var(--glass-btn-bg)",
-  border: "1px solid var(--glass-btn-border)",
-  boxShadow: "var(--glass-btn-shadow)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -804,24 +798,7 @@ export default function AthletesGlobeView({
   chromeOverlay = null,
   openSearchOnMount = false,
 }: AthletesGlobeViewProps) {
-  const router = useRouter();
-  const { theme, toggle: toggleTheme } = useTheme();
-  const [exitingTheme, setExitingTheme] = useState<"light" | "dark" | null>(null);
-  const themeExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const handleToggleTheme = useCallback(() => {
-    setExitingTheme(theme);
-    if (themeExitTimerRef.current) clearTimeout(themeExitTimerRef.current);
-    themeExitTimerRef.current = setTimeout(() => setExitingTheme(null), 200);
-    toggleTheme();
-  }, [theme, toggleTheme]);
-
   const [searchOpen, setSearchOpen] = useState(false);
-
-  useEffect(() => {
-    return () => {
-      if (themeExitTimerRef.current) clearTimeout(themeExitTimerRef.current);
-    };
-  }, []);
 
   useEffect(() => {
     if (mode !== "app" || !openSearchOnMount) return;
@@ -1657,7 +1634,7 @@ export default function AthletesGlobeView({
             </div>
           </div>
 
-          {/* ── theme, settings, search (L→R: theme, settings, search at screen edge) ── */}
+          {/* ── search ── */}
           <div
             style={{
               position: "fixed",
@@ -1672,53 +1649,9 @@ export default function AthletesGlobeView({
           >
             <button
               type="button"
-              onClick={handleToggleTheme}
-              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-              className="theme-toggle-btn active:scale-95"
-              style={{ ...APP_TOP_BAR_GLASS_BTN, overflow: "hidden" }}
-            >
-              {exitingTheme && (
-                <Image
-                  key={`exit-${exitingTheme}`}
-                  src={`/icons/dark-light-mode/${exitingTheme === "dark" ? "sun" : "moon"}.svg`}
-                  alt=""
-                  width={22}
-                  height={22}
-                  aria-hidden
-                  className={`activity-icon-auto theme-icon-exit`}
-                />
-              )}
-              <Image
-                key={`enter-${theme}`}
-                src={`/icons/dark-light-mode/${theme === "dark" ? "sun" : "moon"}.svg`}
-                alt=""
-                width={22}
-                height={22}
-                aria-hidden
-                className={`activity-icon-auto theme-icon-enter`}
-              />
-            </button>
-            <button
-              type="button"
-              onClick={() => router.push("/settings")}
-              aria-label="Settings"
-              style={APP_TOP_BAR_GLASS_BTN}
-              className="active:scale-95"
-            >
-              <Image
-                src="/icons/nav/dots.svg"
-                alt=""
-                width={20}
-                height={20}
-                aria-hidden
-                className="nav-btn-icon"
-              />
-            </button>
-            <button
-              type="button"
               onClick={() => setSearchOpen(true)}
               style={APP_TOP_BAR_GLASS_BTN}
-              className="active:scale-95"
+              className="app-glass-icon-btn active:scale-95"
               aria-label="Search people"
             >
               <svg
