@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { LikePerson } from "@/types/likes";
 import { SHEET_EXIT_MS, SHEET_SPRING } from "@/lib/sheetMotion";
+import { UserAvatar } from "@/components/UserAvatar";
 
 const NAV_HEIGHT = 54;
 
@@ -242,10 +243,18 @@ export function LikersSheet({
           }}
         >
           {people.map((f, i) => (
-            <button
+            <div
               key={f.id}
-              type="button"
+              role="button"
+              tabIndex={onSelectProfile ? 0 : undefined}
               onClick={() => onSelectProfile?.(f.id)}
+              onKeyDown={(e) => {
+                if (!onSelectProfile) return;
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onSelectProfile(f.id);
+                }
+              }}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -273,12 +282,7 @@ export function LikersSheet({
                 }}
               >
                 {f.avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={f.avatarUrl}
-                    alt={f.name}
-                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                  />
+                  <UserAvatar avatarUrl={f.avatarUrl} name={f.name} fillParent expandable />
                 ) : (
                   <div
                     style={{
@@ -340,7 +344,7 @@ export function LikersSheet({
                   Following
                 </span>
               )}
-            </button>
+            </div>
           ))}
 
           <div style={{ height: "max(env(safe-area-inset-bottom), 24px)" }} />

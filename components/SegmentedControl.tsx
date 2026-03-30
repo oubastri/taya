@@ -32,7 +32,8 @@ const defaultStyle: React.CSSProperties = {
   border: "1.5px solid #000",
   borderRadius: "clamp(6px, 1.2vw, 12px)",
   cursor: "pointer",
-  transition: "border-radius 0.3s ease, background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease",
+  transition:
+    "border-radius 0.3s ease, background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
 };
 
 const activeStyle: React.CSSProperties = {
@@ -69,6 +70,9 @@ export function SegmentedControl({ value, onChange }: SegmentedControlProps) {
         let style = { ...defaultStyle };
         if (isActive) style = { ...activeStyle };
         else if (isHover) style = { ...hoverStyle };
+        if (isHover) {
+          style = { ...style, transform: "translateY(-1px)" };
+        }
 
         return (
           <button

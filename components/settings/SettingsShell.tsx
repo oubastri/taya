@@ -57,7 +57,7 @@ export function SettingsShell({
                 borderRadius: "50%",
                 background: "var(--settings-hub-back-bg)",
                 border: "1px solid var(--settings-hub-back-border)",
-                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.06)",
+                boxShadow: "none",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",

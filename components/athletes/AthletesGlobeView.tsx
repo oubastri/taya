@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { AthletesCounter } from "@/components/AthletesCounter";
-import { CustomCursor } from "@/components/CustomCursor";
+import { UserAvatar } from "@/components/UserAvatar";
 import { SHEET_EXIT_MS, SHEET_SPRING } from "@/lib/sheetMotion";
 import type { FriendData } from "@/types/user";
 
@@ -104,8 +104,6 @@ export type AthletesGlobeViewProps = {
   hydrated: boolean;
   friendsForSearch?: FriendData[];
   onNavigateToProfile: (userId: string) => void;
-  /** Default true. Set false on marketing surfaces where the dot cursor is distracting. */
-  showCustomCursor?: boolean;
   /** Default true. When false, only avatar tiles are drawn (no names, handles, or stats). */
   showAvatarLabels?: boolean;
   /**
@@ -408,6 +406,58 @@ function drawUserBowl(
   ctx.restore();
 }
 
+/** Bowl-warp hit test (same projection as drawAvatarPass). */
+function findAvatarIndexAtScreen(
+  screenX: number,
+  screenY: number,
+  px: number,
+  py: number,
+  z: number,
+  tw: number,
+  th: number,
+  bpos: { x: number; y: number }[],
+  userCount: number,
+): number | null {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const scx = vw / 2;
+  const scy = vh / 2;
+  const maxR = Math.hypot(vw, vh) * 0.5;
+  const periodX = tw * z;
+  const periodY = th * z;
+  const normPx = -(((-px % periodX) + periodX) % periodX);
+  const normPy = -(((-py % periodY) + periodY) % periodY);
+
+  for (let tty = 0; tty <= 1; tty++) {
+    for (let ttx = 0; ttx <= 1; ttx++) {
+      for (let i = 0; i < userCount; i++) {
+        const wx = bpos[i]!.x + AVATAR_SIZE / 2 + ttx * tw;
+        const wy = bpos[i]!.y + AVATAR_SIZE / 2 + tty * th;
+        const sx0 = normPx + wx * z;
+        const sy0 = normPy + wy * z;
+        const dvx = sx0 - scx;
+        const dvy = sy0 - scy;
+        const dist = Math.hypot(dvx, dvy);
+        const r = dist / maxR;
+        const warp = 1 + BOWL_K * r * r;
+        const sx = scx + dvx * warp;
+        const sy = scy + dvy * warp;
+        const depthScale = 1 + BOWL_SCALE * r * r;
+        const S = AVATAR_SIZE * z * depthScale;
+        if (
+          screenX >= sx - S / 2 &&
+          screenX <= sx + S / 2 &&
+          screenY >= sy - S / 2 &&
+          screenY <= sy + S / 2
+        ) {
+          return i;
+        }
+      }
+    }
+  }
+  return null;
+}
+
 // ─── SearchSheet ──────────────────────────────────────────────────────────────
 function SearchSheet({
   friends,
@@ -663,10 +713,17 @@ function SearchSheet({
           }}
         >
           {results.map((f, i) => (
-            <button
+            <div
               key={f.id}
-              type="button"
+              role="button"
+              tabIndex={0}
               onClick={() => onSelect(f.id)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onSelect(f.id);
+                }
+              }}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -694,11 +751,7 @@ function SearchSheet({
                 }}
               >
                 {f.avatarUrl ? (
-                  <img
-                    src={f.avatarUrl}
-                    alt={f.name}
-                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                  />
+                  <UserAvatar avatarUrl={f.avatarUrl} name={f.name} fillParent expandable />
                 ) : (
                   <div
                     style={{
@@ -760,7 +813,7 @@ function SearchSheet({
                   Following
                 </span>
               )}
-            </button>
+            </div>
           ))}
 
           {results.length === 0 && (
@@ -792,7 +845,6 @@ export default function AthletesGlobeView({
   hydrated,
   friendsForSearch = [],
   onNavigateToProfile,
-  showCustomCursor = true,
   showAvatarLabels = true,
   dotsOverlayAboveChrome = false,
   chromeOverlay = null,
@@ -1373,52 +1425,54 @@ export default function AthletesGlobeView({
   // Because the bowl warp means a world position no longer maps linearly to
   // screen space, we forward-project each visible avatar (same math as the
   // draw loop) and check whether the tap lands inside its warped bounds.
+  const updateGlobeCanvasCursor = useCallback(
+    (clientX: number, clientY: number) => {
+      const el = canvasRef.current;
+      if (!el) return;
+      if (modeRef.current !== "app" || ptrs.current.size > 0) {
+        el.style.cursor = "";
+        return;
+      }
+      const { px, py, z } = viewRef.current;
+      const { TILE_W: tw, TILE_H: th, basePositions: bpos, allUsers: users } =
+        gridRef.current;
+      const idx = findAvatarIndexAtScreen(
+        clientX,
+        clientY,
+        px,
+        py,
+        z,
+        tw,
+        th,
+        bpos,
+        users.length,
+      );
+      const clickable =
+        idx !== null && idx < users.length && !users[idx]!.isYou;
+      el.style.cursor = clickable ? "pointer" : "";
+    },
+    [],
+  );
+
   const detectTap = useCallback(
     (screenX: number, screenY: number) => {
       const { px, py, z } = viewRef.current;
       const { TILE_W: tw, TILE_H: th, basePositions: bpos, allUsers: users } =
         gridRef.current;
-
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
-      const scx = vw / 2;
-      const scy = vh / 2;
-      const maxR = Math.hypot(vw, vh) * 0.5;
-
-      // Same normalised-viewport math as the draw loop
-      const periodX = tw * z;
-      const periodY = th * z;
-      const normPx = -(((-px % periodX) + periodX) % periodX);
-      const normPy = -(((-py % periodY) + periodY) % periodY);
-
-      // Forward-project each avatar using the same 2×2 tile seam approach
-      // and check whether the tap lands inside its warped bounds.
-      for (let tty = 0; tty <= 1; tty++) {
-        for (let ttx = 0; ttx <= 1; ttx++) {
-          for (let i = 0; i < users.length; i++) {
-            const wx = bpos[i].x + AVATAR_SIZE / 2 + ttx * tw;
-            const wy = bpos[i].y + AVATAR_SIZE / 2 + tty * th;
-            const sx0 = normPx + wx * z;
-            const sy0 = normPy + wy * z;
-            const dvx = sx0 - scx;
-            const dvy = sy0 - scy;
-            const dist = Math.hypot(dvx, dvy);
-            const r = dist / maxR;
-            const warp = 1 + BOWL_K * r * r;
-            const sx = scx + dvx * warp;
-            const sy = scy + dvy * warp;
-            const depthScale = 1 + BOWL_SCALE * r * r;
-            const S = AVATAR_SIZE * z * depthScale;
-            if (
-              screenX >= sx - S / 2 && screenX <= sx + S / 2 &&
-              screenY >= sy - S / 2 && screenY <= sy + S / 2
-            ) {
-              if (mode === "app" && !users[i].isYou) onNavigateToProfile(users[i].id);
-              return;
-            }
-          }
-        }
-      }
+      const idx = findAvatarIndexAtScreen(
+        screenX,
+        screenY,
+        px,
+        py,
+        z,
+        tw,
+        th,
+        bpos,
+        users.length,
+      );
+      if (idx === null) return;
+      const u = users[idx]!;
+      if (mode === "app" && !u.isYou) onNavigateToProfile(u.id);
     },
     [mode, onNavigateToProfile],
   );
@@ -1480,8 +1534,10 @@ export default function AthletesGlobeView({
           z: newZ,
         });
       }
+
+      updateGlobeCanvasCursor(e.clientX, e.clientY);
     },
-    [commit],
+    [commit, updateGlobeCanvasCursor],
   );
 
   const onPointerUp = useCallback(
@@ -1537,13 +1593,21 @@ export default function AthletesGlobeView({
         }
         ptrHistory.current = [];
       }
+
+      if (ptrs.current.size === 0) {
+        updateGlobeCanvasCursor(e.clientX, e.clientY);
+      }
     },
-    [startInertia, startZoomInertia, detectTap],
+    [startInertia, startZoomInertia, detectTap, updateGlobeCanvasCursor],
   );
+
+  const onPointerLeaveGlobe = useCallback(() => {
+    const el = canvasRef.current;
+    if (el) el.style.cursor = "";
+  }, []);
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "var(--background)" }}>
-      {showCustomCursor && <CustomCursor />}
       {/* ── infinite canvas (split on landing: avatars → chrome → dots) ─── */}
       {dotsOverlayAboveChrome ? (
         <>
@@ -1559,6 +1623,7 @@ export default function AthletesGlobeView({
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
+            onPointerLeave={onPointerLeaveGlobe}
           />
           <div
             style={{
@@ -1588,6 +1653,7 @@ export default function AthletesGlobeView({
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
+          onPointerLeave={onPointerLeaveGlobe}
         />
       )}
 

@@ -344,7 +344,7 @@ export default function ProfilePage() {
                 backgroundColor: "var(--foreground-subtle)",
               }}
             >
-              <UserAvatar avatarUrl={user.avatarUrl} name={displayName} fillParent />
+              <UserAvatar avatarUrl={user.avatarUrl} name={displayName} fillParent expandable />
             </div>
             <ProfileStatStrip
               followingCount={followingCount}

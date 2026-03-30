@@ -275,7 +275,7 @@ export default function SettingsPage() {
               backgroundColor: "#979797",
             }}
           >
-            <UserAvatar avatarUrl={user.avatarUrl} name={user.name} fillParent />
+            <UserAvatar avatarUrl={user.avatarUrl} name={user.name} fillParent expandable />
           </div>
           <button
             type="button"
@@ -582,7 +582,7 @@ export default function SettingsPage() {
           const answer = promptAnswers[i] ?? "";
           return (
             <div key={question} style={hubCard}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
                 <div
                   style={{
                     display: "flex",

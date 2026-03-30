@@ -1,44 +1,89 @@
 "use client";
 
+import { useState, type CSSProperties } from "react";
+import { ProfilePhotoLightbox } from "./ProfilePhotoLightbox";
+
 interface UserAvatarProps {
   avatarUrl?: string;
   name?: string;
   size?: "sm" | "md" | "lg" | "xl";
   /** When true, fill the parent container (100% width/height). Use for custom-sized containers; image will cover and crop. */
   fillParent?: boolean;
+  /** When true and `avatarUrl` is set, tap/click opens a full-screen preview. */
+  expandable?: boolean;
 }
 
 const SIZE_MAP = { sm: 32, md: 48, lg: 80, xl: 56 } as const;
 
-export function UserAvatar({ avatarUrl, name, size = "md", fillParent = false }: UserAvatarProps) {
+export function UserAvatar({
+  avatarUrl,
+  name,
+  size = "md",
+  fillParent = false,
+  expandable = false,
+}: UserAvatarProps) {
   const px = SIZE_MAP[size];
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   if (avatarUrl) {
-    return (
-      <div
+    const boxStyle: CSSProperties = {
+      ...(fillParent
+        ? { width: "100%", height: "100%" }
+        : { width: px, height: px }),
+      borderRadius: fillParent ? "inherit" : "50%",
+      overflow: "hidden",
+      flexShrink: 0,
+      display: "block",
+    };
+
+    const imgEl = (
+      <img
+        src={avatarUrl}
+        alt={name ?? "User avatar"}
         style={{
-          ...(fillParent
-            ? { width: "100%", height: "100%" }
-            : { width: px, height: px }),
-          borderRadius: fillParent ? "inherit" : "50%",
-          overflow: "hidden",
-          flexShrink: 0,
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          objectPosition: "center",
           display: "block",
         }}
-      >
-        <img
-          src={avatarUrl}
-          alt={name ?? "User avatar"}
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            objectPosition: "center",
-            display: "block",
-          }}
-        />
-      </div>
+      />
     );
+
+    if (expandable) {
+      return (
+        <>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setLightboxOpen(true);
+            }}
+            aria-label={name ? `View ${name}'s profile photo larger` : "View profile photo larger"}
+            style={{
+              ...boxStyle,
+              padding: 0,
+              margin: 0,
+              border: "none",
+              background: "none",
+              cursor: "zoom-in",
+              WebkitTapHighlightColor: "transparent",
+            }}
+          >
+            {imgEl}
+          </button>
+          <ProfilePhotoLightbox
+            open={lightboxOpen}
+            onClose={() => setLightboxOpen(false)}
+            src={avatarUrl}
+            alt={name ? `${name}'s profile photo` : "Profile photo"}
+          />
+        </>
+      );
+    }
+
+    return <div style={boxStyle}>{imgEl}</div>;
   }
 
   // Default: black circle with green running figure silhouette

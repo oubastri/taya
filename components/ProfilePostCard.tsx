@@ -94,6 +94,7 @@ export function ProfilePostCard({
               avatarUrl={userAvatarUrl}
               name={userHandle}
               size="md"
+              expandable
             />
           </div>
         </div>

@@ -16,8 +16,13 @@ import { useTheme } from "@/hooks/use-theme";
 import { createClient } from "@/lib/supabase/client";
 import { isRealMode, clearAuthCache } from "@/lib/data-adapter";
 import { getFeedbackMailto } from "@/lib/feedback";
+import { SHEET_EXIT_MS, SHEET_SPRING } from "@/lib/sheetMotion";
 
 const MOBILE_MENU_MQ = "(max-width: 599px)";
+
+function isMobileMenuViewport(): boolean {
+  return typeof window !== "undefined" && window.matchMedia(MOBILE_MENU_MQ).matches;
+}
 
 /** Match assets in `public/icons/settings/` */
 const ICON = {
@@ -55,7 +60,12 @@ export function AccountMenu({ triggerStyle }: AccountMenuProps) {
   const { theme, toggleTheme } = useTheme();
   const menuId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const scrimRef = useRef<HTMLButtonElement>(null);
+  const sheetDragRef = useRef({ active: false, startY: 0, dy: 0 });
+  const sheetClosingRef = useRef(false);
   const [open, setOpen] = useState(false);
+  const [sheetAnimOpen, setSheetAnimOpen] = useState(false);
   const [mobileSheet, setMobileSheet] = useState(
     () => typeof window !== "undefined" && window.matchMedia(MOBILE_MENU_MQ).matches,
   );
@@ -100,13 +110,46 @@ export function AccountMenu({ triggerStyle }: AccountMenuProps) {
   }, [open, mobileSheet, updatePopoverPosition]);
 
   useEffect(() => {
+    if (!open || !mobileSheet) {
+      setSheetAnimOpen(false);
+      sheetClosingRef.current = false;
+      return;
+    }
+    setSheetAnimOpen(false);
+    let cancelled = false;
+    const outer = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!cancelled) setSheetAnimOpen(true);
+      });
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(outer);
+    };
+  }, [open, mobileSheet]);
+
+  const close = useCallback(() => {
+    if (isMobileMenuViewport() && open) {
+      if (sheetClosingRef.current) return;
+      sheetClosingRef.current = true;
+      setSheetAnimOpen(false);
+      window.setTimeout(() => {
+        setOpen(false);
+        sheetClosingRef.current = false;
+      }, SHEET_EXIT_MS);
+      return;
+    }
+    setOpen(false);
+  }, [open]);
+
+  useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") close();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
+  }, [open, close]);
 
   useEffect(() => {
     if (!open || !mobileSheet) return;
@@ -117,20 +160,80 @@ export function AccountMenu({ triggerStyle }: AccountMenuProps) {
     };
   }, [open, mobileSheet]);
 
-  const close = useCallback(() => setOpen(false), []);
-
   const go = useCallback(
     (href: string) => {
+      const mobile = isMobileMenuViewport();
       close();
-      router.push(href);
+      window.setTimeout(() => router.push(href), mobile ? SHEET_EXIT_MS : 0);
     },
     [close, router],
   );
 
   const onFeedback = useCallback(() => {
+    const mail = getFeedbackMailto();
+    const mobile = isMobileMenuViewport();
     close();
-    window.location.href = getFeedbackMailto();
+    window.setTimeout(() => {
+      window.location.href = mail;
+    }, mobile ? SHEET_EXIT_MS : 0);
   }, [close]);
+
+  const onSheetHandleDown = useCallback((e: React.PointerEvent) => {
+    sheetDragRef.current = { active: true, startY: e.clientY, dy: 0 };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    if (sheetRef.current) sheetRef.current.style.transition = "none";
+  }, []);
+
+  const onSheetHandleMove = useCallback((e: React.PointerEvent) => {
+    if (!sheetDragRef.current.active) return;
+    const dy = Math.max(0, e.clientY - sheetDragRef.current.startY);
+    sheetDragRef.current.dy = dy;
+    if (sheetRef.current) {
+      sheetRef.current.style.transform = `translateY(${dy}px)`;
+    }
+  }, []);
+
+  const onSheetHandleUp = useCallback(() => {
+    if (!sheetDragRef.current.active) return;
+    sheetDragRef.current.active = false;
+    const { dy } = sheetDragRef.current;
+
+    if (dy > 90) {
+      const vh = window.innerHeight;
+      if (sheetRef.current) {
+        sheetRef.current.style.transition = `transform ${SHEET_SPRING}`;
+        sheetRef.current.style.transform = `translateY(${vh}px)`;
+      }
+      if (scrimRef.current) {
+        scrimRef.current.style.transition = `opacity ${SHEET_SPRING}`;
+        scrimRef.current.style.opacity = "0";
+      }
+      sheetClosingRef.current = true;
+      window.setTimeout(() => {
+        setOpen(false);
+        sheetClosingRef.current = false;
+        if (sheetRef.current) {
+          sheetRef.current.style.transition = "";
+          sheetRef.current.style.transform = "";
+        }
+        if (scrimRef.current) {
+          scrimRef.current.style.transition = "";
+          scrimRef.current.style.opacity = "";
+        }
+      }, SHEET_EXIT_MS);
+    } else if (sheetRef.current) {
+      sheetRef.current.style.willChange = "transform";
+      sheetRef.current.style.transition = `transform ${SHEET_SPRING}`;
+      sheetRef.current.style.transform = "translateY(0)";
+      window.setTimeout(() => {
+        if (sheetRef.current) {
+          sheetRef.current.style.transition = "";
+          sheetRef.current.style.transform = "";
+          sheetRef.current.style.willChange = "";
+        }
+      }, SHEET_EXIT_MS);
+    }
+  }, []);
 
   const handleSignOut = useCallback(async () => {
     setSigningOut(true);
@@ -140,9 +243,12 @@ export function AccountMenu({ triggerStyle }: AccountMenuProps) {
         await supabase.auth.signOut();
         clearAuthCache();
       }
+      const mobile = isMobileMenuViewport();
       close();
-      router.push("/login");
-      router.refresh();
+      window.setTimeout(() => {
+        router.push("/login");
+        router.refresh();
+      }, mobile ? SHEET_EXIT_MS : 0);
     } finally {
       setSigningOut(false);
     }
@@ -221,25 +327,66 @@ export function AccountMenu({ triggerStyle }: AccountMenuProps) {
     open && typeof document !== "undefined"
       ? createPortal(
           <>
-            <button
-              type="button"
-              aria-label="Close menu"
-              className="account-menu__backdrop"
-              onClick={close}
-            />
             {mobileSheet ? (
-              <div
-                className="account-menu__sheet"
-                role="menu"
-                id={menuId}
-                aria-label="Account"
-              >
-                <div className="account-menu__sheet-handle-wrap" aria-hidden>
-                  <div className="account-menu__sheet-handle" />
+              <>
+                <button
+                  ref={scrimRef}
+                  type="button"
+                  aria-label="Close menu"
+                  onClick={close}
+                  style={{
+                    position: "fixed",
+                    inset: 0,
+                    zIndex: 99,
+                    border: "none",
+                    padding: 0,
+                    margin: 0,
+                    background: "var(--overlay)",
+                    cursor: "pointer",
+                    WebkitTapHighlightColor: "transparent",
+                    opacity: sheetAnimOpen ? 1 : 0,
+                    transition: `opacity ${SHEET_SPRING}`,
+                  }}
+                />
+                <div
+                  ref={sheetRef}
+                  className="account-menu__sheet"
+                  role="menu"
+                  id={menuId}
+                  aria-label="Account"
+                  style={{
+                    zIndex: 100,
+                    transform: sheetAnimOpen ? "translateY(0)" : "translateY(100%)",
+                    transition: `transform ${SHEET_SPRING}`,
+                  }}
+                >
+                  <div
+                    className="account-menu__sheet-handle-wrap"
+                    aria-hidden
+                    onPointerDown={onSheetHandleDown}
+                    onPointerMove={onSheetHandleMove}
+                    onPointerUp={onSheetHandleUp}
+                    onPointerCancel={onSheetHandleUp}
+                    style={{
+                      cursor: "grab",
+                      touchAction: "none",
+                      userSelect: "none",
+                    }}
+                  >
+                    <div className="account-menu__sheet-handle" />
+                  </div>
+                  <div className="account-menu__sheet-inner">{panelContent}</div>
                 </div>
-                <div className="account-menu__sheet-inner">{panelContent}</div>
-              </div>
-            ) : popover ? (
+              </>
+            ) : (
+              <button
+                type="button"
+                aria-label="Close menu"
+                className="account-menu__backdrop"
+                onClick={close}
+              />
+            )}
+            {!mobileSheet && popover ? (
               <div
                 className="account-menu__popover"
                 style={{
@@ -264,7 +411,10 @@ export function AccountMenu({ triggerStyle }: AccountMenuProps) {
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          if (open) close();
+          else setOpen(true);
+        }}
         aria-label="Account menu"
         aria-expanded={open}
         aria-haspopup="menu"

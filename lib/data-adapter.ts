@@ -1,6 +1,9 @@
 import type { User, FriendData } from "@/types/user";
 import type { LikePerson } from "@/types/likes";
 import type { Workout, ActivityType } from "@/types/workout";
+
+/** Matches `FeedMode` from the home feed toggle (RPC `fetch_feed_*`). */
+export type FeedListMode = "team" | "stadium";
 import {
   loadWorkouts,
   saveWorkouts,
@@ -263,6 +266,120 @@ export async function fetchWorkouts(): Promise<Workout[]> {
   return workouts;
 }
 
+/** All workouts for another user's profile (RLS: any authenticated reader). */
+export async function fetchWorkoutsForUser(profileUserId: string): Promise<Workout[]> {
+  if (!profileUserId) return [];
+
+  const { data, error } = await supabase()
+    .from("workouts")
+    .select("*")
+    .eq("user_id", profileUserId)
+    .order("date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+
+  return (data ?? []).map((w) => ({
+    id: w.id,
+    date: w.date,
+    description: w.description ?? "",
+    createdAt: w.created_at,
+    activityType: (w.activity_type ?? "other") as ActivityType,
+  }));
+}
+
+export type FeedPageCursor = {
+  date: string;
+  createdAt: string;
+  id: string;
+};
+
+export type FeedPageItem = Workout & {
+  userId: string;
+  userName: string;
+  userHandle: string;
+  userAvatarUrl?: string;
+  likeCount: number;
+  likedByMe: boolean;
+};
+
+type RpcFeedRow = {
+  id: string;
+  user_id: string;
+  date: string;
+  description: string;
+  activity_type: string;
+  created_at: string;
+  author_name: string;
+  author_handle: string;
+  author_avatar_url: string | null;
+  like_count: number | string;
+  liked_by_me: boolean;
+};
+
+function mapRpcFeedRow(row: RpcFeedRow): FeedPageItem {
+  const cnt =
+    typeof row.like_count === "string" ? parseInt(row.like_count, 10) : row.like_count;
+  return {
+    id: row.id,
+    date: row.date,
+    description: row.description ?? "",
+    createdAt: row.created_at,
+    activityType: (row.activity_type ?? "other") as ActivityType,
+    userId: row.user_id,
+    userName: row.author_name ?? "",
+    userHandle: row.author_handle ?? "",
+    userAvatarUrl: row.author_avatar_url ?? undefined,
+    likeCount: Number.isFinite(cnt) ? cnt : 0,
+    likedByMe: Boolean(row.liked_by_me),
+  };
+}
+
+export async function fetchFeedTotal(mode: FeedListMode): Promise<number> {
+  const uid = await getAuthUserId();
+  if (!uid) return 0;
+
+  const { data, error } = await supabase().rpc("fetch_feed_total", {
+    p_feed_mode: mode,
+  });
+
+  if (error) throw error;
+  const n = data as number | string | null;
+  if (n == null) return 0;
+  return typeof n === "string" ? parseInt(n, 10) : n;
+}
+
+/**
+ * Cursor-based page of feed rows with like counts (server-side).
+ * Requests `pageSize + 1` rows to detect `hasMore`.
+ */
+export async function fetchFeedPage(
+  mode: FeedListMode,
+  cursor: FeedPageCursor | null,
+  pageSize: number,
+): Promise<{ items: FeedPageItem[]; hasMore: boolean }> {
+  const uid = await getAuthUserId();
+  if (!uid) return { items: [], hasMore: false };
+
+  const want = Math.max(1, pageSize) + 1;
+  const { data, error } = await supabase().rpc("fetch_feed_page", {
+    p_feed_mode: mode,
+    p_after_date: cursor?.date ?? null,
+    p_after_created_at: cursor?.createdAt ?? null,
+    p_after_id: cursor?.id ?? null,
+    p_fetch_limit: want,
+  });
+
+  if (error) throw error;
+  const rows = (data ?? []) as RpcFeedRow[];
+  const hasMore = rows.length > pageSize;
+  const slice = hasMore ? rows.slice(0, pageSize) : rows;
+  return {
+    items: slice.map(mapRpcFeedRow),
+    hasMore,
+  };
+}
+
 export async function addWorkoutSupabase(
   date: string,
   description: string,
@@ -326,27 +443,6 @@ export async function fetchFriends(): Promise<FriendData[]> {
 
   const followingIds = new Set((follows ?? []).map((f) => f.following_id));
 
-  const friendIds = (profiles ?? []).map((p) => p.id);
-  const workoutsByUser: Record<string, Workout[]> = {};
-
-  if (friendIds.length > 0) {
-    const { data: wRows } = await supabase()
-      .from("workouts")
-      .select("*")
-      .in("user_id", friendIds);
-
-    for (const w of wRows ?? []) {
-      const mapped: Workout = {
-        id: w.id,
-        date: w.date,
-        description: w.description ?? "",
-        createdAt: w.created_at,
-        activityType: (w.activity_type ?? "other") as ActivityType,
-      };
-      (workoutsByUser[w.user_id] ??= []).push(mapped);
-    }
-  }
-
   const friends: FriendData[] = (profiles ?? []).map((p) => ({
     id: p.id,
     name: p.name ?? "",
@@ -359,7 +455,7 @@ export async function fetchFriends(): Promise<FriendData[]> {
     bio: p.bio ?? undefined,
     prompts: p.prompts ?? undefined,
     following: followingIds.has(p.id),
-    workouts: workoutsByUser[p.id] ?? [],
+    workouts: [],
   }));
 
   supabaseCache.friends = friends;

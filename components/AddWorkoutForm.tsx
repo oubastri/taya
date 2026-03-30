@@ -80,8 +80,7 @@ export function AddWorkoutForm({
         )}
         <button
           type="submit"
-          className="flex-1 rounded-xl py-3.5 text-lg font-bold text-white transition-all hover:brightness-110 active:scale-[0.98]"
-          style={{ background: "var(--accent)" }}
+          className="flex-1 rounded-xl bg-[var(--accent)] py-3.5 text-lg font-bold text-white transition-[transform,background-color] duration-200 ease-out hover:-translate-y-px hover:bg-[color-mix(in_srgb,var(--accent)_97%,#ffffff)] motion-reduce:hover:translate-y-0 active:scale-[0.98]"
         >
           Save
         </button>

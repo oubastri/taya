@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useFriends } from "@/hooks/use-friends";
 import { useUser } from "@/hooks/use-user";
+import { isRealMode, fetchWorkoutsForUser } from "@/lib/data-adapter";
 import { loadLikersForEntity } from "@/lib/load-likers";
 import { useLikes } from "@/hooks/use-likes";
 import { ProfileCalendar } from "@/components/ProfileCalendar";
@@ -131,7 +132,31 @@ export default function UserProfilePage() {
 
   const isMe = userId === "me";
   const friend = !isMe ? friends.find((f) => f.id === userId) : null;
-  const workouts = useMemo(() => friend?.workouts ?? [], [friend?.workouts]);
+  const [profileWorkouts, setProfileWorkouts] = useState<Workout[] | null>(null);
+
+  const workouts = useMemo(() => {
+    if (!friend) return [];
+    if (!isRealMode) return friend.workouts;
+    return profileWorkouts ?? [];
+  }, [friend, profileWorkouts]);
+
+  const workoutsReady = !isRealMode ? true : profileWorkouts !== null;
+
+  useEffect(() => {
+    if (!isRealMode || !userId || isMe || !friend) return;
+    let cancelled = false;
+    setProfileWorkouts(null);
+    fetchWorkoutsForUser(userId)
+      .then((w) => {
+        if (!cancelled) setProfileWorkouts(w);
+      })
+      .catch(() => {
+        if (!cancelled) setProfileWorkouts([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isRealMode, userId, isMe, friend]);
 
   const workoutIds = useMemo(() => workouts.map((w) => w.id), [workouts]);
   const promptLikeIds = useMemo(
@@ -258,6 +283,19 @@ export default function UserProfilePage() {
   }, [sheetDateKey, workouts]);
 
   if (!fh || !mh || isMe) {
+    return (
+      <main style={{ minHeight: "100vh", background: "var(--background)", paddingBottom: 96 }}>
+        <div style={{ padding: "max(env(safe-area-inset-top), 20px) 20px 0" }}>
+          <div style={{ height: 44, marginBottom: 20 }} />
+        </div>
+        <div style={{ maxWidth: 428, margin: "0 auto" }}>
+          <UserProfileSkeleton />
+        </div>
+      </main>
+    );
+  }
+
+  if (friend && !workoutsReady) {
     return (
       <main style={{ minHeight: "100vh", background: "var(--background)", paddingBottom: 96 }}>
         <div style={{ padding: "max(env(safe-area-inset-top), 20px) 20px 0" }}>
@@ -397,7 +435,7 @@ export default function UserProfilePage() {
                 backgroundColor: "var(--foreground-subtle)",
               }}
             >
-              <UserAvatar avatarUrl={friend.avatarUrl} name={friend.name} fillParent />
+              <UserAvatar avatarUrl={friend.avatarUrl} name={friend.name} fillParent expandable />
             </div>
             <ProfileStatStrip
               followingCount={crewStat}

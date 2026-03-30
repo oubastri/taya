@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { getAdapter } from "@/lib/data-adapter";
@@ -13,8 +14,8 @@ import {
   figmaPrimaryBtn,
   figmaPrimaryBtnDisabled,
   figmaErrorText,
-  figmaPageTitle,
 } from "@/components/auth/figmaAuthStyles";
+import { sheetHeroTitle } from "@/lib/sheetTitleStyle";
 import { AutoHeightTextarea } from "@/components/settings/AutoHeightTextarea";
 import { SettingsCharCounter } from "@/components/settings/SettingsCharCounter";
 import {
@@ -58,42 +59,75 @@ const isMockMode = process.env.NEXT_PUBLIC_DATA_MODE !== "real";
 
 type HandleUiStatus = "idle" | "checking" | "ok" | "taken" | "invalid";
 
-const backBtnStyle: React.CSSProperties = {
-  background: "none",
-  border: "none",
-  color: "var(--foreground-muted)",
-  fontSize: 15,
-  fontFamily: "var(--font-sans), sans-serif",
-  fontWeight: 500,
-  cursor: "pointer",
-  padding: "8px 0",
-  textAlign: "center",
-  textDecoration: "underline",
-  textUnderlineOffset: 3,
+const onboardingCtaRowStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "row",
+  gap: 12,
+  width: "100%",
+  alignItems: "stretch",
 };
 
-function primaryPill(disabled: boolean): React.CSSProperties {
+const onboardingBackBtnLayout: React.CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+};
+
+function onboardingPrimaryCtaStyle(disabled: boolean, grow: boolean): React.CSSProperties {
   return {
     ...figmaPrimaryBtn,
     ...(disabled ? figmaPrimaryBtnDisabled : {}),
+    textAlign: "center",
+    width: grow ? "100%" : "auto",
+    flex: grow ? undefined : 1,
+    minWidth: 0,
   };
 }
 
 function ProgressRow({ step }: { step: number }) {
+  const reduceMotion = useReducedMotion();
+  const fillTransition = reduceMotion
+    ? { duration: 0.15 }
+    : { type: "spring" as const, stiffness: 380, damping: 22, mass: 0.55 };
+
   return (
-    <div style={{ display: "flex", gap: 6, marginBottom: 24 }}>
+    <div
+      role="img"
+      aria-label={`Onboarding step ${step} of ${TOTAL_STEPS}`}
+      style={{
+        display: "flex",
+        justifyContent: "flex-start",
+        alignItems: "center",
+        gap: 10,
+        marginBottom: 24,
+      }}
+    >
       {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((s) => (
         <div
           key={s}
           style={{
-            height: 4,
-            flex: 1,
-            borderRadius: 9999,
-            backgroundColor:
-              s <= step ? "var(--foreground)" : "var(--figma-auth-progress-inactive)",
-            transition: "background-color 0.3s ease",
+            width: 8,
+            height: 8,
+            borderRadius: "50%",
+            flexShrink: 0,
+            backgroundColor: "var(--figma-auth-progress-inactive)",
+            position: "relative",
+            overflow: "hidden",
           }}
-        />
+        >
+          <motion.div
+            initial={false}
+            animate={{ scale: s <= step ? 1 : 0 }}
+            transition={fillTransition}
+            style={{
+              position: "absolute",
+              inset: 0,
+              borderRadius: "50%",
+              backgroundColor: "var(--foreground)",
+              transformOrigin: "50% 50%",
+              willChange: "transform",
+            }}
+          />
+        </div>
       ))}
     </div>
   );
@@ -121,7 +155,7 @@ function OnboardingFrame({
       }
     >
       <div style={{ marginBottom: 20 }}>
-        <p style={{ ...figmaPageTitle, margin: 0 }}>{title}</p>
+        <p style={sheetHeroTitle}>{title}</p>
         {subtitle ? (
           <p
             style={{
@@ -346,11 +380,7 @@ export default function OnboardingPage() {
 
   if (step === "name") {
     return (
-      <OnboardingFrame
-        step={1}
-        title="What's your name?"
-        subtitle="This is how your friends will see you in the feed."
-      >
+      <OnboardingFrame step={1} title="What's your name?">
         <form onSubmit={handleNameNext} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={hubCard}>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -383,7 +413,7 @@ export default function OnboardingPage() {
             type="submit"
             disabled={!firstName.trim()}
             className="app-cta"
-            style={primaryPill(!firstName.trim())}
+            style={onboardingPrimaryCtaStyle(!firstName.trim(), true)}
           >
             Continue
           </button>
@@ -394,11 +424,7 @@ export default function OnboardingPage() {
 
   if (step === "handle") {
     return (
-      <OnboardingFrame
-        step={2}
-        title="Pick a handle"
-        subtitle="This is your unique username. You can change it later."
-      >
+      <OnboardingFrame step={2} title="Pick a handle">
         <form onSubmit={handleHandleNext} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={hubCard}>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -465,30 +491,32 @@ export default function OnboardingPage() {
             </div>
           </div>
 
-          <button
-            type="submit"
-            className="app-cta"
-            disabled={
-              loading ||
-              !handleInput.trim() ||
-              handleStatus === "invalid" ||
-              handleStatus === "taken" ||
-              handleStatus === "checking"
-            }
-            style={primaryPill(
-              loading ||
+          <div style={onboardingCtaRowStyle}>
+            <button type="button" className="app-cta-outline" onClick={() => setStep("name")} style={onboardingBackBtnLayout}>
+              Back
+            </button>
+            <button
+              type="submit"
+              className="app-cta"
+              disabled={
+                loading ||
                 !handleInput.trim() ||
                 handleStatus === "invalid" ||
                 handleStatus === "taken" ||
-                handleStatus === "checking",
-            )}
-          >
-            {loading ? "Checking…" : handleStatus === "checking" ? "Checking…" : "Continue"}
-          </button>
-
-          <button type="button" onClick={() => setStep("name")} style={backBtnStyle}>
-            Back
-          </button>
+                handleStatus === "checking"
+              }
+              style={onboardingPrimaryCtaStyle(
+                loading ||
+                  !handleInput.trim() ||
+                  handleStatus === "invalid" ||
+                  handleStatus === "taken" ||
+                  handleStatus === "checking",
+                false,
+              )}
+            >
+              {loading ? "Checking…" : handleStatus === "checking" ? "Checking…" : "Continue"}
+            </button>
+          </div>
         </form>
       </OnboardingFrame>
     );
@@ -496,11 +524,7 @@ export default function OnboardingPage() {
 
   if (step === "photo") {
     return (
-      <OnboardingFrame
-        step={3}
-        title="Add a photo"
-        subtitle="You know you want to upload a pic. Choose something vibey."
-      >
+      <OnboardingFrame step={3} title="Add a photo">
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div
             style={{
@@ -583,13 +607,19 @@ export default function OnboardingPage() {
             </div>
           </div>
 
-          <button type="button" className="app-cta" onClick={() => setStep("tagline")} style={primaryPill(false)}>
-            Continue
-          </button>
-
-          <button type="button" onClick={() => setStep("handle")} style={backBtnStyle}>
-            Back
-          </button>
+          <div style={onboardingCtaRowStyle}>
+            <button type="button" className="app-cta-outline" onClick={() => setStep("handle")} style={onboardingBackBtnLayout}>
+              Back
+            </button>
+            <button
+              type="button"
+              className="app-cta"
+              onClick={() => setStep("tagline")}
+              style={onboardingPrimaryCtaStyle(false, false)}
+            >
+              Continue
+            </button>
+          </div>
         </div>
       </OnboardingFrame>
     );
@@ -597,11 +627,7 @@ export default function OnboardingPage() {
 
   if (step === "tagline") {
     return (
-      <OnboardingFrame
-        step={4}
-        title="What's your athlete motto?"
-        subtitle="The line you live by."
-      >
+      <OnboardingFrame step={4} title="What's your athlete motto?">
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={hubCard}>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -647,12 +673,19 @@ export default function OnboardingPage() {
               />
             </div>
           </div>
-          <button type="button" className="app-cta" onClick={() => setStep("prompts")} style={primaryPill(false)}>
-            Continue
-          </button>
-          <button type="button" onClick={() => setStep("photo")} style={backBtnStyle}>
-            Back
-          </button>
+          <div style={onboardingCtaRowStyle}>
+            <button type="button" className="app-cta-outline" onClick={() => setStep("photo")} style={onboardingBackBtnLayout}>
+              Back
+            </button>
+            <button
+              type="button"
+              className="app-cta"
+              onClick={() => setStep("prompts")}
+              style={onboardingPrimaryCtaStyle(false, false)}
+            >
+              Continue
+            </button>
+          </div>
         </div>
       </OnboardingFrame>
     );
@@ -669,7 +702,7 @@ export default function OnboardingPage() {
           const answer = promptAnswers[i] ?? "";
           return (
             <div key={question} style={hubCard}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
                 <div
                   style={{
                     display: "flex",
@@ -753,19 +786,20 @@ export default function OnboardingPage() {
 
         {handleError ? <p style={figmaErrorText}>{handleError}</p> : null}
 
-        <button
-          type="button"
-          className="app-cta"
-          onClick={handleFinish}
-          disabled={loading}
-          style={primaryPill(loading)}
-        >
-          {loading ? "Saving…" : "Let's go"}
-        </button>
-
-        <button type="button" onClick={() => setStep("tagline")} style={backBtnStyle}>
-          Back
-        </button>
+        <div style={onboardingCtaRowStyle}>
+          <button type="button" className="app-cta-outline" onClick={() => setStep("tagline")} style={onboardingBackBtnLayout}>
+            Back
+          </button>
+          <button
+            type="button"
+            className="app-cta"
+            onClick={handleFinish}
+            disabled={loading}
+            style={onboardingPrimaryCtaStyle(loading, false)}
+          >
+            {loading ? "Saving…" : "Let's go"}
+          </button>
+        </div>
       </div>
     </OnboardingFrame>
   );

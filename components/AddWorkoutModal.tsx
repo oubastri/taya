@@ -136,8 +136,7 @@ export function AddWorkoutModal({
             </div>
             <button
               type="submit"
-              className="w-full shrink-0 rounded-2xl py-3.5 text-lg font-semibold text-white transition-all duration-200 hover:opacity-90 active:scale-[0.98]"
-              style={{ backgroundColor: "#000" }}
+              className="w-full shrink-0 rounded-2xl bg-black py-3.5 text-lg font-semibold text-white transition-[transform,background-color] duration-200 ease-out hover:-translate-y-px hover:bg-[color-mix(in_srgb,#000_92%,#fff)] motion-reduce:hover:translate-y-0 active:scale-[0.98]"
             >
               Save
             </button>

@@ -208,15 +208,7 @@ export function FeedPost({
               marginRight: -OVERLAP,
             }}
           >
-            <Link
-              href={isMe ? "/profile" : `/profile/${workout.userId}`}
-              style={{
-                flexShrink: 0,
-                textDecoration: "none",
-                color: "inherit",
-              }}
-              aria-label={isMe ? "View your profile" : `View ${workout.userName}'s profile`}
-            >
+            {workout.userAvatarUrl ? (
               <div
                 style={{
                   width: AVATAR_SIZE,
@@ -231,9 +223,33 @@ export function FeedPost({
                   avatarUrl={workout.userAvatarUrl}
                   name={workout.userName}
                   fillParent
+                  expandable
                 />
               </div>
-            </Link>
+            ) : (
+              <Link
+                href={isMe ? "/profile" : `/profile/${workout.userId}`}
+                style={{
+                  flexShrink: 0,
+                  textDecoration: "none",
+                  color: "inherit",
+                }}
+                aria-label={isMe ? "View your profile" : `View ${workout.userName}'s profile`}
+              >
+                <div
+                  style={{
+                    width: AVATAR_SIZE,
+                    height: AVATAR_SIZE,
+                    borderRadius: AVATAR_RADIUS,
+                    overflow: "hidden",
+                    border: "1px solid var(--card-ring)",
+                    flexShrink: 0,
+                  }}
+                >
+                  <UserAvatar name={workout.userName} fillParent />
+                </div>
+              </Link>
+            )}
             <div
               style={{
                 width: AVATAR_SIZE,

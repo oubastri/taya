@@ -20,6 +20,7 @@ import {
 } from "@/types/workout";
 import type { ActivityType } from "@/types/workout";
 import { SHEET_EXIT_MS, SHEET_SPRING } from "@/lib/sheetMotion";
+import { sheetHeroTitle } from "@/lib/sheetTitleStyle";
 
 const DEFAULT_TOP_5: ActivityType[] = [
   "run",
@@ -600,13 +601,7 @@ export function LogSheet() {
 
           <h2
             style={{
-              fontFamily: "var(--font-sans), sans-serif",
-              fontSize: "clamp(26px, 7vw, 32px)",
-              fontWeight: 500,
-              lineHeight: 1.15,
-              letterSpacing: "-0.04em",
-              color: "var(--foreground)",
-              margin: 0,
+              ...sheetHeroTitle,
               marginTop: 28,
             }}
           >

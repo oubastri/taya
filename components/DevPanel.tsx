@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type CSSProperties } from "react";
-import Image from "next/image";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { getAdapter, isRealMode } from "@/lib/data-adapter";
 import { useLogSheet } from "@/contexts/log-sheet";
@@ -10,47 +9,55 @@ import {
   setDevThemeOverride,
   type DevThemeMode,
 } from "@/lib/app-theme";
+import { CustomCursor } from "@/components/CustomCursor";
 
 const isMockMode = !isRealMode;
 
-/** Clears bottom nav; FAB sits above it */
-const DEV_FAB_BOTTOM_PX = 100;
-const DEV_FAB_SIZE_PX = 48;
-/** Space between dev panel bottom edge and top of round FAB */
-const DEV_PANEL_GAP_PX = 14;
-const DEV_PANEL_BOTTOM_PX = DEV_FAB_BOTTOM_PX + DEV_FAB_SIZE_PX + DEV_PANEL_GAP_PX;
+const DEV_CUSTOM_CURSOR_STORAGE = "taya-dev-custom-cursor";
+
+/** Invisible hit strip at the viewport’s right edge (pointer / coarse touch). */
+const EDGE_HIT_PX = 12;
+const EDGE_HIT_PX_COARSE = 22;
+/** Panel stacks above bottom nav + safe area */
+const PANEL_BOTTOM_INSET = "max(12px, calc(env(safe-area-inset-bottom, 0px) + 76px))";
+const PANEL_TOP_INSET = "max(10px, env(safe-area-inset-top, 0px))";
+
+const TRANSFORM_OPEN = "translateX(0)";
+const TRANSFORM_HIDDEN = "translateX(calc(100% + 16px))";
 
 function showDevChrome(): boolean {
   if (process.env.NODE_ENV === "development") return true;
   return process.env.NEXT_PUBLIC_DEV_MENU === "1";
 }
 
-/** Terminal palette — fixed dark “native shell” look in light and dark app themes */
-const T = {
-  bg: "#0a0b0d",
-  bgLine: "#12141a",
-  border: "rgba(1, 239, 84, 0.45)",
-  borderDim: "rgba(1, 239, 84, 0.2)",
-  text: "#b5bdc6",
-  dim: "#6e7681",
-  accent: "#01ef54",
-  accentMuted: "rgba(1, 239, 84, 0.85)",
-  prompt: "#79c0ff",
-  err: "#ff7b72",
-  mono: 'var(--font-mono), ui-monospace, "Cascadia Code", "SF Mono", Menlo, monospace',
+/** Lexend Deca is applied app-wide via `layout.tsx` (`--font-sans`); keep name in stack for clarity. */
+const fontSans = '"Lexend Deca", var(--font-sans), system-ui, sans-serif';
+const fontMono = 'var(--font-mono), ui-monospace, monospace';
+
+const type = {
+  title: { fontSize: 15, fontWeight: 600 as const, letterSpacing: "-0.03em" },
+  action: { fontSize: 14, fontWeight: 600 as const, letterSpacing: "-0.02em" },
+  row: { fontSize: 13, fontWeight: 500 as const, letterSpacing: "-0.02em" },
+  rowMeta: { fontSize: 11, fontWeight: 500 as const, letterSpacing: "-0.01em" },
+  section: { fontSize: 11, fontWeight: 600 as const, letterSpacing: "0.04em" },
+  foot: { fontSize: 11, fontWeight: 400 as const, letterSpacing: "-0.01em", lineHeight: 1.35 as const },
+  segment: { fontSize: 12, fontWeight: 500 as const, letterSpacing: "-0.02em" },
+  segmentActive: { fontSize: 12, fontWeight: 600 as const, letterSpacing: "-0.02em" },
+  code: { fontSize: 12, fontWeight: 400 as const },
+  codeSm: { fontSize: 11, fontWeight: 500 as const },
 } as const;
 
-const NAV_LINKS: { cmd: string; href: string }[] = [
-  { cmd: "/", href: "/" },
-  { cmd: "/login", href: "/login" },
-  { cmd: "/signup", href: "/signup" },
-  { cmd: "/forgot-password", href: "/forgot-password" },
-  { cmd: "/onboarding", href: "/onboarding" },
-  { cmd: "/athletes", href: "/athletes" },
-  { cmd: "/profile", href: "/profile" },
-  { cmd: "/settings", href: "/settings" },
-  { cmd: "/privacy", href: "/privacy" },
-  { cmd: "/terms", href: "/terms" },
+const NAV_LINKS: { href: string }[] = [
+  { href: "/" },
+  { href: "/login" },
+  { href: "/signup" },
+  { href: "/forgot-password" },
+  { href: "/onboarding" },
+  { href: "/athletes" },
+  { href: "/profile" },
+  { href: "/settings" },
+  { href: "/privacy" },
+  { href: "/terms" },
 ];
 
 const MOCK_PROFILE_SAMPLE_ID = "jordan";
@@ -60,16 +67,245 @@ function todayDateKey(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+function DevSection({
+  title,
+  footer,
+  children,
+}: {
+  title: string;
+  footer?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section style={{ marginBottom: 16 }}>
+      <h2
+        style={{
+          margin: "0 0 6px 1px",
+          padding: 0,
+          fontFamily: fontSans,
+          fontSize: type.section.fontSize,
+          fontWeight: type.section.fontWeight,
+          letterSpacing: type.section.letterSpacing,
+          textTransform: "uppercase",
+          color: "var(--foreground-subtle)",
+        }}
+      >
+        {title}
+      </h2>
+      <div
+        style={{
+          borderRadius: "var(--radius-sm)",
+          border: "1px solid var(--border)",
+          background: "var(--surface-elevated)",
+          overflow: "hidden",
+        }}
+      >
+        {children}
+      </div>
+      {footer ? (
+        <p
+          style={{
+            margin: "6px 0 0 1px",
+            padding: 0,
+            fontFamily: fontSans,
+            fontSize: type.foot.fontSize,
+            fontWeight: type.foot.fontWeight,
+            letterSpacing: type.foot.letterSpacing,
+            lineHeight: type.foot.lineHeight,
+            color: "var(--foreground-faint)",
+          }}
+        >
+          {footer}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+function rowButtonBase(isLast: boolean): CSSProperties {
+  return {
+    width: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    padding: "10px 12px",
+    minHeight: 40,
+    margin: 0,
+    border: "none",
+    borderBottom: isLast ? undefined : "1px solid var(--row-border)",
+    borderRadius: 0,
+    background: "transparent",
+    cursor: "pointer",
+    textAlign: "left",
+    fontFamily: fontSans,
+    WebkitTapHighlightColor: "transparent",
+  };
+}
+
+function DevRow({
+  label,
+  detail,
+  onClick,
+  danger,
+  isLast,
+  mono,
+}: {
+  label: string;
+  detail?: string;
+  onClick: () => void;
+  danger?: boolean;
+  isLast: boolean;
+  mono?: boolean;
+}) {
+  return (
+    <button type="button" onClick={onClick} style={rowButtonBase(isLast)}>
+      <span
+        style={{
+          flex: 1,
+          minWidth: 0,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "flex-start",
+          gap: detail ? 3 : 0,
+          textAlign: "left",
+        }}
+      >
+        <span
+          style={{
+            fontFamily: mono ? fontMono : fontSans,
+            fontSize: mono ? type.code.fontSize : type.row.fontSize,
+            fontWeight: mono ? 500 : type.row.fontWeight,
+            letterSpacing: mono ? 0 : type.row.letterSpacing,
+            lineHeight: 1.25,
+            color: danger ? "var(--settings-logout-text)" : "var(--foreground)",
+            wordBreak: mono ? "break-all" : undefined,
+          }}
+        >
+          {label}
+        </span>
+        {detail ? (
+          <span
+            style={{
+              fontFamily: fontSans,
+              fontSize: type.rowMeta.fontSize,
+              fontWeight: type.rowMeta.fontWeight,
+              letterSpacing: type.rowMeta.letterSpacing,
+              lineHeight: 1.3,
+              color: "var(--foreground-muted)",
+            }}
+          >
+            {detail}
+          </span>
+        ) : null}
+      </span>
+      <span
+        style={{
+          flexShrink: 0,
+          fontSize: 13,
+          fontWeight: 400,
+          color: "var(--foreground-faint)",
+          lineHeight: 1,
+          paddingLeft: 2,
+        }}
+      >
+        ›
+      </span>
+    </button>
+  );
+}
+
+function DevSegmented<T extends string>({
+  options,
+  value,
+  onChange,
+  ariaLabel,
+}: {
+  options: { id: T; label: string }[];
+  value: T;
+  onChange: (next: T) => void;
+  ariaLabel: string;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label={ariaLabel}
+      style={{
+        display: "flex",
+        padding: 3,
+        gap: 2,
+        background: "var(--chip-bg)",
+      }}
+    >
+      {options.map((opt) => {
+        const selected = value === opt.id;
+        const t = selected ? type.segmentActive : type.segment;
+        return (
+          <button
+            key={opt.id}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            onClick={() => onChange(opt.id)}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              padding: "7px 5px",
+              border: "none",
+              borderRadius: 7,
+              fontFamily: fontSans,
+              fontSize: t.fontSize,
+              fontWeight: t.fontWeight,
+              letterSpacing: t.letterSpacing,
+              color: selected ? "var(--foreground)" : "var(--foreground-muted)",
+              background: selected ? "var(--surface-elevated)" : "transparent",
+              boxShadow: selected ? "0 1px 2px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.06)" : "none",
+              cursor: "pointer",
+              WebkitTapHighlightColor: "transparent",
+            }}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function DevPanel() {
   const router = useRouter();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [profileIdInput, setProfileIdInput] = useState("");
   const [devThemeMode, setDevThemeMode] = useState<DevThemeMode>("system");
+  const [devCustomCursor, setDevCustomCursor] = useState(false);
+  const [coarsePointer, setCoarsePointer] = useState(false);
   const { open: openLogSheet } = useLogSheet();
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const visible = showDevChrome();
   const modeEnv = isRealMode ? "real" : "mock";
+  const edgeWidthPx = coarsePointer ? EDGE_HIT_PX_COARSE : EDGE_HIT_PX;
+
+  const cancelCloseTimer = useCallback(() => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleClosePanel = useCallback(() => {
+    cancelCloseTimer();
+    closeTimerRef.current = setTimeout(() => {
+      setOpen(false);
+      closeTimerRef.current = null;
+    }, 420);
+  }, [cancelCloseTimer]);
+
+  const revealPanel = useCallback(() => {
+    cancelCloseTimer();
+    setOpen(true);
+  }, [cancelCloseTimer]);
 
   const go = useCallback(
     (href: string) => {
@@ -79,31 +315,67 @@ export function DevPanel() {
     [router],
   );
 
-  const runSheet = useCallback(
-    (fn: () => void) => {
-      setOpen(false);
-      fn();
-    },
-    [],
-  );
+  const runSheet = useCallback((fn: () => void) => {
+    setOpen(false);
+    fn();
+  }, []);
 
   useEffect(() => {
-    if (!open) return;
+    const mq = window.matchMedia("(pointer: coarse)");
+    const sync = () => setCoarsePointer(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  useEffect(() => () => cancelCloseTimer(), [cancelCloseTimer]);
+
+  useEffect(() => {
+    if (!visible) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        if (open) {
+          cancelCloseTimer();
+          setOpen(false);
+        }
+        return;
+      }
+      if (e.altKey && e.shiftKey && (e.key === "d" || e.key === "D")) {
+        e.preventDefault();
+        cancelCloseTimer();
+        setOpen((v) => !v);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
+  }, [open, visible, cancelCloseTimer]);
 
   useEffect(() => {
+    cancelCloseTimer();
     setOpen(false);
-  }, [pathname]);
+  }, [pathname, cancelCloseTimer]);
 
   useEffect(() => {
     if (!open || !visible) return;
     setDevThemeMode(getDevThemeMode());
   }, [open, visible]);
+
+  useEffect(() => {
+    try {
+      setDevCustomCursor(localStorage.getItem(DEV_CUSTOM_CURSOR_STORAGE) === "1");
+    } catch {
+      setDevCustomCursor(false);
+    }
+  }, []);
+
+  const setDevCustomCursorPersist = useCallback((next: boolean) => {
+    setDevCustomCursor(next);
+    try {
+      localStorage.setItem(DEV_CUSTOM_CURSOR_STORAGE, next ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   if (!visible) return null;
 
@@ -126,305 +398,347 @@ export function DevPanel() {
     go(`/profile/${encodeURIComponent(id)}`);
   }
 
-  const btnBase: CSSProperties = {
-    width: "100%",
-    padding: "6px 10px",
-    borderRadius: 2,
-    border: `1px solid ${T.borderDim}`,
-    background: T.bgLine,
-    color: T.accentMuted,
-    fontSize: 11,
-    fontWeight: 600,
-    fontFamily: T.mono,
-    cursor: "pointer",
-    textAlign: "left",
-    WebkitTapHighlightColor: "transparent",
-  };
+  const mockRows = isMockMode ? (
+    <>
+      <DevRow label="Load sample data" detail="Seeds & reload" onClick={loadSampleData} isLast={false} />
+      <DevRow label="Reset mock storage" detail="Clear & reload" onClick={startEmpty} danger isLast />
+    </>
+  ) : null;
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-label={open ? "Close dev console" : "Open dev console"}
-        aria-expanded={open}
+      {/* Invisible “magnetic” zone: hover or touch the right screen edge to open. */}
+      <div
+        aria-hidden
+        onPointerEnter={(e) => {
+          if (e.pointerType === "mouse" || e.pointerType === "pen") revealPanel();
+        }}
+        onClick={() => {
+          if (!open) revealPanel();
+        }}
         style={{
           position: "fixed",
-          bottom: DEV_FAB_BOTTOM_PX,
-          right: 16,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          width: edgeWidthPx,
           zIndex: 10001,
-          width: DEV_FAB_SIZE_PX,
-          height: DEV_FAB_SIZE_PX,
-          borderRadius: "50%",
-          border: `2px solid ${T.accent}`,
-          background: T.bg,
-          boxShadow: `0 0 0 1px rgba(0,0,0,0.5), 0 4px 20px rgba(1, 239, 84, 0.15)`,
-          cursor: "pointer",
-          WebkitTapHighlightColor: "transparent",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          lineHeight: 0,
-          overflow: "hidden",
-          padding: 0,
+          pointerEvents: open ? "none" : "auto",
+          touchAction: "manipulation",
+        }}
+      />
+
+      <div
+        role="dialog"
+        aria-label="Developer menu"
+        aria-modal="false"
+        aria-hidden={!open}
+        className="dev-panel"
+        onPointerEnter={cancelCloseTimer}
+        onPointerLeave={(e) => {
+          if (e.pointerType === "touch") return;
+          scheduleClosePanel();
+        }}
+        style={{
+          position: "fixed",
+          top: PANEL_TOP_INSET,
+          bottom: PANEL_BOTTOM_INSET,
+          right: 0,
+          zIndex: 10002,
+          width: "min(348px, calc(100vw - 20px))",
+          maxWidth: "100vw",
+          backgroundColor: "var(--sheet-bg)",
+          borderTopLeftRadius: "var(--radius-lg)",
+          borderBottomLeftRadius: "var(--radius-lg)",
+          border: "1px solid var(--border)",
+          borderRight: "none",
+          boxShadow: "var(--shadow-card-hover)",
+          padding: "14px 14px 12px",
+          overflowY: "auto",
+          WebkitOverflowScrolling: "touch",
+          color: "var(--foreground)",
+          transform: open ? TRANSFORM_OPEN : TRANSFORM_HIDDEN,
+          transition: "transform 0.32s cubic-bezier(0.16, 1, 0.3, 1)",
+          pointerEvents: open ? "auto" : "none",
+          willChange: "transform",
         }}
       >
-        <Image
-          src="/icons/dev-app-stack.svg"
-          alt=""
-          width={26}
-          height={26}
-          style={{ display: "block", opacity: open ? 0.92 : 1 }}
-          aria-hidden
-        />
-      </button>
-
-      {open && (
-        <div
-          role="dialog"
-          aria-label="Developer console"
-          aria-modal="false"
-          className="dev-console-panel"
-          style={{
-            position: "fixed",
-            bottom: DEV_PANEL_BOTTOM_PX,
-            right: 16,
-            zIndex: 10000,
-            backgroundColor: T.bg,
-            borderRadius: 4,
-            border: `1px solid ${T.border}`,
-            boxShadow: "0 8px 32px rgba(0,0,0,0.55), 0 0 1px rgba(1,239,84,0.3)",
-            padding: "10px 12px 10px",
-            width: "min(340px, calc(100vw - 28px))",
-            maxHeight: `min(calc(100dvh - ${DEV_PANEL_BOTTOM_PX + 24}px), 560px)`,
-            overflowY: "auto",
-            fontFamily: T.mono,
-            fontSize: 11,
-            lineHeight: 1.45,
-            color: T.text,
-          }}
-        >
-          <div
+          <header
             style={{
               display: "flex",
-              alignItems: "center",
+              alignItems: "baseline",
               justifyContent: "space-between",
-              gap: 10,
-              marginBottom: 10,
-              paddingBottom: 8,
-              borderBottom: `1px solid ${T.borderDim}`,
-              userSelect: "none",
+              gap: 12,
+              marginBottom: 12,
+              paddingBottom: 10,
+              borderBottom: "1px solid var(--separator)",
             }}
           >
-            <div style={{ color: T.dim, minWidth: 0 }}>
-              <span style={{ color: T.prompt }}>taya</span>
-              <span style={{ color: T.dim }}>@</span>
-              <span style={{ color: T.accentMuted }}>dev</span>
-              <span style={{ color: T.dim }}>:~$ </span>
-              <span style={{ color: T.text }}>console</span>
+            <div style={{ minWidth: 0 }}>
+              <h1
+                style={{
+                  margin: 0,
+                  fontFamily: fontSans,
+                  fontSize: type.title.fontSize,
+                  fontWeight: type.title.fontWeight,
+                  letterSpacing: type.title.letterSpacing,
+                  lineHeight: 1.2,
+                  color: "var(--foreground)",
+                }}
+              >
+                Developer
+              </h1>
+              <p
+                style={{
+                  margin: "3px 0 0",
+                  padding: 0,
+                  fontFamily: fontSans,
+                  fontSize: type.foot.fontSize,
+                  fontWeight: type.foot.fontWeight,
+                  letterSpacing: type.foot.letterSpacing,
+                  lineHeight: type.foot.lineHeight,
+                  color: "var(--foreground-faint)",
+                }}
+              >
+                Local tools · not shipped to users
+              </p>
             </div>
             <button
               type="button"
-              onClick={() => setOpen(false)}
-              aria-label="Dismiss dev console"
+              onClick={() => {
+                cancelCloseTimer();
+                setOpen(false);
+              }}
+              aria-label="Done"
               style={{
-                flexShrink: 0,
-                padding: "4px 10px",
-                borderRadius: 2,
-                border: `1px solid ${T.borderDim}`,
-                background: T.bgLine,
-                color: T.accentMuted,
-                fontSize: 10,
-                fontWeight: 700,
-                fontFamily: T.mono,
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
+                margin: 0,
+                padding: "4px 2px",
+                border: "none",
+                borderRadius: 8,
+                background: "transparent",
+                fontFamily: fontSans,
+                fontSize: type.action.fontSize,
+                fontWeight: type.action.fontWeight,
+                letterSpacing: type.action.letterSpacing,
+                color: "var(--accent)",
                 cursor: "pointer",
                 WebkitTapHighlightColor: "transparent",
+                flexShrink: 0,
               }}
             >
-              dismiss
+              Done
             </button>
-          </div>
+          </header>
 
-          <pre
-            style={{
-              margin: "0 0 10px",
-              padding: "8px 10px",
-              background: T.bgLine,
-              border: `1px solid ${T.borderDim}`,
-              borderRadius: 2,
-              color: T.dim,
-              fontFamily: T.mono,
-              fontSize: 10,
-              lineHeight: 1.5,
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-word",
-            }}
+          <DevSection
+            title="Environment"
+            footer="Change NEXT_PUBLIC_DATA_MODE in .env.local, then restart the dev server."
           >
-            <span style={{ color: T.accentMuted }}>NEXT_PUBLIC_DATA_MODE</span>=
-            <span style={{ color: T.text }}>{modeEnv}</span>
-            {"\n"}
-            <span style={{ color: T.dim }}>
-              # switch: .env.local → restart npm run dev
-            </span>
-          </pre>
-
-          <div style={{ color: T.dim, margin: "10px 0 4px", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em" }}>
-            # theme
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 10 }}>
-            {(["system", "light", "dark"] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => {
-                  setDevThemeMode(mode);
-                  setDevThemeOverride(mode);
-                }}
+            <div style={{ ...rowButtonBase(true), cursor: "default", pointerEvents: "none" }}>
+              <span
                 style={{
-                  ...btnBase,
-                  width: "auto",
-                  flex: "1 1 30%",
-                  minWidth: "fit-content",
-                  borderColor:
-                    devThemeMode === mode ? T.border : T.borderDim,
-                  color: devThemeMode === mode ? T.accent : T.accentMuted,
-                  textAlign: "center",
+                  fontFamily: fontSans,
+                  fontSize: type.row.fontSize,
+                  fontWeight: type.row.fontWeight,
+                  letterSpacing: type.row.letterSpacing,
+                  color: "var(--foreground)",
                 }}
               >
-                {mode === "system" ? "system" : mode}
-              </button>
-            ))}
-          </div>
-          <div style={{ color: T.dim, fontSize: 10, marginTop: -6, marginBottom: 10 }}>
-            app uses device light/dark · override for testing only
-          </div>
-
-          <div style={{ color: T.dim, margin: "10px 0 4px", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em" }}>
-            # sheets
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 10 }}>
-            <button
-              type="button"
-              style={btnBase}
-              onClick={() => runSheet(() => openLogSheet())}
-            >
-              open LogSheet <span style={{ color: T.dim }}>— new move</span>
-            </button>
-            <button
-              type="button"
-              style={btnBase}
-              onClick={() => runSheet(() => openLogSheet(todayDateKey()))}
-            >
-              open LogSheet <span style={{ color: T.dim }}>— date {todayDateKey()}</span>
-            </button>
-            <button
-              type="button"
-              style={btnBase}
-              onClick={() => go("/athletes?sheet=search")}
-            >
-              open SearchSheet <span style={{ color: T.dim }}>— /athletes?sheet=search</span>
-            </button>
-          </div>
-
-          <div style={{ color: T.dim, margin: "10px 0 4px", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em" }}>
-            # routes
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 10 }}>
-            {NAV_LINKS.map(({ cmd, href }) => (
-              <button key={href} type="button" onClick={() => go(href)} style={btnBase}>
-                cd <span style={{ color: T.prompt }}>{cmd}</span>
-              </button>
-            ))}
-            {isMockMode ? (
-              <button
-                type="button"
-                onClick={() => go(`/profile/${MOCK_PROFILE_SAMPLE_ID}`)}
-                style={btnBase}
+                Data mode
+              </span>
+              <span
+                style={{
+                  fontFamily: fontMono,
+                  fontSize: type.codeSm.fontSize,
+                  fontWeight: type.codeSm.fontWeight,
+                  padding: "3px 8px",
+                  borderRadius: 999,
+                  background: "var(--chip-bg)",
+                  color: "var(--foreground)",
+                  letterSpacing: "0.02em",
+                }}
               >
-                cd <span style={{ color: T.prompt }}>/profile/{MOCK_PROFILE_SAMPLE_ID}</span>
-                <span style={{ color: T.dim }}> # seed</span>
-              </button>
-            ) : null}
-          </div>
+                {modeEnv}
+              </span>
+            </div>
+          </DevSection>
 
-          <div style={{ color: T.dim, margin: "10px 0 4px", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em" }}>
-            # profile by id
-          </div>
-          <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-            <input
-              value={profileIdInput}
-              onChange={(e) => setProfileIdInput(e.target.value)}
-              placeholder={isMockMode ? "jordan" : "uuid"}
-              style={{
-                flex: 1,
-                minWidth: 0,
-                padding: "6px 8px",
-                borderRadius: 2,
-                border: `1px solid ${T.borderDim}`,
-                background: T.bgLine,
-                color: T.text,
-                fontSize: 11,
-                fontFamily: T.mono,
+          <DevSection
+            title="Theme override"
+            footer="Uses device light/dark unless you pick a fixed mode for QA."
+          >
+            <DevSegmented
+              ariaLabel="Theme override"
+              options={[
+                { id: "system", label: "System" },
+                { id: "light", label: "Light" },
+                { id: "dark", label: "Dark" },
+              ]}
+              value={devThemeMode}
+              onChange={(mode) => {
+                setDevThemeMode(mode);
+                setDevThemeOverride(mode);
               }}
             />
-            <button
-              type="button"
-              onClick={openProfileById}
+          </DevSection>
+
+          <DevSection title="Cursor" footer="Custom pointer is for local preview only.">
+            <DevSegmented
+              ariaLabel="Cursor style"
+              options={[
+                { id: "off", label: "System" },
+                { id: "on", label: "Custom" },
+              ]}
+              value={devCustomCursor ? "on" : "off"}
+              onChange={(id) => setDevCustomCursorPersist(id === "on")}
+            />
+          </DevSection>
+
+          <DevSection title="Sheets">
+            <DevRow
+              label="Log workout"
+              detail="New move"
+              onClick={() => runSheet(() => openLogSheet())}
+              isLast={false}
+            />
+            <DevRow
+              label="Log workout"
+              detail={todayDateKey()}
+              onClick={() => runSheet(() => openLogSheet(todayDateKey()))}
+              isLast={false}
+            />
+            <DevRow
+              label="Athlete search"
+              detail="sheet=search"
+              onClick={() => go("/athletes?sheet=search")}
+              isLast
+            />
+          </DevSection>
+
+          <DevSection title="Routes">
+            <div
               style={{
-                ...btnBase,
-                width: "auto",
-                flexShrink: 0,
-                borderColor: T.border,
-                color: T.accent,
+                maxHeight: 176,
+                overflowY: "auto",
+                WebkitOverflowScrolling: "touch",
               }}
             >
-              go
-            </button>
-          </div>
+              {NAV_LINKS.map(({ href }, i) => (
+                <DevRow
+                  key={href}
+                  label={href}
+                  onClick={() => go(href)}
+                  isLast={i === NAV_LINKS.length - 1 && !isMockMode}
+                  mono
+                />
+              ))}
+              {isMockMode ? (
+                <DevRow
+                  label={`/profile/${MOCK_PROFILE_SAMPLE_ID}`}
+                  detail="seed profile"
+                  onClick={() => go(`/profile/${MOCK_PROFILE_SAMPLE_ID}`)}
+                  isLast
+                  mono
+                />
+              ) : null}
+            </div>
+          </DevSection>
+
+          <DevSection
+            title="Profile"
+            footer="Opens /profile/{id}. In mock mode try the sample id."
+          >
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+                padding: "10px 12px",
+              }}
+            >
+              <label
+                htmlFor="dev-panel-profile-id"
+                style={{
+                  fontFamily: fontSans,
+                  fontSize: type.rowMeta.fontSize,
+                  fontWeight: 600,
+                  letterSpacing: type.rowMeta.letterSpacing,
+                  color: "var(--foreground-muted)",
+                }}
+              >
+                User id
+              </label>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input
+                  value={profileIdInput}
+                  onChange={(e) => setProfileIdInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") openProfileById();
+                  }}
+                  placeholder={isMockMode ? "jordan" : "…"}
+                  aria-label="Profile user id"
+                  id="dev-panel-profile-id"
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    padding: "8px 10px",
+                    borderRadius: 8,
+                    border: "1px solid var(--border-strong)",
+                    background: "var(--surface)",
+                    color: "var(--input-color)",
+                    fontSize: type.code.fontSize,
+                    fontFamily: fontMono,
+                    outline: "none",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={openProfileById}
+                  style={{
+                    flexShrink: 0,
+                    padding: "8px 14px",
+                    borderRadius: 8,
+                    border: "none",
+                    background: "var(--cta-bg)",
+                    color: "var(--cta-color)",
+                    fontFamily: fontSans,
+                    fontSize: type.row.fontSize,
+                    fontWeight: 600,
+                    letterSpacing: type.row.letterSpacing,
+                    cursor: "pointer",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  Go
+                </button>
+              </div>
+            </div>
+          </DevSection>
 
           {isMockMode ? (
-            <>
-              <div style={{ color: T.dim, margin: "10px 0 4px", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em" }}>
-                # mock fs
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
-                <button type="button" style={btnBase} onClick={loadSampleData}>
-                  ./seed.sh <span style={{ color: T.dim }}>— load sample</span>
-                </button>
-                <button type="button" style={btnBase} onClick={startEmpty}>
-                  rm -rf <span style={{ color: T.err }}>./data</span>
-                  <span style={{ color: T.dim }}> — empty FTUX</span>
-                </button>
-              </div>
-              <div style={{ color: T.dim, fontSize: 10 }}>reloads page · real mode uses Supabase</div>
-            </>
+            <DevSection title="Mock data" footer="Supabase is used when data mode is real.">
+              {mockRows}
+            </DevSection>
           ) : null}
 
-          <div style={{ marginTop: 12, paddingTop: 8, borderTop: `1px solid ${T.borderDim}`, color: T.dim, fontSize: 10 }}>
-            esc close ·{" "}
-            <button type="button" onClick={() => go("/privacy")} style={termLinkBtn}>
-              privacy
-            </button>{" "}
-            ·{" "}
-            <button type="button" onClick={() => go("/terms")} style={termLinkBtn}>
-              terms
-            </button>
-          </div>
+          <p
+            style={{
+              margin: "4px 1px 0",
+              paddingTop: 10,
+              borderTop: "1px solid var(--separator)",
+              fontFamily: fontSans,
+              fontSize: type.foot.fontSize,
+              fontWeight: type.foot.fontWeight,
+              letterSpacing: type.foot.letterSpacing,
+              lineHeight: type.foot.lineHeight,
+              color: "var(--foreground-faint)",
+            }}
+          >
+            Esc to dismiss · Alt+Shift+D · hover or tap the right screen edge
+          </p>
         </div>
-      )}
+
+      {devCustomCursor ? <CustomCursor /> : null}
     </>
   );
 }
-
-const termLinkBtn: CSSProperties = {
-  padding: 0,
-  border: "none",
-  background: "none",
-  font: "inherit",
-  fontSize: "inherit",
-  color: T.accentMuted,
-  textDecoration: "underline",
-  cursor: "pointer",
-};

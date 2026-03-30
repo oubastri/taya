@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
+import { setSiteCustomCursorSuppressed } from "@/components/CustomCursor";
 import AthletesGlobeView, {
   type AthletesGlobeUser,
 } from "@/components/athletes/AthletesGlobeView";
@@ -30,6 +31,11 @@ const sans = 'var(--font-sans), system-ui, sans-serif';
 
 export default function HomeLanding() {
   const landingGlobeUsers = useMemo(() => buildLandingGlobeUsers(), []);
+
+  useEffect(() => {
+    setSiteCustomCursorSuppressed(true);
+    return () => setSiteCustomCursorSuppressed(false);
+  }, []);
 
   const headerScrim =
     "linear-gradient(to bottom, var(--background) 0%, var(--background) 12%, color-mix(in srgb, var(--background) 96%, transparent) 38%, color-mix(in srgb, var(--background) 78%, transparent) 62%, color-mix(in srgb, var(--background) 42%, transparent) 84%, transparent 100%)";
@@ -86,7 +92,6 @@ export default function HomeLanding() {
           users={landingGlobeUsers}
           hydrated
           onNavigateToProfile={() => {}}
-          showCustomCursor={false}
           showAvatarLabels={false}
           dotsOverlayAboveChrome
           chromeOverlay={landingChromeOverlay}

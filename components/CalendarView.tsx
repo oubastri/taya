@@ -66,7 +66,7 @@ export function CalendarView({
         <button
           type="button"
           onClick={onPrevMonth}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors duration-200 hover:bg-black/6 active:scale-95"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors duration-200 hover:bg-black/[0.04] active:scale-95"
           style={{ color: "var(--foreground)" }}
           aria-label="Previous month"
         >
@@ -85,7 +85,7 @@ export function CalendarView({
         <button
           type="button"
           onClick={onNextMonth}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors duration-200 hover:bg-black/6 active:scale-95"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors duration-200 hover:bg-black/[0.04] active:scale-95"
           style={{ color: "var(--foreground)" }}
           aria-label="Next month"
         >
