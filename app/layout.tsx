@@ -41,6 +41,9 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   viewportFit: "cover",
+  // Helps Chrome/Android resize the layout viewport when browser chrome appears,
+  // so fixed bottom sheets align with the visible area more reliably.
+  interactiveWidget: "resizes-content",
 };
 
 const devThemeChrome =

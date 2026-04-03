@@ -11,7 +11,7 @@ import { loadUser } from "@/lib/storage";
 
 const isRealMode = process.env.NEXT_PUBLIC_DATA_MODE === "real";
 
-const AUTH_PATHS = ["/login", "/signup", "/forgot-password", "/onboarding"];
+const AUTH_PATHS = ["/login", "/signup", "/forgot-password", "/onboarding", "/manifesto"];
 /** Settings hub (edit profile, etc.) — hide tab bar and log FAB like auth flows */
 const SETTINGS_PREFIX = "/settings";
 

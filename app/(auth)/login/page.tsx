@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { useAuthLandingRequestClose } from "@/components/auth/AuthLandingScaffold";
@@ -19,6 +19,9 @@ import { LegalFooterLinks } from "@/components/LegalFooterLinks";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const authBgSuffix =
+    searchParams.get("bg") === "manifesto" ? "?bg=manifesto" : "";
   const requestCloseModal = useAuthLandingRequestClose();
   const closeToHome = () => {
     if (requestCloseModal) requestCloseModal();
@@ -114,7 +117,7 @@ export default function LoginPage() {
 
       <div style={{ marginTop: 16, textAlign: "center" }}>
         <Link
-          href="/forgot-password"
+          href={`/forgot-password${authBgSuffix}`}
           style={{
             ...figmaFooterText,
             textDecoration: "underline",
@@ -128,7 +131,10 @@ export default function LoginPage() {
 
       <div style={{ marginTop: 28, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
         <span style={figmaFooterText}>Don&apos;t have an account?</span>
-        <Link href="/signup" style={{ ...figmaFooterText, textDecoration: "underline", textUnderlineOffset: 3 }}>
+        <Link
+          href={`/signup${authBgSuffix}`}
+          style={{ ...figmaFooterText, textDecoration: "underline", textUnderlineOffset: 3 }}
+        >
           Sign up
         </Link>
       </div>

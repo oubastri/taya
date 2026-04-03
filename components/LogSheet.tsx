@@ -116,12 +116,15 @@ function getOrderedActivities(
   return [...top5, ...rest];
 }
 
-/** Pixels of bottom browser chrome (e.g. Safari toolbar) not covered by `env(safe-area)`. */
+/** Pixels of layout viewport extending below the visual viewport (browser chrome, etc.). */
 function getVisualViewportBottomOverlapPx(): number {
   if (typeof window === "undefined") return 0;
   const vv = window.visualViewport;
   if (!vv) return 0;
-  return Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+  const innerBottomGap = window.innerHeight - vv.height - vv.offsetTop;
+  const clientH = document.documentElement?.clientHeight ?? window.innerHeight;
+  const clientBottomGap = clientH - vv.height - vv.offsetTop;
+  return Math.max(0, innerBottomGap, clientBottomGap);
 }
 
 export function LogSheet() {
@@ -150,6 +153,8 @@ export function LogSheet() {
   const chipsRef = useRef<HTMLDivElement>(null);
   const chipsInnerRef = useRef<HTMLDivElement>(null);
   const [browserOvhPx, setBrowserOvhPx] = useState(0);
+  /** `visualViewport.height / 100` in px — drives min/max height so the sheet tracks visible viewport. */
+  const [visualVhPx, setVisualVhPx] = useState(0);
   const chipsDragRef = useRef({
     active: false,
     startX: 0,
@@ -164,25 +169,63 @@ export function LogSheet() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const vv = window.visualViewport;
-    if (!vv) {
-      setBrowserOvhPx(0);
-      return;
-    }
     const root = document.documentElement;
     const update = () => {
+      if (!vv) {
+        setBrowserOvhPx(0);
+        setVisualVhPx(window.innerHeight / 100);
+        root.style.removeProperty("--log-sheet-browser-ovh");
+        root.style.removeProperty("--log-sheet-vvh");
+        return;
+      }
       const px = getVisualViewportBottomOverlapPx();
+      const vvh = vv.height / 100;
       setBrowserOvhPx(px);
+      setVisualVhPx(vvh);
       root.style.setProperty("--log-sheet-browser-ovh", `${px}px`);
+      root.style.setProperty("--log-sheet-vvh", `${vvh}px`);
     };
     update();
-    vv.addEventListener("resize", update);
-    vv.addEventListener("scroll", update);
+    if (vv) {
+      vv.addEventListener("resize", update);
+      vv.addEventListener("scroll", update);
+    }
+    window.addEventListener("resize", update);
     return () => {
-      vv.removeEventListener("resize", update);
-      vv.removeEventListener("scroll", update);
+      if (vv) {
+        vv.removeEventListener("resize", update);
+        vv.removeEventListener("scroll", update);
+      }
+      window.removeEventListener("resize", update);
       root.style.removeProperty("--log-sheet-browser-ovh");
+      root.style.removeProperty("--log-sheet-vvh");
     };
   }, []);
+
+  useEffect(() => {
+    if (!isOpen || !panelOpen || typeof window === "undefined") return;
+    const vv = window.visualViewport;
+    const root = document.documentElement;
+    let cancelled = false;
+    let raf2 = 0;
+    const refresh = () => {
+      if (cancelled || !vv) return;
+      const px = getVisualViewportBottomOverlapPx();
+      const vvh = vv.height / 100;
+      setBrowserOvhPx(px);
+      setVisualVhPx(vvh);
+      root.style.setProperty("--log-sheet-browser-ovh", `${px}px`);
+      root.style.setProperty("--log-sheet-vvh", `${vvh}px`);
+    };
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(refresh);
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+  }, [isOpen, panelOpen]);
 
   useEffect(() => {
     const el = chipsRef.current;
@@ -595,6 +638,19 @@ export function LogSheet() {
 
   const isEditing = !!workoutToEdit;
 
+  const sheetMainSize =
+    visualVhPx > 0
+      ? {
+          minHeight: `min(${54 * visualVhPx}px, calc(${100 * visualVhPx}px - env(safe-area-inset-bottom, 0px) - 8px))`,
+          maxHeight: `min(${74 * visualVhPx}px, calc(${100 * visualVhPx}px - env(safe-area-inset-bottom, 0px) - 8px))`,
+        }
+      : {
+          minHeight:
+            "min(54svh, calc(100dvh - env(safe-area-inset-bottom, 0px) - 8px))",
+          maxHeight:
+            "min(74svh, calc(100dvh - env(safe-area-inset-bottom, 0px) - 8px))",
+        };
+
   return (
     <>
       <style>{`
@@ -643,10 +699,7 @@ export function LogSheet() {
           flexDirection: "column",
           overflow: "hidden",
           /* Without a main-size floor, `flex:1` on the body (only abs children) collapses to ~0 */
-          minHeight:
-            "min(54svh, calc(100dvh - env(safe-area-inset-bottom, 0px) - 8px))",
-          maxHeight:
-            "min(74svh, calc(100dvh - env(safe-area-inset-bottom, 0px) - 8px))",
+          ...sheetMainSize,
           transform: panelOpen
             ? "translateX(-50%)"
             : "translateX(-50%) translateY(100%)",

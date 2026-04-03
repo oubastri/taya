@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { useAuthLandingRequestClose } from "@/components/auth/AuthLandingScaffold";
@@ -19,6 +19,9 @@ import { LegalFooterLinks } from "@/components/LegalFooterLinks";
 
 export default function SignupPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const authBgSuffix =
+    searchParams.get("bg") === "manifesto" ? "?bg=manifesto" : "";
   const requestCloseModal = useAuthLandingRequestClose();
   const goBack = () => {
     if (requestCloseModal) requestCloseModal();
@@ -151,7 +154,10 @@ export default function SignupPage() {
 
       <div style={{ marginTop: 28, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
         <span style={figmaFooterText}>Already have an account?</span>
-        <Link href="/login" style={{ ...figmaFooterText, textDecoration: "underline", textUnderlineOffset: 3 }}>
+        <Link
+          href={`/login${authBgSuffix}`}
+          style={{ ...figmaFooterText, textDecoration: "underline", textUnderlineOffset: 3 }}
+        >
           Login
         </Link>
       </div>

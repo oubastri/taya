@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { AuthLandingScaffold } from "@/components/auth/AuthLandingScaffold";
 
 export default function AuthLayout({
@@ -5,5 +6,17 @@ export default function AuthLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <AuthLandingScaffold>{children}</AuthLandingScaffold>;
+  return (
+    <Suspense
+      fallback={
+        <div
+          className="min-h-dvh"
+          style={{ background: "var(--background)" }}
+          aria-hidden
+        />
+      }
+    >
+      <AuthLandingScaffold>{children}</AuthLandingScaffold>
+    </Suspense>
+  );
 }

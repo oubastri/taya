@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { FigmaAuthHeader } from "@/components/auth/FigmaAuthHeader";
@@ -18,6 +18,9 @@ import { LegalFooterLinks } from "@/components/LegalFooterLinks";
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const authBgSuffix =
+    searchParams.get("bg") === "manifesto" ? "?bg=manifesto" : "";
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +49,12 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <AuthShell embedded showBack dismissIcon="close" onBack={() => router.push("/login")}>
+    <AuthShell
+      embedded
+      showBack
+      dismissIcon="close"
+      onBack={() => router.push(`/login${authBgSuffix}`)}
+    >
       <FigmaAuthHeader title="Reset password" showWordmark={false} />
 
       {sent ? (
@@ -60,7 +68,7 @@ export default function ForgotPasswordPage() {
             arrive.
           </p>
           <Link
-            href="/login"
+            href={`/login${authBgSuffix}`}
             style={{
               ...figmaFooterText,
               marginTop: 8,
@@ -116,7 +124,7 @@ export default function ForgotPasswordPage() {
           </button>
 
           <Link
-            href="/login"
+            href={`/login${authBgSuffix}`}
             style={{
               ...figmaFooterText,
               marginTop: 12,

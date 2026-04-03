@@ -8,9 +8,10 @@ import {
   useRef,
   useState,
 } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import HomeLanding from "@/components/HomeLanding";
+import ManifestoView from "@/components/ManifestoView";
 
 type AuthLandingScaffoldProps = {
   children: React.ReactNode;
@@ -36,8 +37,14 @@ export function useAuthLandingRequestClose() {
 export function AuthLandingScaffold({ children }: AuthLandingScaffoldProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const pathnameLive = useRef(pathname);
   pathnameLive.current = pathname;
+
+  const afterCloseHref =
+    searchParams.get("bg") === "manifesto" ? "/manifesto" : "/";
+  const afterCloseHrefRef = useRef(afterCloseHref);
+  afterCloseHrefRef.current = afterCloseHref;
 
   const [leaving, setLeaving] = useState(false);
   const leavingRef = useRef(false);
@@ -76,14 +83,18 @@ export function AuthLandingScaffold({ children }: AuthLandingScaffoldProps) {
       setLeaving(false);
       return;
     }
-    router.push("/");
+    router.push(afterCloseHrefRef.current);
   }, [router]);
 
   return (
     <AuthLandingRequestCloseContext.Provider value={requestClose}>
       <div className="auth-landing-scaffold">
         <div className="auth-landing-scaffold__bg" aria-hidden>
-          <HomeLanding />
+          {searchParams.get("bg") === "manifesto" ? (
+            <ManifestoView />
+          ) : (
+            <HomeLanding />
+          )}
         </div>
         <motion.button
           type="button"

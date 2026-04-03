@@ -1429,10 +1429,10 @@ textarea::placeholder {
   opacity: 0.88;
 }
 
-/* Landing auth CTAs — equal columns; full width on mobile second row */
+/* Landing auth CTAs — circle | login | join; full width on mobile second row */
 .landing-nav-auth-pair {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
   gap: 10px;
   align-items: stretch;
   width: 100%;
@@ -1449,6 +1449,50 @@ textarea::placeholder {
   .landing-nav-auth-pair {
     gap: 10px;
   }
+}
+
+/* Circular manifesto CTA — square, same height as login pill */
+.landing-nav-manifesto-btn {
+  height: 54px;
+  width: 54px;
+  min-width: 54px;
+  padding: 0;
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: none;
+  transition: transform 0.2s var(--ease-out-expo), opacity 0.2s, background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+  flex-shrink: 0;
+  /* Override .landing-nav-auth-cta width: 100% */
+  width: 54px !important;
+}
+
+@media (max-width: 520px) {
+  .landing-nav-manifesto-btn {
+    height: 46px;
+    width: 46px !important;
+    min-width: 46px;
+  }
+}
+
+@media (max-width: 640px) {
+  .landing-header__auth .landing-nav-manifesto-btn {
+    height: 50px;
+    width: 50px !important;
+    min-width: 50px;
+  }
+}
+
+.landing-nav-manifesto-btn:hover {
+  background: #000;
+  color: #fff;
+  border-color: #000 !important;
+  transform: translateY(-1px);
+}
+
+[data-theme="dark"] .landing-nav-manifesto-btn:hover {
+  background: #fff;
+  color: #000;
+  border-color: #fff !important;
 }
 
 .landing-nav-login {
@@ -1884,4 +1928,132 @@ textarea::placeholder {
   .account-menu__row:active:not(:disabled) {
     transform: none;
   }
+}
+
+/* ─── Manifesto page ──────────────────────────────────────────────────── */
+
+@keyframes manifesto-scroll-hint-fade-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@keyframes manifesto-scroll-hint-chevron-nudge {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(5px);
+  }
+}
+
+.manifesto-scroll-hint--intro {
+  animation: manifesto-scroll-hint-fade-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.manifesto-scroll-hint__chevron {
+  display: block;
+  animation: manifesto-scroll-hint-chevron-nudge 1.35s ease-in-out 0.4s infinite;
+}
+
+@keyframes manifesto-type-caret-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Insertion caret: same line as text, flush right of last glyph (no margin — like OS text fields). */
+.manifesto-typewriter-line {
+  display: inline;
+  letter-spacing: inherit;
+}
+
+.manifesto-type-caret {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 2px;
+  min-width: 2px;
+  height: 1em;
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+  vertical-align: text-bottom;
+  background: var(--accent);
+  animation: manifesto-type-caret-blink 1.05s step-end infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .manifesto-type-caret {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+@keyframes manifesto-end-cta-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.manifesto-end-cta {
+  animation: manifesto-end-cta-in 0.55s var(--ease-out-expo) both;
+}
+
+.manifesto-signup-cta.app-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 54px;
+  padding: 0 32px;
+  border-radius: 100px;
+  text-decoration: none;
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 17px;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+  background: var(--accent);
+  color: #000;
+  box-shadow: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .manifesto-signup-cta.app-cta:not(.app-cta--inactive):not(:disabled):hover {
+    transform: translateY(-1px);
+    box-shadow: var(--cta-shadow-hover);
+    background: color-mix(in srgb, var(--accent) 90%, #fff);
+    color: #000;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .manifesto-signup-cta.app-cta:not(.app-cta--inactive):not(:disabled):hover {
+    transform: none;
+  }
+}
+
+.manifesto-close-btn:hover {
+  border-color: rgba(255, 255, 255, 0.5) !important;
+  color: #fff !important;
+}
+
+.manifesto-close-btn:active {
+  opacity: 0.7;
 }

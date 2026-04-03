@@ -107,6 +107,42 @@ export default function HomeLanding() {
           <nav className="landing-header__auth" aria-label="Account">
             <div className="landing-nav-auth-pair">
               <Link
+                href="/manifesto"
+                aria-label="Our manifesto"
+                className="landing-nav-manifesto-btn landing-nav-auth-cta active:opacity-85 active:scale-[0.98]"
+                style={{
+                  fontFamily: sans,
+                  borderRadius: "50%",
+                  textDecoration: "none",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  WebkitTapHighlightColor: "transparent",
+                  border: "2px solid var(--foreground)",
+                  flexShrink: 0,
+                  color: "var(--foreground)",
+                }}
+              >
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-hidden
+                >
+                  <path
+                    d="M9 3.79c2.795-1.235 6.412-1.089 7.648.911 1.235 1.999.383 4.324-1.735 6.119S12 13.569 12 14.98"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="square"
+                    strokeLinejoin="miter"
+                  />
+                  <circle cx="12" cy="20.5" r="1.5" fill="currentColor" />
+                </svg>
+              </Link>
+
+              <Link
                 href="/login"
                 className="landing-nav-login landing-nav-auth-cta active:opacity-85 active:scale-[0.98]"
                 style={{
