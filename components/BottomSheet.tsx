@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { SHEET_EXIT_MS, SHEET_SPRING } from "@/lib/sheetMotion";
+import { useLockBodyScroll } from "@/hooks/useLockBodyScroll";
 
 type Props = {
   isOpen: boolean;
@@ -37,6 +38,8 @@ export function BottomSheet({ isOpen, onClose, children, title }: Props) {
     window.setTimeout(onClose, SHEET_EXIT_MS);
   }, [onClose]);
 
+  useLockBodyScroll(isOpen || open);
+
   if (!isOpen && !open) return null;
 
   return (
@@ -67,15 +70,16 @@ export function BottomSheet({ isOpen, onClose, children, title }: Props) {
           transform: open ? "translateY(0)" : "translateY(100%)",
           transition: `transform ${SHEET_SPRING}`,
           borderTop: "1px solid var(--border)",
+          overscrollBehavior: "contain",
         }}
       >
-        <div className="flex flex-shrink-0 justify-center pt-3 pb-1">
-          <div className="h-1 w-10 rounded-full bg-[var(--drag-handle)]" aria-hidden />
+        <div className="flex min-h-11 flex-shrink-0 touch-none select-none items-center justify-center py-2.5">
+          <div className="h-1 w-10 shrink-0 rounded-full bg-[var(--drag-handle)]" aria-hidden />
         </div>
         {title ? (
           <h2 className="px-6 pb-2 text-center text-[17px] font-semibold text-[var(--foreground)]">{title}</h2>
         ) : null}
-        <div className="flex-1 overflow-y-auto px-5 pb-6">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 pb-6 touch-pan-y">
           {typeof children === "function" ? children(close) : children}
         </div>
       </div>

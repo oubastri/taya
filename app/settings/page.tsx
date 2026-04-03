@@ -138,10 +138,14 @@ export default function SettingsPage() {
     const trimmed = taglineInput.trim();
     if (trimmed === (user.tagline ?? "")) return;
     updateUser({ tagline: trimmed || undefined });
+    toast("Tagline saved", "success");
   }
 
   function handleSavePrompt(index: number) {
     const trimmed = promptAnswers[index]!.trim();
+    const prev =
+      user.prompts?.find((x) => x.question === PROMPT_OPTIONS[index])?.answer?.trim() ?? "";
+    if (trimmed === prev) return;
     const next = [...promptAnswers];
     next[index] = trimmed;
     setPromptAnswers(next);
@@ -150,6 +154,7 @@ export default function SettingsPage() {
       answer: (i === index ? trimmed : next[i] ?? "").trim(),
     })).filter((p) => p.answer.length > 0);
     updateUser({ prompts: prompts.length > 0 ? prompts : undefined });
+    toast("Prompt saved", "success");
   }
 
   async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -160,6 +165,7 @@ export default function SettingsPage() {
     if (!isRealMode) {
       const url = URL.createObjectURL(file);
       updateUser({ avatarUrl: url });
+      toast("Photo updated", "success");
       if (fileRef.current) fileRef.current.value = "";
       return;
     }
@@ -201,6 +207,7 @@ export default function SettingsPage() {
     }
     setNameFieldError(null);
     updateUser({ name: trimmed });
+    toast("Name saved", "success");
   }
 
   async function handleBlurHandle() {
@@ -223,6 +230,7 @@ export default function SettingsPage() {
 
     setHandleBlurError(null);
     updateUser({ handle: clean });
+    toast("Handle saved", "success");
   }
 
   async function handleSignOut() {

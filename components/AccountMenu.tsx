@@ -16,7 +16,11 @@ import { useTheme } from "@/hooks/use-theme";
 import { createClient } from "@/lib/supabase/client";
 import { isRealMode, clearAuthCache } from "@/lib/data-adapter";
 import { getFeedbackMailto } from "@/lib/feedback";
-import { SHEET_EXIT_MS, SHEET_SPRING } from "@/lib/sheetMotion";
+import {
+  SHEET_EXIT_MS,
+  SHEET_SPRING,
+  SHEET_TRANSFORM_SETTLED_FULL_WIDTH,
+} from "@/lib/sheetMotion";
 
 const MOBILE_MENU_MQ = "(max-width: 599px)";
 
@@ -214,7 +218,7 @@ export function AccountMenu({ triggerStyle }: AccountMenuProps) {
         sheetClosingRef.current = false;
         if (sheetRef.current) {
           sheetRef.current.style.transition = "";
-          sheetRef.current.style.transform = "";
+          sheetRef.current.style.transform = SHEET_TRANSFORM_SETTLED_FULL_WIDTH;
         }
         if (scrimRef.current) {
           scrimRef.current.style.transition = "";
@@ -228,7 +232,7 @@ export function AccountMenu({ triggerStyle }: AccountMenuProps) {
       window.setTimeout(() => {
         if (sheetRef.current) {
           sheetRef.current.style.transition = "";
-          sheetRef.current.style.transform = "";
+          sheetRef.current.style.transform = SHEET_TRANSFORM_SETTLED_FULL_WIDTH;
           sheetRef.current.style.willChange = "";
         }
       }, SHEET_EXIT_MS);

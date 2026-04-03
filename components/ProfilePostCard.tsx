@@ -90,12 +90,7 @@ export function ProfilePostCard({
               flexShrink: 0,
             }}
           >
-            <UserAvatar
-              avatarUrl={userAvatarUrl}
-              name={userHandle}
-              size="md"
-              expandable
-            />
+            <UserAvatar avatarUrl={userAvatarUrl} name={userHandle} size="md" />
           </div>
         </div>
         <span

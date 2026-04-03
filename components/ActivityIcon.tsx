@@ -62,9 +62,8 @@ export const ACTIVITY_TYPES_WITH_SVG_FILE: ActivityType[] = [
   "spin",
   "stretch",
   "volleyball",
+  "other",
 ];
-
-const ACTIVITY_WITH_ICON_FILE = new Set<ActivityType>(ACTIVITY_TYPES_WITH_SVG_FILE);
 
 export function activityTypeToIconPath(type: ActivityType): string {
   return `/icons/${type}.svg`;
@@ -92,12 +91,11 @@ export function ActivityIcon({
 }: ActivityIconProps) {
   const iconSize = badge ? Math.round(size * 0.52) : size;
   const radius = Math.round(size * 0.28);
-  const useAsset = ACTIVITY_WITH_ICON_FILE.has(type);
   const showWhite = badge || invert;
 
-  const iconEl = useAsset ? (
+  const iconEl = (
     <img
-      src={`/icons/${type}.svg`}
+      src={activityTypeToIconPath(type)}
       alt=""
       width={iconSize}
       height={iconSize}
@@ -122,19 +120,6 @@ export function ActivityIcon({
             : {}),
       }}
     />
-  ) : (
-    <svg
-      width={iconSize}
-      height={iconSize}
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden
-      style={{
-        color: showWhite ? "#fff" : monochromeBlack ? "#000" : "currentColor",
-      }}
-    >
-      <OtherSparkle />
-    </svg>
   );
 
   if (!badge) return <span className={className} style={{ display: "inline-flex", flexShrink: 0 }}>{iconEl}</span>;
@@ -155,15 +140,5 @@ export function ActivityIcon({
     >
       {iconEl}
     </div>
-  );
-}
-
-function OtherSparkle() {
-  return (
-    <path
-      d="M12 2 L13.6 10.4 L22 12 L13.6 13.6 L12 22 L10.4 13.6 L2 12 L10.4 10.4 Z"
-      fill="currentColor"
-      stroke="none"
-    />
   );
 }

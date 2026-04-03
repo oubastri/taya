@@ -3,7 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { LikePerson } from "@/types/likes";
-import { SHEET_EXIT_MS, SHEET_SPRING } from "@/lib/sheetMotion";
+import {
+  SHEET_DISMISS_DRAG_PX,
+  SHEET_DRAG_REGION_STYLE,
+  SHEET_EXIT_MS,
+  SHEET_SPRING,
+  SHEET_TRANSFORM_SETTLED_CENTERED,
+} from "@/lib/sheetMotion";
+import { useLockBodyScroll } from "@/hooks/useLockBodyScroll";
+import { useSheetScrollPullDown } from "@/hooks/useSheetScrollPullDown";
 import { UserAvatar } from "@/components/UserAvatar";
 
 const NAV_HEIGHT = 54;
@@ -34,6 +42,7 @@ export function LikersSheet({
   const [open, setOpen] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
   const scrimRef = useRef<HTMLDivElement>(null);
+  const listScrollRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef({ active: false, startY: 0, dy: 0 });
 
   useEffect(() => {
@@ -66,6 +75,37 @@ export function LikersSheet({
     return () => window.removeEventListener("keydown", onKey);
   }, [close]);
 
+  useLockBodyScroll(true);
+
+  const endVerticalSheetDrag = useCallback(() => {
+    const { dy } = dragRef.current;
+
+    if (dy > SHEET_DISMISS_DRAG_PX) {
+      const vh = window.innerHeight;
+      if (sheetRef.current) {
+        sheetRef.current.style.transition = `transform ${SHEET_SPRING}`;
+        sheetRef.current.style.transform = `translateX(-50%) translateY(${vh}px)`;
+      }
+      if (scrimRef.current) {
+        scrimRef.current.style.transition = `opacity ${SHEET_SPRING}`;
+        scrimRef.current.style.opacity = "0";
+      }
+      window.setTimeout(onClose, SHEET_EXIT_MS);
+    } else {
+      if (sheetRef.current) {
+        sheetRef.current.style.transition = `transform ${SHEET_SPRING}`;
+        sheetRef.current.style.transform = "translateX(-50%) translateY(0)";
+        window.setTimeout(() => {
+          if (sheetRef.current) {
+            sheetRef.current.style.transition = "";
+            sheetRef.current.style.transform = SHEET_TRANSFORM_SETTLED_CENTERED;
+          }
+        }, SHEET_EXIT_MS);
+      }
+    }
+    dragRef.current.dy = 0;
+  }, [onClose]);
+
   const onHandleDown = (e: React.PointerEvent) => {
     dragRef.current = { active: true, startY: e.clientY, dy: 0 };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -84,32 +124,23 @@ export function LikersSheet({
   const onHandleUp = () => {
     if (!dragRef.current.active) return;
     dragRef.current.active = false;
-    const { dy } = dragRef.current;
-
-    if (dy > 90) {
-      const vh = window.innerHeight;
-      if (sheetRef.current) {
-        sheetRef.current.style.transition = `transform ${SHEET_SPRING}`;
-        sheetRef.current.style.transform = `translateX(-50%) translateY(${vh}px)`;
-      }
-      if (scrimRef.current) {
-        scrimRef.current.style.transition = `opacity ${SHEET_SPRING}`;
-        scrimRef.current.style.opacity = "0";
-      }
-      window.setTimeout(onClose, SHEET_EXIT_MS);
-    } else {
-      if (sheetRef.current) {
-        sheetRef.current.style.transition = `transform ${SHEET_SPRING}`;
-        sheetRef.current.style.transform = "translateX(-50%) translateY(0)";
-        window.setTimeout(() => {
-          if (sheetRef.current) {
-            sheetRef.current.style.transition = "";
-            sheetRef.current.style.transform = "";
-          }
-        }, SHEET_EXIT_MS);
-      }
-    }
+    endVerticalSheetDrag();
   };
+
+  const onScrollEdgePullMove = useCallback((dy: number) => {
+    dragRef.current.dy = dy;
+    if (sheetRef.current) {
+      sheetRef.current.style.transition = "none";
+      sheetRef.current.style.transform = `translateX(-50%) translateY(${dy}px)`;
+    }
+  }, []);
+
+  useSheetScrollPullDown({
+    enabled: open,
+    scrollRef: listScrollRef,
+    onPullMove: onScrollEdgePullMove,
+    onPullCommit: endVerticalSheetDrag,
+  });
 
   if (!mounted) return null;
 
@@ -147,6 +178,7 @@ export function LikersSheet({
           fontFamily: "var(--font-sans), sans-serif",
           transform: open ? "translateX(-50%)" : "translateX(-50%) translateY(100%)",
           transition: `transform ${SHEET_SPRING}`,
+          overscrollBehavior: "contain",
         }}
       >
         <div
@@ -155,24 +187,41 @@ export function LikersSheet({
           onPointerUp={onHandleUp}
           onPointerCancel={onHandleUp}
           style={{
-            padding: "12px 24px 0",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
             flexShrink: 0,
             cursor: "grab",
             touchAction: "none",
             userSelect: "none",
           }}
         >
+          <div style={SHEET_DRAG_REGION_STYLE}>
+            <div
+              style={{
+                width: 36,
+                height: 4,
+                borderRadius: 2,
+                background: "var(--drag-handle)",
+              }}
+            />
+          </div>
           <div
             style={{
-              width: 36,
-              height: 4,
-              borderRadius: 2,
-              background: "var(--drag-handle)",
+              padding: "0 84px 18px 24px",
+              flexShrink: 0,
             }}
-          />
+          >
+            <p
+              style={{
+                margin: 0,
+                fontFamily: "var(--font-sans), sans-serif",
+                fontSize: "clamp(26px, 7vw, 32px)",
+                fontWeight: 500,
+                letterSpacing: "-0.04em",
+                color: "var(--input-color)",
+              }}
+            >
+              {title}
+            </p>
+          </div>
         </div>
 
         <button
@@ -212,33 +261,17 @@ export function LikersSheet({
           </svg>
         </button>
 
-        <div
-          style={{
-            padding: "16px 84px 18px 24px",
-            flexShrink: 0,
-          }}
-        >
-          <p
-            style={{
-              margin: 0,
-              fontFamily: "var(--font-sans), sans-serif",
-              fontSize: "clamp(26px, 7vw, 32px)",
-              fontWeight: 500,
-              letterSpacing: "-0.04em",
-              color: "var(--input-color)",
-            }}
-          >
-            {title}
-          </p>
-        </div>
-
         <div style={{ height: "0.5px", background: "var(--separator)", flexShrink: 0 }} />
 
         <div
+          ref={listScrollRef}
           style={{
             flex: 1,
+            minHeight: 0,
             overflowY: "auto",
             overflowX: "hidden",
+            WebkitOverflowScrolling: "touch",
+            overscrollBehaviorY: "contain",
             touchAction: "pan-y",
           }}
         >
@@ -282,7 +315,7 @@ export function LikersSheet({
                 }}
               >
                 {f.avatarUrl ? (
-                  <UserAvatar avatarUrl={f.avatarUrl} name={f.name} fillParent expandable />
+                  <UserAvatar avatarUrl={f.avatarUrl} name={f.name} fillParent />
                 ) : (
                   <div
                     style={{

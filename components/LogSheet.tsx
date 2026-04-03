@@ -19,8 +19,39 @@ import {
   toDateKey,
 } from "@/types/workout";
 import type { ActivityType } from "@/types/workout";
-import { SHEET_EXIT_MS, SHEET_SPRING } from "@/lib/sheetMotion";
+import {
+  SHEET_DISMISS_DRAG_PX,
+  SHEET_DRAG_REGION_STYLE,
+  SHEET_EXIT_MS,
+  SHEET_SPRING,
+  SHEET_TRANSFORM_SETTLED_CENTERED,
+} from "@/lib/sheetMotion";
+import { LOG_SHEET_SAVE_HANDOFF_MS } from "@/lib/feedEntranceMotion";
+import { useLockBodyScroll } from "@/hooks/useLockBodyScroll";
 import { sheetHeroTitle } from "@/lib/sheetTitleStyle";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+
+const LOG_SHEET_CHIPS_ID = "log-sheet-chips";
+
+function isTextFieldTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  const el = target.closest("input, textarea");
+  if (!el) return false;
+  if (el instanceof HTMLTextAreaElement) return true;
+  if (!(el instanceof HTMLInputElement)) return true;
+  const t = el.type.toLowerCase();
+  return !["button", "submit", "reset", "checkbox", "radio", "file", "hidden"].includes(
+    t
+  );
+}
+
+type LogSheetPan = {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  downTarget: EventTarget;
+  phase: "deciding" | "sheet" | "rejected";
+};
 
 const DEFAULT_TOP_5: ActivityType[] = [
   "run",
@@ -33,6 +64,8 @@ const DEFAULT_TOP_5: ActivityType[] = [
 const MAX_DESCRIPTION_LENGTH = 150;
 /** Cross-fade + slide between log form and inline date picker */
 const LOG_VIEW_TRANSITION = `0.36s cubic-bezier(0.32, 0.72, 0, 1)`;
+/** "View more" expand — matches sheet motion feel */
+const LOG_CHIP_EXPAND_EASE = [0.32, 0.72, 0, 1] as const;
 const CLOSE_BTN = 54;
 
 /** Matches `fieldErrorText` in settings sheets (e.g. ChangePasswordSheet) */
@@ -102,7 +135,10 @@ export function LogSheet() {
 
   const sheetRef = useRef<HTMLDivElement>(null);
   const scrimRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef({ active: false, startY: 0, dy: 0 });
+  const calendarScrollRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef({ dy: 0 });
+  const sheetPanRef = useRef<LogSheetPan | null>(null);
+  const endSheetDragRef = useRef<() => void>(() => {});
   const chipsRef = useRef<HTMLDivElement>(null);
   const chipsInnerRef = useRef<HTMLDivElement>(null);
   const chipsDragRef = useRef({
@@ -278,6 +314,8 @@ export function LogSheet() {
   );
   const top5 = useMemo(() => orderedActivities.slice(0, 5), [orderedActivities]);
   const remaining = useMemo(() => orderedActivities.slice(5), [orderedActivities]);
+  const reduceMotion = useReducedMotion();
+  const visibleActivities = showAll ? orderedActivities : top5;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -312,6 +350,8 @@ export function LogSheet() {
       cancelAnimationFrame(outer);
     };
   }, [isOpen]);
+
+  useLockBodyScroll(isOpen);
 
   const openInlineDatePicker = useCallback(() => {
     datePickerSnapshotRef.current = date;
@@ -365,34 +405,20 @@ export function LogSheet() {
         description: description.trim(),
         activityType: selected,
       });
+      handleClose();
     } else {
-      addWorkout(date, description.trim(), selected);
-    }
-    handleClose();
-  };
-
-
-  const onHandleDown = (e: React.PointerEvent) => {
-    dragRef.current = { active: true, startY: e.clientY, dy: 0 };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    if (sheetRef.current) sheetRef.current.style.transition = "none";
-  };
-
-  const onHandleMove = (e: React.PointerEvent) => {
-    if (!dragRef.current.active) return;
-    const dy = Math.max(0, e.clientY - dragRef.current.startY);
-    dragRef.current.dy = dy;
-    if (sheetRef.current) {
-      sheetRef.current.style.transform = `translateX(-50%) translateY(${dy}px)`;
+      handleClose();
+      window.setTimeout(() => {
+        addWorkout(date, description.trim(), selected);
+      }, LOG_SHEET_SAVE_HANDOFF_MS);
     }
   };
 
-  const onHandleUp = () => {
-    if (!dragRef.current.active) return;
-    dragRef.current.active = false;
+
+  const endVerticalSheetDrag = useCallback(() => {
     const { dy } = dragRef.current;
 
-    if (dy > 90) {
+    if (dy > SHEET_DISMISS_DRAG_PX) {
       const vh = window.innerHeight;
       if (sheetRef.current) {
         sheetRef.current.style.transition = `transform ${SHEET_SPRING}`;
@@ -413,19 +439,134 @@ export function LogSheet() {
         window.setTimeout(() => {
           if (sheetRef.current) {
             sheetRef.current.style.transition = "";
-            sheetRef.current.style.transform = "";
+            sheetRef.current.style.transform = SHEET_TRANSFORM_SETTLED_CENTERED;
           }
         }, SHEET_EXIT_MS);
       }
     }
-  };
+    dragRef.current.dy = 0;
+  }, [close, reset]);
+
+  endSheetDragRef.current = endVerticalSheetDrag;
+
+  useEffect(() => {
+    const sheet = sheetRef.current;
+    if (!sheet || !isOpen || !panelOpen) return;
+
+    const onDown = (e: PointerEvent) => {
+      if (e.button !== 0) return;
+      const t = e.target;
+      if (!(t instanceof Element) || !sheet.contains(t)) return;
+      if (t.closest("[data-log-sheet-close]")) return;
+      if (isTextFieldTarget(t)) return;
+
+      sheetPanRef.current = {
+        pointerId: e.pointerId,
+        startX: e.clientX,
+        startY: e.clientY,
+        downTarget: t,
+        phase: "deciding",
+      };
+    };
+
+    const onMove = (e: PointerEvent) => {
+      const st = sheetPanRef.current;
+      if (!st || st.pointerId !== e.pointerId) return;
+      if (st.phase === "rejected") return;
+
+      const dx = e.clientX - st.startX;
+      const dy = e.clientY - st.startY;
+      const downEl = st.downTarget instanceof Element ? st.downTarget : null;
+      if (!downEl) return;
+
+      if (st.phase === "deciding") {
+        const inChips = chipsRef.current?.contains(downEl) ?? false;
+        if (inChips) {
+          if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) {
+            st.phase = "rejected";
+            return;
+          }
+          if (dy > 10 && dy >= Math.abs(dx)) {
+            st.phase = "sheet";
+            e.preventDefault();
+            sheet.setPointerCapture(e.pointerId);
+            sheet.style.transition = "none";
+          }
+          return;
+        }
+
+        if (datePickerOpen) {
+          const cs = calendarScrollRef.current;
+          if (cs?.contains(downEl)) {
+            if (cs.scrollTop > 0) {
+              if (Math.abs(dy) > 6) st.phase = "rejected";
+              return;
+            }
+            if (dy < -10 && Math.abs(dy) > Math.abs(dx)) {
+              st.phase = "rejected";
+              return;
+            }
+            if (dy > 10 && dy >= Math.abs(dx)) {
+              st.phase = "sheet";
+              e.preventDefault();
+              sheet.setPointerCapture(e.pointerId);
+              sheet.style.transition = "none";
+            }
+            return;
+          }
+        }
+
+        if (dy > 10 && dy >= Math.abs(dx)) {
+          st.phase = "sheet";
+          e.preventDefault();
+          sheet.setPointerCapture(e.pointerId);
+          sheet.style.transition = "none";
+        }
+        return;
+      }
+
+      if (st.phase === "sheet") {
+        e.preventDefault();
+        const pullDy = Math.max(0, e.clientY - st.startY);
+        dragRef.current.dy = pullDy;
+        sheet.style.transform = `translateX(-50%) translateY(${pullDy}px)`;
+      }
+    };
+
+    const onUp = (e: PointerEvent) => {
+      const st = sheetPanRef.current;
+      if (!st || st.pointerId !== e.pointerId) return;
+      if (st.phase === "sheet") {
+        try {
+          sheet.releasePointerCapture(e.pointerId);
+        } catch {
+          /* already released */
+        }
+        endSheetDragRef.current();
+      }
+      sheetPanRef.current = null;
+    };
+
+    sheet.addEventListener("pointerdown", onDown, { capture: true });
+    window.addEventListener("pointermove", onMove, { passive: false });
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+
+    return () => {
+      sheet.removeEventListener("pointerdown", onDown, { capture: true });
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      sheetPanRef.current = null;
+    };
+  }, [isOpen, panelOpen, datePickerOpen]);
 
   const isEditing = !!workoutToEdit;
 
   return (
     <>
       <style>{`
-        #log-sheet-chips::-webkit-scrollbar { display: none; }
+        #${LOG_SHEET_CHIPS_ID}::-webkit-scrollbar { display: none; }
       `}</style>
 
       {/* Scrim */}
@@ -469,33 +610,21 @@ export function LogSheet() {
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
-          maxHeight: datePickerOpen
-            ? "min(94svh, calc(100dvh - 8px))"
-            : "90svh",
+          /* Without a main-size floor, `flex:1` on the body (only abs children) collapses to ~0 */
+          minHeight:
+            "min(54svh, calc(100dvh - env(safe-area-inset-bottom, 0px) - 8px))",
+          maxHeight:
+            "min(74svh, calc(100dvh - env(safe-area-inset-bottom, 0px) - 8px))",
           transform: panelOpen
             ? "translateX(-50%)"
             : "translateX(-50%) translateY(100%)",
           transition: `transform ${SHEET_SPRING}`,
           pointerEvents: isOpen ? "auto" : "none",
+          overscrollBehavior: "contain",
         }}
       >
-        {/* Drag handle */}
-        <div
-          onPointerDown={onHandleDown}
-          onPointerMove={onHandleMove}
-          onPointerUp={onHandleUp}
-          onPointerCancel={onHandleUp}
-          style={{
-          padding: "12px 24px 0",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          flexShrink: 0,
-          cursor: "grab",
-          touchAction: "none",
-          userSelect: "none",
-          }}
-        >
+        {/* Drag handle (visual); dismiss gesture is handled on the whole sheet. */}
+        <div style={SHEET_DRAG_REGION_STYLE} aria-hidden>
           <div
             style={{
               width: 36,
@@ -509,6 +638,7 @@ export function LogSheet() {
         {/* Close button */}
         <button
           type="button"
+          data-log-sheet-close
           onClick={handleClose}
           aria-label="Close"
           style={{
@@ -614,15 +744,11 @@ export function LogSheet() {
           ) : null}
         </div>
 
-        {/* In-flow height comes from minHeight (children are position:absolute). Animate minHeight when the inline calendar opens. */}
+        {/* Fills space below the header within maxHeight; abs layers for log vs calendar. */}
         <div
           style={{
-            flex: "0 0 auto",
-            flexShrink: 0,
-            minHeight: datePickerOpen
-              ? "min(560px, calc(94svh - 230px))"
-              : "min(300px, 44svh)",
-            transition: `min-height ${LOG_VIEW_TRANSITION}`,
+            flex: 1,
+            minHeight: 0,
             position: "relative",
             display: "flex",
             flexDirection: "column",
@@ -636,25 +762,15 @@ export function LogSheet() {
               display: "flex",
               flexDirection: "column",
               overflow: "hidden",
+              minHeight: 0,
               opacity: datePickerOpen ? 0 : 1,
               transition: `opacity ${LOG_VIEW_TRANSITION}`,
               pointerEvents: datePickerOpen ? "none" : "auto",
             }}
           >
-            <div
-              style={{
-                flex: 1,
-                minHeight: 0,
-                overflowY: "auto",
-                overflowX: "hidden",
-                WebkitOverflowScrolling: "touch",
-                display: "flex",
-                flexDirection: "column",
-              }}
-            >
-        {/* Activity chips — horizontal scroll */}
+        {/* Activity chips — horizontal scroll only */}
         <div
-          id="log-sheet-chips"
+          id={LOG_SHEET_CHIPS_ID}
           ref={chipsRef}
           style={{
             overflowX: "auto",
@@ -666,27 +782,73 @@ export function LogSheet() {
             userSelect: "none",
           }}
         >
-          <div
+          <motion.div
             ref={chipsInnerRef}
+            layout
             style={{
               display: "flex",
               gap: 8,
-              padding: "26px 24px 22px",
+              padding: "26px 24px 10px 16px",
               width: "max-content",
               willChange: "transform",
             }}
+            transition={
+              reduceMotion
+                ? { layout: { duration: 0 } }
+                : {
+                    layout: {
+                      type: "spring",
+                      stiffness: 380,
+                      damping: 34,
+                      mass: 0.85,
+                    },
+                  }
+            }
           >
-            {(showAll ? orderedActivities : top5).map((activity) => {
+            {visibleActivities.map((activity, index) => {
               const isSelected = selected === activity;
+              const isReveal = showAll && index >= 5;
+              const stagger = Math.max(0, index - 5);
               return (
-                <button
+                <motion.button
                   key={activity}
+                  layout
                   type="button"
                   onClick={() => setSelected(isSelected ? null : activity)}
                   aria-pressed={isSelected}
                   className={
                     isSelected ? "log-sheet-activity-chip--selected" : undefined
                   }
+                  initial={
+                    reduceMotion || !isReveal
+                      ? false
+                      : { opacity: 0, x: -14 }
+                  }
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{
+                    layout: reduceMotion
+                      ? { duration: 0 }
+                      : {
+                          type: "spring",
+                          stiffness: 420,
+                          damping: 32,
+                          mass: 0.78,
+                        },
+                    opacity: reduceMotion
+                      ? { duration: 0 }
+                      : {
+                          duration: 0.34,
+                          ease: LOG_CHIP_EXPAND_EASE,
+                          delay: stagger * 0.038,
+                        },
+                    x: reduceMotion
+                      ? { duration: 0 }
+                      : {
+                          duration: 0.34,
+                          ease: LOG_CHIP_EXPAND_EASE,
+                          delay: stagger * 0.038,
+                        },
+                  }}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
@@ -703,63 +865,77 @@ export function LogSheet() {
                     letterSpacing: "-0.02em",
                     color: isSelected ? "var(--chip-selected-color)" : "var(--chip-color)",
                     WebkitTapHighlightColor: "transparent",
-                    transition: "background 0.18s, color 0.18s",
                     flexShrink: 0,
                     whiteSpace: "nowrap",
                   }}
                 >
                   <ActivityIcon type={activity} size={22} invert={isSelected} />
                   {ACTIVITY_LABELS[activity]}
-                </button>
+                </motion.button>
               );
             })}
 
-            {/* View more pill */}
-            {!showAll && remaining.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setShowAll(true)}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 5,
-                  padding: "0 14px",
-                  height: 40,
-                  borderRadius: 100,
-                  border: "none",
-                  background: "var(--chip-bg)",
-                  cursor: "pointer",
-                  fontFamily: "var(--font-sans), sans-serif",
-                  fontSize: 14,
-                  fontWeight: 500,
-                  letterSpacing: "-0.02em",
-                  color: "var(--chip-color)",
-                  WebkitTapHighlightColor: "transparent",
-                  flexShrink: 0,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                View more
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden
+            <AnimatePresence initial={false} mode="popLayout">
+              {!showAll && remaining.length > 0 ? (
+                <motion.button
+                  key="log-sheet-view-more"
+                  type="button"
+                  layout
+                  onClick={() => setShowAll(true)}
+                  initial={false}
+                  exit={
+                    reduceMotion
+                      ? { opacity: 0, transition: { duration: 0 } }
+                      : {
+                          opacity: 0,
+                          scale: 0.94,
+                          transition: {
+                            duration: 0.22,
+                            ease: LOG_CHIP_EXPAND_EASE,
+                          },
+                        }
+                  }
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5,
+                    padding: "0 14px",
+                    height: 40,
+                    borderRadius: 100,
+                    border: "none",
+                    background: "var(--chip-bg)",
+                    cursor: "pointer",
+                    fontFamily: "var(--font-sans), sans-serif",
+                    fontSize: 14,
+                    fontWeight: 500,
+                    letterSpacing: "-0.02em",
+                    color: "var(--chip-color)",
+                    WebkitTapHighlightColor: "transparent",
+                    flexShrink: 0,
+                    whiteSpace: "nowrap",
+                  }}
                 >
-                  <path d="M9 18l6-6-6-6" />
-                </svg>
-              </button>
-            )}
-          </div>
+                  View more
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden
+                  >
+                    <path d="M9 18l6-6-6-6" />
+                  </svg>
+                </motion.button>
+              ) : null}
+            </AnimatePresence>
+          </motion.div>
         </div>
 
-        {/* Notes */}
-        <div style={{ padding: "26px 24px 0" }}>
+        <div style={{ flexShrink: 0, padding: "12px 24px 0" }}>
           <textarea
             id="log-sheet-note"
             placeholder="Tell us about it (optional)"
@@ -768,9 +944,11 @@ export function LogSheet() {
               setDescription(e.target.value.slice(0, MAX_DESCRIPTION_LENGTH))
             }
             maxLength={MAX_DESCRIPTION_LENGTH}
-            rows={4}
+            rows={5}
             style={{
               width: "100%",
+              minHeight: 120,
+              maxHeight: "min(220px, 32svh)",
               boxSizing: "border-box",
               resize: "none",
               padding: 0,
@@ -784,16 +962,18 @@ export function LogSheet() {
               letterSpacing: "-0.025em",
               lineHeight: 1.55,
               display: "block",
+              overflowY: "auto",
+              WebkitOverflowScrolling: "touch",
             }}
           />
         </div>
 
-        {/* CTA */}
         <div
           style={{
-            padding: "16px 24px",
+            flexShrink: 0,
+            padding: "10px 24px",
             paddingBottom:
-              "max(20px, calc(10px + env(safe-area-inset-bottom)))",
+              "calc(8px + env(safe-area-inset-bottom, 0px))",
           }}
         >
           <button
@@ -819,7 +999,6 @@ export function LogSheet() {
             {isEditing ? "Save" : "Log move"}
           </button>
         </div>
-            </div>
           </div>
 
           {/* Inline calendar — fades in over the same region */}
@@ -830,6 +1009,7 @@ export function LogSheet() {
               display: "flex",
               flexDirection: "column",
               overflow: "hidden",
+              minHeight: 0,
               opacity: datePickerOpen ? 1 : 0,
               transition: datePickerOpen
                 ? `opacity ${LOG_VIEW_TRANSITION} 70ms`
@@ -838,11 +1018,14 @@ export function LogSheet() {
             }}
           >
             <div
+              ref={calendarScrollRef}
               style={{
                 flex: 1,
                 minHeight: 0,
                 overflowY: "auto",
                 WebkitOverflowScrolling: "touch",
+                overscrollBehaviorY: "contain",
+                touchAction: "pan-y",
                 padding: "22px 24px 4px",
                 boxSizing: "border-box",
               }}

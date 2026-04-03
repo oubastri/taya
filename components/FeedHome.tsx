@@ -5,8 +5,11 @@ import {
   useState,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
+  type AnimationEvent,
   type CSSProperties,
+  type ReactNode,
 } from "react";
 import { loadLikersForEntity } from "@/lib/load-likers";
 import { useUser } from "@/hooks/use-user";
@@ -27,6 +30,13 @@ import {
 } from "@/lib/data-adapter";
 import { useToast } from "@/contexts/toast";
 import type { FeedItem } from "@/hooks/use-friends";
+import { WORKOUTS_CHANGED_EVENT, type WorkoutsChangedDetail } from "@/lib/taya-events";
+import { flushMoveLogToast } from "@/lib/move-log-toast";
+import {
+  FEED_ENTRANCE,
+  FEED_ENTRANCE_FALLBACK_MS,
+  feedEntranceChoreoMs,
+} from "@/lib/feedEntranceMotion";
 
 /** Shown below the feed while the next server page loads (real mode). */
 function FeedLoadMoreSpinner() {
@@ -88,6 +98,57 @@ const FEED_HEADER_GLASS_BTN: CSSProperties = {
 /** Initial batch and each infinite-scroll step (mock: client slice; real: RPC page). */
 const FEED_PAGE_SIZE = 20;
 
+/**
+ * Phase 1: grid row opens from 0 → 1fr (pushes posts below).
+ * Phase 2: inner card fades/slides in after slot is mostly open.
+ * Settled state keeps the same DOM so clearing choreo does not remount the post.
+ */
+function FeedPostEntranceSlot({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [settled, setSettled] = useState(false);
+
+  useLayoutEffect(() => {
+    if (settled) return;
+    const el = ref.current;
+    if (!el) return;
+    const id = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        el.classList.add("feed-post-new-slot--open");
+      });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [settled]);
+
+  useEffect(() => {
+    if (settled) return;
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    if (!mq.matches) return;
+    setSettled(true);
+  }, [settled]);
+
+  const onRevealEnd = useCallback((e: AnimationEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget) return;
+    if (e.animationName !== "feed-post-new-reveal-in") return;
+    setSettled(true);
+  }, []);
+
+  return (
+    <div
+      ref={ref}
+      className={`feed-post-new-slot${settled ? " feed-post-new-slot--settled" : ""}`}
+    >
+      <div className="feed-post-new-slot-inner">
+        <div
+          className={`feed-post-new-reveal${settled ? " feed-post-new-reveal--settled" : ""}`}
+          onAnimationEnd={onRevealEnd}
+        >
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function FeedHome() {
   const { toast } = useToast();
   const { user, hydrated: uh } = useUser();
@@ -107,6 +168,15 @@ export default function FeedHome() {
   const [realFeedLoadingInitial, setRealFeedLoadingInitial] = useState(true);
   const [realFeedLoadingMore, setRealFeedLoadingMore] = useState(false);
   const [realFeedTotal, setRealFeedTotal] = useState<number | null>(null);
+  const [feedEntranceWorkoutId, setFeedEntranceWorkoutId] = useState<string | null>(null);
+  /** Keeps slot DOM after choreo ends so the post does not remount (avoids flash). */
+  const [slotWrapperWorkoutId, setSlotWrapperWorkoutId] = useState<string | null>(null);
+  const realFeedGenRef = useRef(0);
+
+  useEffect(() => {
+    setFeedEntranceWorkoutId(null);
+    setSlotWrapperWorkoutId(null);
+  }, [feedMode]);
 
   const currentUser = useMemo(
     () => ({ id: user.id, name: user.name, handle: user.handle, avatarUrl: user.avatarUrl }),
@@ -173,6 +243,7 @@ export default function FeedHome() {
   useEffect(() => {
     if (!realSocialReady) return;
     let cancelled = false;
+    const effectGen = ++realFeedGenRef.current;
     setRealFeedLoadingInitial(true);
     setRealFeedRows([]);
     setRealFeedHasMore(true);
@@ -184,21 +255,76 @@ export default function FeedHome() {
           fetchFeedTotal(feedMode),
           fetchFeedPage(feedMode, null, FEED_PAGE_SIZE),
         ]);
-        if (cancelled) return;
+        if (cancelled || effectGen !== realFeedGenRef.current) return;
         setRealFeedTotal(total);
         setRealFeedRows(page.items);
         setRealFeedHasMore(page.hasMore);
       } catch {
-        if (!cancelled) toast("Couldn't load feed", "error");
+        if (!cancelled && effectGen === realFeedGenRef.current) toast("Couldn't load feed", "error");
       } finally {
-        if (!cancelled) setRealFeedLoadingInitial(false);
+        if (!cancelled && effectGen === realFeedGenRef.current) setRealFeedLoadingInitial(false);
       }
     })();
 
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- toast stable; avoid remount churn
   }, [realSocialReady, feedMode]);
+
+  useEffect(() => {
+    const mergeFreshTop = (prev: FeedPageItem[], freshTop: FeedPageItem[]) => {
+      const topIds = new Set(freshTop.map((i) => i.id));
+      const merged = [...freshTop];
+      for (const r of prev) {
+        if (!topIds.has(r.id)) merged.push(r);
+      }
+      return merged;
+    };
+
+    const pulseIfNewAdd = (highlightId?: string) => {
+      if (!highlightId) return;
+      setFeedEntranceWorkoutId(highlightId);
+      setSlotWrapperWorkoutId(highlightId);
+    };
+
+    const onWorkoutsChanged = (ev: Event) => {
+      const detail = (ev as CustomEvent<WorkoutsChangedDetail>).detail;
+      const highlightId = detail?.source === "add" ? detail?.workoutId : undefined;
+
+      if (!isRealMode) {
+        pulseIfNewAdd(highlightId);
+        return;
+      }
+
+      if (!realSocialReady) return;
+
+      const refreshGen = ++realFeedGenRef.current;
+
+      void (async () => {
+        try {
+          const [total, page] = await Promise.all([
+            fetchFeedTotal(feedMode),
+            fetchFeedPage(feedMode, null, FEED_PAGE_SIZE),
+          ]);
+          if (refreshGen !== realFeedGenRef.current) return;
+          setRealFeedTotal(total);
+          setRealFeedRows((prev) => mergeFreshTop(prev, page.items));
+          setRealFeedHasMore(page.hasMore);
+          setRealFeedLoadingInitial(false);
+          pulseIfNewAdd(highlightId);
+        } catch {
+          if (refreshGen === realFeedGenRef.current) {
+            toast("Couldn't refresh feed", "error");
+          }
+        }
+      })();
+    };
+
+    window.addEventListener(WORKOUTS_CHANGED_EVENT, onWorkoutsChanged);
+    return () => window.removeEventListener(WORKOUTS_CHANGED_EVENT, onWorkoutsChanged);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- toast stable; avoid remount churn
+  }, [isRealMode, realSocialReady, feedMode]);
 
   const loadMoreRealFeed = useCallback(async () => {
     if (!realSocialReady || !realFeedHasMore || realFeedLoadingMore || realFeedRows.length === 0) {
@@ -372,6 +498,45 @@ export default function FeedHome() {
     return groups;
   }, [realFeedRows]);
 
+  const feedEntranceCardIndex = useMemo(() => {
+    if (!feedEntranceWorkoutId) return -1;
+    const groups = isRealMode ? groupedRealItems : groupedMockItems;
+    let idx = 0;
+    for (const g of groups) {
+      for (const item of g.items) {
+        const id = isRealMode ? (item as FeedPageItem).id : (item as FeedItem).id;
+        if (id === feedEntranceWorkoutId) return idx;
+        idx++;
+      }
+    }
+    return -1;
+  }, [feedEntranceWorkoutId, groupedRealItems, groupedMockItems, isRealMode]);
+
+  const totalFeedCardCount = useMemo(() => {
+    const groups = isRealMode ? groupedRealItems : groupedMockItems;
+    return groups.reduce((n, g) => n + g.items.length, 0);
+  }, [isRealMode, groupedRealItems, groupedMockItems]);
+
+  useEffect(() => {
+    if (!feedEntranceWorkoutId) return;
+    const choreoId = feedEntranceWorkoutId;
+
+    if (feedEntranceCardIndex < 0) {
+      const t = window.setTimeout(() => {
+        setFeedEntranceWorkoutId((cur) => (cur === choreoId ? null : cur));
+        flushMoveLogToast((msg) => toast(msg, "success"));
+      }, FEED_ENTRANCE_FALLBACK_MS);
+      return () => clearTimeout(t);
+    }
+    const nBelow = totalFeedCardCount - feedEntranceCardIndex - 1;
+    const ms = feedEntranceChoreoMs(nBelow);
+    const t = window.setTimeout(() => {
+      setFeedEntranceWorkoutId((cur) => (cur === choreoId ? null : cur));
+      flushMoveLogToast((msg) => toast(msg, "success"));
+    }, ms);
+    return () => clearTimeout(t);
+  }, [feedEntranceWorkoutId, feedEntranceCardIndex, totalFeedCardCount, toast]);
+
   const handleFeedModeChange = useCallback((mode: FeedMode) => {
     setFeedMode(mode);
   }, []);
@@ -514,23 +679,44 @@ export default function FeedHome() {
                       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                         {group.items.map((item) => {
                           const i = cardIndex++;
+                          const isSlotWrapper = item.id === slotWrapperWorkoutId;
+                          const isBelowEntrance =
+                            feedEntranceWorkoutId != null &&
+                            feedEntranceCardIndex >= 0 &&
+                            i > feedEntranceCardIndex;
+                          const belowStaggerMs =
+                            isBelowEntrance
+                              ? (i - feedEntranceCardIndex - 1) * FEED_ENTRANCE.belowStaggerMs
+                              : 0;
+                          const post = (
+                            <FeedPost
+                              workout={item}
+                              currentUserId={user.id}
+                              liked={item.likedByMe}
+                              likeCount={item.likeCount}
+                              onToggleLike={() => void onToggleRealLike(item)}
+                              onLikeIfNeeded={() => {
+                                if (!item.likedByMe) void onToggleRealLike(item);
+                              }}
+                              resolveLikers={resolveLikers}
+                            />
+                          );
+                          if (isSlotWrapper) {
+                            return (
+                              <FeedPostEntranceSlot key={`${item.userId}-${item.id}-${feedMode}`}>
+                                {post}
+                              </FeedPostEntranceSlot>
+                            );
+                          }
                           return (
                             <div
                               key={`${item.userId}-${item.id}-${feedMode}`}
-                              style={{ animationDelay: `${i * 40}ms` }}
-                              className="animate-fade-in-up"
+                              style={
+                                isBelowEntrance ? { animationDelay: `${belowStaggerMs}ms` } : undefined
+                              }
+                              className={isBelowEntrance ? "animate-feed-post-below-settle" : undefined}
                             >
-                              <FeedPost
-                                workout={item}
-                                currentUserId={user.id}
-                                liked={item.likedByMe}
-                                likeCount={item.likeCount}
-                                onToggleLike={() => void onToggleRealLike(item)}
-                                onLikeIfNeeded={() => {
-                                  if (!item.likedByMe) void onToggleRealLike(item);
-                                }}
-                                resolveLikers={resolveLikers}
-                              />
+                              {post}
                             </div>
                           );
                         })}
@@ -563,21 +749,44 @@ export default function FeedHome() {
                           const mockItem = item as FeedItem;
                           const like = getLike(mockItem.id);
                           const i = cardIndex++;
+                          const isSlotWrapper = mockItem.id === slotWrapperWorkoutId;
+                          const isBelowEntrance =
+                            feedEntranceWorkoutId != null &&
+                            feedEntranceCardIndex >= 0 &&
+                            i > feedEntranceCardIndex;
+                          const belowStaggerMs =
+                            isBelowEntrance
+                              ? (i - feedEntranceCardIndex - 1) * FEED_ENTRANCE.belowStaggerMs
+                              : 0;
+                          const post = (
+                            <FeedPost
+                              workout={mockItem}
+                              currentUserId={user.id}
+                              liked={like.likedByMe}
+                              likeCount={like.count}
+                              onToggleLike={() => toggleLike(mockItem.id)}
+                              onLikeIfNeeded={() => likeIfNeeded(mockItem.id)}
+                              resolveLikers={resolveLikers}
+                            />
+                          );
+                          if (isSlotWrapper) {
+                            return (
+                              <FeedPostEntranceSlot
+                                key={`${mockItem.userId}-${mockItem.id}-${feedMode}`}
+                              >
+                                {post}
+                              </FeedPostEntranceSlot>
+                            );
+                          }
                           return (
                             <div
                               key={`${mockItem.userId}-${mockItem.id}-${feedMode}`}
-                              style={{ animationDelay: `${i * 40}ms` }}
-                              className="animate-fade-in-up"
+                              style={
+                                isBelowEntrance ? { animationDelay: `${belowStaggerMs}ms` } : undefined
+                              }
+                              className={isBelowEntrance ? "animate-feed-post-below-settle" : undefined}
                             >
-                              <FeedPost
-                                workout={mockItem}
-                                currentUserId={user.id}
-                                liked={like.likedByMe}
-                                likeCount={like.count}
-                                onToggleLike={() => toggleLike(mockItem.id)}
-                                onLikeIfNeeded={() => likeIfNeeded(mockItem.id)}
-                                resolveLikers={resolveLikers}
-                              />
+                              {post}
                             </div>
                           );
                         })}

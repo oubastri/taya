@@ -30,6 +30,7 @@ import type { FeedItem } from "@/hooks/use-friends";
 import type { LikePerson } from "@/types/likes";
 import { UserAvatar } from "@/components/UserAvatar";
 import { AccountMenu } from "@/components/AccountMenu";
+import { useToast } from "@/contexts/toast";
 
 /** Sticky top bar — stays pinned while profile content scrolls */
 const PROFILE_STICKY_TOP_BAR: CSSProperties = {
@@ -96,6 +97,7 @@ function ProfileSkeleton() {
 
 export default function ProfilePage() {
   const router = useRouter();
+  const { toast } = useToast();
   const { user, hydrated: uh, updateUser } = useUser();
   const { workouts, stats, hydrated: wh, deleteWorkout } = useWorkouts();
   const { friends } = useFriends();
@@ -175,7 +177,11 @@ export default function ProfilePage() {
   }, [socialSheet]);
 
   const handleNameBlur = () => {
-    if (nameInput.trim()) updateUser({ name: nameInput.trim() });
+    const trimmed = nameInput.trim();
+    if (trimmed && trimmed !== user.name) {
+      updateUser({ name: trimmed });
+      toast("Name saved", "success");
+    }
     setEditingName(false);
   };
 
@@ -258,6 +264,8 @@ export default function ProfilePage() {
         onToggleLike={() => toggleLike(workout.id)}
         onLikeIfNeeded={() => likeIfNeeded(workout.id)}
         resolveLikers={resolveLikers}
+        showMoveDate
+        disableProfileNavigation
       />
     );
   }
@@ -281,6 +289,7 @@ export default function ProfilePage() {
         onToggleLike={() => toggleLike(workout.id)}
         onLikeIfNeeded={() => likeIfNeeded(workout.id)}
         resolveLikers={resolveLikers}
+        disableProfileNavigation
         postActions={{
           onEdit: () => {
             openForEdit(workout);
@@ -299,12 +308,17 @@ export default function ProfilePage() {
     );
   }
 
+  const mainPaddingBottom =
+    section === "about"
+      ? "max(140px, calc(112px + env(safe-area-inset-bottom, 0px)))"
+      : 96;
+
   return (
     <main
       style={{
         minHeight: "100vh",
         background: "var(--background)",
-        paddingBottom: 96,
+        paddingBottom: mainPaddingBottom,
       }}
     >
       <div

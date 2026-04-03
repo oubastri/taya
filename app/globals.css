@@ -47,8 +47,8 @@
   --glass-btn-shadow: none;
   --glass-btn-icon: rgba(0, 0, 0, 0.6);
 
-  /* Bottom sheets — solid panel (light: white; dark: see [data-theme="dark"]) */
-  --sheet-bg: #ffffff;
+  /* Bottom sheets — match page canvas so feed cards (--card-bg / white) separate from the panel */
+  --sheet-bg: var(--background);
   --sheet-shadow: 0 -1px 0 rgba(0, 0, 0, 0.07), 0 -12px 48px rgba(0, 0, 0, 0.13);
   --drag-handle: rgba(0, 0, 0, 0.16);
 
@@ -475,27 +475,35 @@
   gap: 7px;
 }
 
+.profile-follow-btn__verify-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  max-width: 0;
+  opacity: 0;
+  transform: scale(0.92);
+  transition:
+    max-width var(--duration-normal) var(--ease-out-expo),
+    opacity var(--duration-normal) var(--ease-out-expo),
+    transform var(--duration-normal) var(--ease-out-expo);
+}
+
+.profile-follow-btn--following .profile-follow-btn__verify-wrap {
+  max-width: 22px;
+  opacity: 1;
+  transform: scale(1);
+}
+
 .profile-follow-btn__verify {
   flex-shrink: 0;
   display: block;
   object-fit: contain;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .profile-follow-btn--following .profile-follow-btn__verify {
-    animation: profile-follow-verify-in var(--duration-normal) var(--ease-out-expo) both;
-  }
-}
-
-@keyframes profile-follow-verify-in {
-  from {
-    opacity: 0;
-    transform: scale(0.92);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+.profile-follow-btn__label {
+  display: inline-block;
+  transition: transform var(--duration-fast) var(--ease-out-expo);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -504,8 +512,8 @@
     transition-property: background-color, color, border-color, box-shadow, transform;
   }
 
-  .profile-follow-btn--following .profile-follow-btn__verify {
-    animation: none;
+  .profile-follow-btn__verify-wrap {
+    transition-duration: 0.01ms;
   }
 }
 
@@ -815,6 +823,200 @@ textarea:focus-visible {
 
 .animate-fade-in-up {
   animation: fade-in-up var(--duration-normal) var(--ease-out-expo) forwards;
+}
+
+/* New move: (1) slot opens — layout pushes posts below; (2) card reveals inside slot */
+/* Timings ↔ lib/feedEntranceMotion.ts */
+.feed-post-new-slot {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.32s cubic-bezier(0.22, 1, 0.28, 1);
+}
+
+.feed-post-new-slot--open {
+  grid-template-rows: 1fr;
+}
+
+.feed-post-new-slot-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.feed-post-new-reveal {
+  opacity: 0;
+  transform: translateY(14px);
+}
+
+.feed-post-new-slot--open .feed-post-new-reveal:not(.feed-post-new-reveal--settled) {
+  animation: feed-post-new-reveal-in 0.3s 0.16s cubic-bezier(0.22, 1, 0.28, 1) forwards;
+}
+
+.feed-post-new-slot.feed-post-new-slot--settled {
+  grid-template-rows: 1fr;
+  transition: none;
+}
+
+.feed-post-new-slot--settled .feed-post-new-slot-inner {
+  overflow: visible;
+}
+
+.feed-post-new-reveal--settled {
+  opacity: 1;
+  transform: none;
+}
+
+@keyframes feed-post-new-reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Posts below the new slot: staggered “giving room” settle (runs as slot opens) */
+@keyframes feed-post-below-settle {
+  from {
+    transform: translateY(-20px);
+    opacity: 0.92;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-feed-post-below-settle {
+  animation: feed-post-below-settle 0.34s cubic-bezier(0.22, 1, 0.28, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feed-post-new-slot {
+    transition: none;
+    grid-template-rows: 1fr;
+  }
+
+  .feed-post-new-slot--open .feed-post-new-reveal,
+  .feed-post-new-reveal {
+    animation: none !important;
+    opacity: 1;
+    transform: none;
+  }
+
+  .feed-post-new-reveal--settled {
+    opacity: 1;
+    transform: none;
+  }
+
+  .animate-feed-post-below-settle {
+    animation: none;
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(100% + 14px));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toast-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(calc(100% + 14px));
+  }
+}
+
+.toast-item--in {
+  animation: toast-in var(--duration-normal) var(--ease-out-expo) forwards;
+}
+
+.toast-item--out {
+  animation: toast-out var(--duration-fast) cubic-bezier(0.32, 0, 0.67, 0) forwards;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-item--in,
+  .toast-item--out {
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+  }
+}
+
+/* Toasts — bottom-center, hugs content width */
+.toast-host {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 100vw;
+  padding: 0 12px;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.toast-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 24px));
+  padding: 11px 16px 11px 14px;
+  border-radius: var(--radius-full);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+  text-align: left;
+  word-break: break-word;
+  pointer-events: auto;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
+  background: #0a0a0a;
+  color: #fff;
+}
+
+.toast-item__verify {
+  flex-shrink: 0;
+  display: block;
+  width: 22px;
+  height: 22px;
+}
+
+.toast-item__icon {
+  flex-shrink: 0;
+}
+
+.toast-item__body {
+  min-width: 0;
+}
+
+/* Dark theme — light pill */
+[data-theme="dark"] .toast-item {
+  background: #fff;
+  color: #0a0a0a;
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
 }
 
 @keyframes fade-out-down {
@@ -1440,13 +1642,18 @@ textarea::placeholder {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  overscroll-behavior: contain;
 }
 
 .account-menu__sheet-handle-wrap {
   display: flex;
   justify-content: center;
-  padding: 12px 24px 0;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 10px 24px;
   flex-shrink: 0;
+  touch-action: none;
 }
 
 .account-menu__sheet-handle {
@@ -1461,6 +1668,8 @@ textarea::placeholder {
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
   padding: 8px 14px max(24px, env(safe-area-inset-bottom));
 }
 

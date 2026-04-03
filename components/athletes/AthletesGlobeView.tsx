@@ -11,7 +11,15 @@ import {
 } from "react";
 import { AthletesCounter } from "@/components/AthletesCounter";
 import { UserAvatar } from "@/components/UserAvatar";
-import { SHEET_EXIT_MS, SHEET_SPRING } from "@/lib/sheetMotion";
+import {
+  SHEET_DISMISS_DRAG_PX,
+  SHEET_DRAG_REGION_STYLE,
+  SHEET_EXIT_MS,
+  SHEET_SPRING,
+  SHEET_TRANSFORM_SETTLED_CENTERED,
+} from "@/lib/sheetMotion";
+import { useLockBodyScroll } from "@/hooks/useLockBodyScroll";
+import { useSheetScrollPullDown } from "@/hooks/useSheetScrollPullDown";
 import type { FriendData } from "@/types/user";
 
 // ─── constants ───────────────────────────────────────────────────────────────
@@ -473,6 +481,7 @@ function SearchSheet({
   const inputRef = useRef<HTMLInputElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const scrimRef = useRef<HTMLDivElement>(null);
+  const listScrollRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef({ active: false, startY: 0, dy: 0 });
 
   // Trigger enter animation on next paint
@@ -506,7 +515,35 @@ function SearchSheet({
     return () => window.removeEventListener("keydown", onKey);
   }, [close]);
 
-  // ── Drag-to-dismiss on the handle ────────────────────────────────────────
+  useLockBodyScroll(true);
+
+  const endVerticalSheetDrag = useCallback(() => {
+    const { dy } = dragRef.current;
+
+    if (dy > SHEET_DISMISS_DRAG_PX) {
+      const vh = window.innerHeight;
+      if (sheetRef.current) {
+        sheetRef.current.style.transition = `transform ${SHEET_SPRING}`;
+        sheetRef.current.style.transform = `translateX(-50%) translateY(${vh}px)`;
+      }
+      if (scrimRef.current) {
+        scrimRef.current.style.transition = `opacity ${SHEET_SPRING}`;
+        scrimRef.current.style.opacity = "0";
+      }
+      window.setTimeout(onClose, SHEET_EXIT_MS);
+    } else if (sheetRef.current) {
+      sheetRef.current.style.transition = `transform ${SHEET_SPRING}`;
+      sheetRef.current.style.transform = "translateX(-50%) translateY(0)";
+        window.setTimeout(() => {
+          if (sheetRef.current) {
+            sheetRef.current.style.transition = "";
+            sheetRef.current.style.transform = SHEET_TRANSFORM_SETTLED_CENTERED;
+          }
+        }, SHEET_EXIT_MS);
+    }
+    dragRef.current.dy = 0;
+  }, [onClose]);
+
   const onHandleDown = (e: React.PointerEvent) => {
     dragRef.current = { active: true, startY: e.clientY, dy: 0 };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -523,34 +560,23 @@ function SearchSheet({
   const onHandleUp = () => {
     if (!dragRef.current.active) return;
     dragRef.current.active = false;
-    const { dy } = dragRef.current;
-
-    if (dy > 90) {
-      // Dismiss: animate sheet and scrim out in px so units match
-      const vh = window.innerHeight;
-      if (sheetRef.current) {
-        sheetRef.current.style.transition = `transform ${SHEET_SPRING}`;
-        sheetRef.current.style.transform = `translateX(-50%) translateY(${vh}px)`;
-      }
-      if (scrimRef.current) {
-        scrimRef.current.style.transition = `opacity ${SHEET_SPRING}`;
-        scrimRef.current.style.opacity = "0";
-      }
-      window.setTimeout(onClose, SHEET_EXIT_MS);
-    } else {
-      // Snap back
-      if (sheetRef.current) {
-        sheetRef.current.style.transition = `transform ${SHEET_SPRING}`;
-        sheetRef.current.style.transform = "translateX(-50%) translateY(0)";
-        window.setTimeout(() => {
-          if (sheetRef.current) {
-            sheetRef.current.style.transition = "";
-            sheetRef.current.style.transform = "";
-          }
-        }, SHEET_EXIT_MS);
-      }
-    }
+    endVerticalSheetDrag();
   };
+
+  const onScrollEdgePullMove = useCallback((dy: number) => {
+    dragRef.current.dy = dy;
+    if (sheetRef.current) {
+      sheetRef.current.style.transition = "none";
+      sheetRef.current.style.transform = `translateX(-50%) translateY(${dy}px)`;
+    }
+  }, []);
+
+  useSheetScrollPullDown({
+    enabled: open,
+    scrollRef: listScrollRef,
+    onPullMove: onScrollEdgePullMove,
+    onPullCommit: endVerticalSheetDrag,
+  });
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -598,6 +624,7 @@ function SearchSheet({
           fontFamily: "var(--font-sans), sans-serif",
           transform: open ? "translateX(-50%)" : "translateX(-50%) translateY(100%)",
           transition: `transform ${SHEET_SPRING}`,
+          overscrollBehavior: "contain",
         }}
       >
         {/* Drag handle */}
@@ -606,16 +633,7 @@ function SearchSheet({
           onPointerMove={onHandleMove}
           onPointerUp={onHandleUp}
           onPointerCancel={onHandleUp}
-          style={{
-            padding: "12px 24px 0",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            flexShrink: 0,
-            cursor: "grab",
-            touchAction: "none",
-            userSelect: "none",
-          }}
+          style={SHEET_DRAG_REGION_STYLE}
         >
           <div
             style={{
@@ -705,10 +723,14 @@ function SearchSheet({
 
         {/* Results */}
         <div
+          ref={listScrollRef}
           style={{
             flex: 1,
+            minHeight: 0,
             overflowY: "auto",
             overflowX: "hidden",
+            WebkitOverflowScrolling: "touch",
+            overscrollBehaviorY: "contain",
             touchAction: "pan-y",
           }}
         >
@@ -751,7 +773,7 @@ function SearchSheet({
                 }}
               >
                 {f.avatarUrl ? (
-                  <UserAvatar avatarUrl={f.avatarUrl} name={f.name} fillParent expandable />
+                  <UserAvatar avatarUrl={f.avatarUrl} name={f.name} fillParent />
                 ) : (
                   <div
                     style={{

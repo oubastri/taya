@@ -5,7 +5,11 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { FeedItem } from "@/hooks/use-friends";
-import { ACTIVITY_FEED_PHRASE, ACTIVITY_FEED_HIGHLIGHT } from "@/types/workout";
+import {
+  ACTIVITY_FEED_PHRASE,
+  ACTIVITY_FEED_HIGHLIGHT,
+  formatProfileMovesListDayLabel,
+} from "@/types/workout";
 import type { ActivityType } from "@/types/workout";
 import type { LikePerson } from "@/types/likes";
 import { ActivityIcon } from "./ActivityIcon";
@@ -37,6 +41,10 @@ interface FeedPostProps {
     onEdit: () => void;
     onDelete: () => void;
   };
+  /** Profile Moves tab: show subtle move day under the month section (feed stays uncluttered). */
+  showMoveDate?: boolean;
+  /** When listing this user's posts on their profile, skip card tap + profile links (already on that profile). */
+  disableProfileNavigation?: boolean;
 }
 
 export function FeedPost({
@@ -50,6 +58,8 @@ export function FeedPost({
   likeEntityId,
   density = "default",
   postActions,
+  showMoveDate = false,
+  disableProfileNavigation = false,
 }: FeedPostProps) {
   const AVATAR_SIZE = density === "compact" ? 32 : 44;
   const ICON_SIZE = density === "compact" ? 24 : 28;
@@ -61,6 +71,8 @@ export function FeedPost({
   const isMe = currentUserId ? workout.userId === currentUserId : workout.userId === "me";
   const showPostActions = isMe && postActions;
   const hasDescription = Boolean(workout.description?.trim());
+  const moveDayLabel =
+    showMoveDate && workout.date ? formatProfileMovesListDayLabel(workout.date) : null;
   const beforeHighlight = phrase.slice(0, phrase.indexOf(highlight));
   const afterHighlight = phrase.slice(phrase.indexOf(highlight) + highlight.length);
 
@@ -146,7 +158,7 @@ export function FeedPost({
     }
     lastCardTapRef.current = { t: now, id: entityId };
     clearNavTimer();
-    scheduleNav();
+    if (!disableProfileNavigation) scheduleNav();
   };
 
   const openLikers = useCallback(async () => {
@@ -189,7 +201,7 @@ export function FeedPost({
           flexDirection: "column",
           gap: 20,
           overflow: "hidden",
-          cursor: "pointer",
+          cursor: disableProfileNavigation ? "default" : "pointer",
         }}
       >
         <div
@@ -209,26 +221,69 @@ export function FeedPost({
             }}
           >
             {workout.userAvatarUrl ? (
+              disableProfileNavigation ? (
+                <div
+                  style={{
+                    width: AVATAR_SIZE,
+                    height: AVATAR_SIZE,
+                    borderRadius: AVATAR_RADIUS,
+                    overflow: "hidden",
+                    border: "1px solid var(--card-ring)",
+                    flexShrink: 0,
+                  }}
+                >
+                  <UserAvatar
+                    avatarUrl={workout.userAvatarUrl}
+                    name={workout.userName}
+                    fillParent
+                  />
+                </div>
+              ) : (
+                <Link
+                  href={profileHref}
+                  style={{
+                    flexShrink: 0,
+                    textDecoration: "none",
+                    color: "inherit",
+                  }}
+                  aria-label={
+                    isMe ? "View your profile" : `View ${workout.userName}'s profile`
+                  }
+                >
+                  <div
+                    style={{
+                      width: AVATAR_SIZE,
+                      height: AVATAR_SIZE,
+                      borderRadius: AVATAR_RADIUS,
+                      overflow: "hidden",
+                      border: "1px solid var(--card-ring)",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <UserAvatar
+                      avatarUrl={workout.userAvatarUrl}
+                      name={workout.userName}
+                      fillParent
+                    />
+                  </div>
+                </Link>
+              )
+            ) : disableProfileNavigation ? (
               <div
                 style={{
+                  flexShrink: 0,
                   width: AVATAR_SIZE,
                   height: AVATAR_SIZE,
                   borderRadius: AVATAR_RADIUS,
                   overflow: "hidden",
                   border: "1px solid var(--card-ring)",
-                  flexShrink: 0,
                 }}
               >
-                <UserAvatar
-                  avatarUrl={workout.userAvatarUrl}
-                  name={workout.userName}
-                  fillParent
-                  expandable
-                />
+                <UserAvatar name={workout.userName} fillParent />
               </div>
             ) : (
               <Link
-                href={isMe ? "/profile" : `/profile/${workout.userId}`}
+                href={profileHref}
                 style={{
                   flexShrink: 0,
                   textDecoration: "none",
@@ -369,7 +424,7 @@ export function FeedPost({
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: 8,
+            gap: moveDayLabel ? 6 : 8,
             fontFamily: "var(--font-sans), sans-serif",
             fontSize: 16,
             fontWeight: 400,
@@ -377,9 +432,27 @@ export function FeedPost({
             color: "var(--foreground)",
           }}
         >
+          {moveDayLabel ? (
+            <p
+              style={{
+                margin: 0,
+                fontFamily: 'var(--font-mono), "B612 Mono", monospace',
+                fontSize: 10,
+                fontWeight: 400,
+                lineHeight: 1.25,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                color: "var(--foreground-subtle)",
+              }}
+            >
+              <time dateTime={workout.date}>{moveDayLabel}</time>
+            </p>
+          ) : null}
           <p style={{ margin: 0, lineHeight: "normal" }}>
             <span>@</span>
-            {isMe ? (
+            {disableProfileNavigation ? (
+              <span style={{ color: "inherit" }}>{workout.userHandle}</span>
+            ) : isMe ? (
               <Link
                 href="/profile"
                 style={{ textDecoration: "underline", color: "inherit" }}

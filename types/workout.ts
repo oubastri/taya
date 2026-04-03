@@ -185,3 +185,12 @@ export function fromDateKey(key: string): Date {
   const [y, m, d] = key.split("-").map(Number);
   return new Date(y, m - 1, d);
 }
+
+/**
+ * Day label for profile Moves list: `FEB 13` (en-US short month, uppercase, no leading zero on day).
+ */
+export function formatProfileMovesListDayLabel(dateKey: string): string {
+  const d = new Date(`${dateKey}T12:00:00`);
+  const mon = d.toLocaleDateString("en-US", { month: "short" }).toUpperCase();
+  return `${mon} ${d.getDate()}`;
+}

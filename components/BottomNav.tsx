@@ -12,6 +12,8 @@ import { loadUser } from "@/lib/storage";
 const isRealMode = process.env.NEXT_PUBLIC_DATA_MODE === "real";
 
 const AUTH_PATHS = ["/login", "/signup", "/forgot-password", "/onboarding"];
+/** Settings hub (edit profile, etc.) — hide tab bar and log FAB like auth flows */
+const SETTINGS_PREFIX = "/settings";
 
 export function BottomNav() {
   const { open } = useLogSheet();
@@ -53,11 +55,13 @@ export function BottomNav() {
   const hideForAuthRoute = AUTH_PATHS.some(
     (p) => pathname === p || pathname.startsWith(`${p}/`),
   );
+  const hideForSettings =
+    pathname === SETTINGS_PREFIX || pathname.startsWith(`${SETTINGS_PREFIX}/`);
   const hideForGuestHome = isRealMode && pathname === "/" && homeSignedIn !== "yes";
   const hideForMockGuestHome =
     !isRealMode && pathname === "/" && mockHomeGuestNav !== false;
 
-  if (hideForAuthRoute || hideForGuestHome || hideForMockGuestHome) {
+  if (hideForAuthRoute || hideForSettings || hideForGuestHome || hideForMockGuestHome) {
     return null;
   }
 

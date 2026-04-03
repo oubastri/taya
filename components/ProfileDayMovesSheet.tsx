@@ -1,7 +1,15 @@
 "use client";
 
-import { useRef, type CSSProperties, type ReactNode } from "react";
-import { SHEET_EXIT_MS, SHEET_SPRING } from "@/lib/sheetMotion";
+import { useCallback, useRef, type CSSProperties, type ReactNode } from "react";
+import {
+  SHEET_DISMISS_DRAG_PX,
+  SHEET_DRAG_REGION_STYLE,
+  SHEET_EXIT_MS,
+  SHEET_SPRING,
+  SHEET_TRANSFORM_SETTLED_CENTERED,
+} from "@/lib/sheetMotion";
+import { useLockBodyScroll } from "@/hooks/useLockBodyScroll";
+import { useSheetScrollPullDown } from "@/hooks/useSheetScrollPullDown";
 
 export function formatProfileDaySheetDateLabel(dateStr: string): string {
   const today = new Date().toISOString().slice(0, 10);
@@ -31,9 +39,38 @@ export function ProfileDayMovesSheet({
 }: ProfileDayMovesSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const scrimRef = useRef<HTMLDivElement>(null);
+  const listScrollRef = useRef<HTMLDivElement>(null);
   const sheetDragRef = useRef({ active: false, startY: 0, dy: 0 });
 
-  if (dateKey == null) return null;
+  const active = open && dateKey != null;
+  useLockBodyScroll(active);
+
+  const endVerticalSheetDrag = useCallback(() => {
+    const { dy } = sheetDragRef.current;
+
+    if (dy > SHEET_DISMISS_DRAG_PX) {
+      const vh = window.innerHeight;
+      if (sheetRef.current) {
+        sheetRef.current.style.transition = `transform ${SHEET_SPRING}`;
+        sheetRef.current.style.transform = `translateX(-50%) translateY(${vh}px)`;
+      }
+      if (scrimRef.current) {
+        scrimRef.current.style.transition = `opacity ${SHEET_SPRING}`;
+        scrimRef.current.style.opacity = "0";
+      }
+      window.setTimeout(onClose, SHEET_EXIT_MS);
+    } else if (sheetRef.current) {
+      sheetRef.current.style.transition = `transform ${SHEET_SPRING}`;
+      sheetRef.current.style.transform = "translateX(-50%) translateY(0)";
+      window.setTimeout(() => {
+        if (sheetRef.current) {
+          sheetRef.current.style.transition = "";
+          sheetRef.current.style.transform = SHEET_TRANSFORM_SETTLED_CENTERED;
+        }
+      }, SHEET_EXIT_MS);
+    }
+    sheetDragRef.current.dy = 0;
+  }, [onClose]);
 
   const onHandleDown = (e: React.PointerEvent) => {
     sheetDragRef.current = { active: true, startY: e.clientY, dy: 0 };
@@ -53,29 +90,25 @@ export function ProfileDayMovesSheet({
   const onHandleUp = () => {
     if (!sheetDragRef.current.active) return;
     sheetDragRef.current.active = false;
-    const { dy } = sheetDragRef.current;
-    if (dy > 90) {
-      const vh = window.innerHeight;
-      if (sheetRef.current) {
-        sheetRef.current.style.transition = `transform ${SHEET_SPRING}`;
-        sheetRef.current.style.transform = `translateX(-50%) translateY(${vh}px)`;
-      }
-      if (scrimRef.current) {
-        scrimRef.current.style.transition = `opacity ${SHEET_SPRING}`;
-        scrimRef.current.style.opacity = "0";
-      }
-      window.setTimeout(onClose, SHEET_EXIT_MS);
-    } else if (sheetRef.current) {
-      sheetRef.current.style.transition = `transform ${SHEET_SPRING}`;
-      sheetRef.current.style.transform = "translateX(-50%) translateY(0)";
-      window.setTimeout(() => {
-        if (sheetRef.current) {
-          sheetRef.current.style.transition = "";
-          sheetRef.current.style.transform = "";
-        }
-      }, SHEET_EXIT_MS);
-    }
+    endVerticalSheetDrag();
   };
+
+  const onScrollEdgePullMove = useCallback((dy: number) => {
+    sheetDragRef.current.dy = dy;
+    if (sheetRef.current) {
+      sheetRef.current.style.transition = "none";
+      sheetRef.current.style.transform = `translateX(-50%) translateY(${dy}px)`;
+    }
+  }, []);
+
+  useSheetScrollPullDown({
+    enabled: active,
+    scrollRef: listScrollRef,
+    onPullMove: onScrollEdgePullMove,
+    onPullCommit: endVerticalSheetDrag,
+  });
+
+  if (dateKey == null) return null;
 
   return (
     <>
@@ -113,6 +146,7 @@ export function ProfileDayMovesSheet({
           maxHeight: "82svh",
           transform: open ? "translateX(-50%)" : "translateX(-50%) translateY(100%)",
           transition: `transform ${SHEET_SPRING}`,
+          overscrollBehavior: "contain",
         }}
       >
         <div
@@ -121,24 +155,49 @@ export function ProfileDayMovesSheet({
           onPointerUp={onHandleUp}
           onPointerCancel={onHandleUp}
           style={{
-            padding: "12px 24px 0",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
             flexShrink: 0,
             cursor: "grab",
             touchAction: "none",
             userSelect: "none",
           }}
         >
-          <div
-            style={{
-              width: 36,
-              height: 4,
-              borderRadius: 2,
-              background: "var(--drag-handle)",
-            }}
-          />
+          <div style={SHEET_DRAG_REGION_STYLE}>
+            <div
+              style={{
+                width: 36,
+                height: 4,
+                borderRadius: 2,
+                background: "var(--drag-handle)",
+              }}
+            />
+          </div>
+          <div style={{ padding: "4px 70px 4px 20px" }}>
+            <h2
+              style={{
+                fontFamily: "var(--font-sans), sans-serif",
+                fontSize: "clamp(26px, 7vw, 32px)",
+                fontWeight: 500,
+                lineHeight: 1.15,
+                letterSpacing: "-0.04em",
+                color: "var(--foreground)",
+                margin: "0 0 4px",
+              }}
+            >
+              {formatProfileDaySheetDateLabel(dateKey)}
+            </h2>
+            <p
+              style={{
+                margin: 0,
+                fontSize: 12,
+                fontWeight: 600,
+                color: "var(--foreground-subtle)",
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+              }}
+            >
+              {moveCount} {moveCount === 1 ? "move" : "moves"}
+            </p>
+          </div>
         </div>
         <button
           type="button"
@@ -178,46 +237,23 @@ export function ProfileDayMovesSheet({
           </svg>
         </button>
         <div
+          ref={listScrollRef}
           style={{
             overflowY: "auto",
             flex: 1,
+            minHeight: 0,
             WebkitOverflowScrolling: "touch" as CSSProperties["WebkitOverflowScrolling"],
             scrollbarWidth: "none" as CSSProperties["scrollbarWidth"],
+            overscrollBehaviorY: "contain",
+            touchAction: "pan-y",
           }}
         >
-          <div style={{ padding: "20px 20px 0" }}>
-            <h2
-              style={{
-                fontFamily: "var(--font-sans), sans-serif",
-                fontSize: "clamp(26px, 7vw, 32px)",
-                fontWeight: 500,
-                lineHeight: 1.15,
-                letterSpacing: "-0.04em",
-                color: "var(--foreground)",
-                margin: "0 0 4px",
-              }}
-            >
-              {formatProfileDaySheetDateLabel(dateKey)}
-            </h2>
-            <p
-              style={{
-                margin: "0 0 20px",
-                fontSize: 12,
-                fontWeight: 600,
-                color: "var(--foreground-subtle)",
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
-              }}
-            >
-              {moveCount} {moveCount === 1 ? "move" : "moves"}
-            </p>
-          </div>
           <div
             style={{
               display: "flex",
               flexDirection: "column",
               gap: 14,
-              padding: "0 20px",
+              padding: "12px 20px 0",
               paddingBottom: "max(28px, env(safe-area-inset-bottom))",
             }}
           >

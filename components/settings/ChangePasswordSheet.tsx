@@ -10,7 +10,15 @@ import {
   pillBtn,
   fieldErrorText,
 } from "@/components/settings/settingsHubStyles";
-import { SHEET_EXIT_MS, SHEET_SPRING } from "@/lib/sheetMotion";
+import {
+  SHEET_DISMISS_DRAG_PX,
+  SHEET_DRAG_REGION_STYLE,
+  SHEET_EXIT_MS,
+  SHEET_SPRING,
+  SHEET_TRANSFORM_SETTLED_CENTERED,
+} from "@/lib/sheetMotion";
+import { useLockBodyScroll } from "@/hooks/useLockBodyScroll";
+import { useSheetScrollPullDown } from "@/hooks/useSheetScrollPullDown";
 
 const NAV_HEIGHT = 54;
 
@@ -35,6 +43,7 @@ export function ChangePasswordSheet({ onClose }: ChangePasswordSheetProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const scrimRef = useRef<HTMLDivElement>(null);
+  const formScrollRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef({ active: false, startY: 0, dy: 0 });
 
   function reset() {
@@ -86,6 +95,38 @@ export function ChangePasswordSheet({ onClose }: ChangePasswordSheetProps) {
     return () => window.removeEventListener("keydown", onKey);
   }, [close]);
 
+  useLockBodyScroll(true);
+
+  const endVerticalSheetDrag = useCallback(() => {
+    const { dy } = dragRef.current;
+
+    if (dy > SHEET_DISMISS_DRAG_PX) {
+      const vh = window.innerHeight;
+      if (sheetRef.current) {
+        sheetRef.current.style.transition = `transform ${SHEET_SPRING}`;
+        sheetRef.current.style.transform = `translateX(-50%) translateY(${vh}px)`;
+      }
+      if (scrimRef.current) {
+        scrimRef.current.style.transition = `opacity ${SHEET_SPRING}`;
+        scrimRef.current.style.opacity = "0";
+      }
+      window.setTimeout(() => {
+        reset();
+        onClose();
+      }, SHEET_EXIT_MS);
+    } else if (sheetRef.current) {
+      sheetRef.current.style.transition = `transform ${SHEET_SPRING}`;
+      sheetRef.current.style.transform = "translateX(-50%) translateY(0)";
+      window.setTimeout(() => {
+        if (sheetRef.current) {
+          sheetRef.current.style.transition = "";
+          sheetRef.current.style.transform = SHEET_TRANSFORM_SETTLED_CENTERED;
+        }
+      }, SHEET_EXIT_MS);
+    }
+    dragRef.current.dy = 0;
+  }, [onClose]);
+
   const onHandleDown = (e: React.PointerEvent) => {
     dragRef.current = { active: true, startY: e.clientY, dy: 0 };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -102,35 +143,23 @@ export function ChangePasswordSheet({ onClose }: ChangePasswordSheetProps) {
   const onHandleUp = () => {
     if (!dragRef.current.active) return;
     dragRef.current.active = false;
-    const { dy } = dragRef.current;
-
-    if (dy > 90) {
-      const vh = window.innerHeight;
-      if (sheetRef.current) {
-        sheetRef.current.style.transition = `transform ${SHEET_SPRING}`;
-        sheetRef.current.style.transform = `translateX(-50%) translateY(${vh}px)`;
-      }
-      if (scrimRef.current) {
-        scrimRef.current.style.transition = `opacity ${SHEET_SPRING}`;
-        scrimRef.current.style.opacity = "0";
-      }
-      window.setTimeout(() => {
-        reset();
-        onClose();
-      }, SHEET_EXIT_MS);
-    } else {
-      if (sheetRef.current) {
-        sheetRef.current.style.transition = `transform ${SHEET_SPRING}`;
-        sheetRef.current.style.transform = "translateX(-50%) translateY(0)";
-        window.setTimeout(() => {
-          if (sheetRef.current) {
-            sheetRef.current.style.transition = "";
-            sheetRef.current.style.transform = "";
-          }
-        }, SHEET_EXIT_MS);
-      }
-    }
+    endVerticalSheetDrag();
   };
+
+  const onScrollEdgePullMove = useCallback((dy: number) => {
+    dragRef.current.dy = dy;
+    if (sheetRef.current) {
+      sheetRef.current.style.transition = "none";
+      sheetRef.current.style.transform = `translateX(-50%) translateY(${dy}px)`;
+    }
+  }, []);
+
+  useSheetScrollPullDown({
+    enabled: open,
+    scrollRef: formScrollRef,
+    onPullMove: onScrollEdgePullMove,
+    onPullCommit: endVerticalSheetDrag,
+  });
 
   async function submit() {
     setErrCurrent(null);
@@ -218,6 +247,7 @@ export function ChangePasswordSheet({ onClose }: ChangePasswordSheetProps) {
           fontFamily: "var(--font-sans), sans-serif",
           transform: open ? "translateX(-50%)" : "translateX(-50%) translateY(100%)",
           transition: `transform ${SHEET_SPRING}`,
+          overscrollBehavior: "contain",
         }}
       >
         <div
@@ -226,24 +256,45 @@ export function ChangePasswordSheet({ onClose }: ChangePasswordSheetProps) {
           onPointerUp={onHandleUp}
           onPointerCancel={onHandleUp}
           style={{
-            padding: "12px 24px 0",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
             flexShrink: 0,
             cursor: "grab",
             touchAction: "none",
             userSelect: "none",
           }}
         >
+          <div style={SHEET_DRAG_REGION_STYLE}>
+            <div
+              style={{
+                width: 36,
+                height: 4,
+                borderRadius: 2,
+                background: "var(--drag-handle)",
+              }}
+            />
+          </div>
           <div
             style={{
-              width: 36,
-              height: 4,
-              borderRadius: 2,
-              background: "var(--drag-handle)",
+              padding: "0 84px 12px 24px",
+              flexShrink: 0,
             }}
-          />
+          >
+            <p
+              style={{
+                margin: 0,
+                padding: 0,
+                border: "none",
+                outline: "none",
+                background: "transparent",
+                fontFamily: "var(--font-sans), sans-serif",
+                fontSize: "clamp(26px, 7vw, 32px)",
+                fontWeight: 500,
+                letterSpacing: "-0.04em",
+                color: "var(--input-color)",
+              }}
+            >
+              Change password
+            </p>
+          </div>
         </div>
 
         <button
@@ -284,35 +335,14 @@ export function ChangePasswordSheet({ onClose }: ChangePasswordSheetProps) {
         </button>
 
         <div
-          style={{
-            padding: "16px 84px 18px 24px",
-            flexShrink: 0,
-          }}
-        >
-          <p
-            style={{
-              margin: 0,
-              padding: 0,
-              border: "none",
-              outline: "none",
-              background: "transparent",
-              fontFamily: "var(--font-sans), sans-serif",
-              fontSize: "clamp(26px, 7vw, 32px)",
-              fontWeight: 500,
-              letterSpacing: "-0.04em",
-              color: "var(--input-color)",
-            }}
-          >
-            Change password
-          </p>
-        </div>
-
-        <div
+          ref={formScrollRef}
           style={{
             flex: "1 1 auto",
             minHeight: 0,
             overflowY: "auto",
             overflowX: "hidden",
+            WebkitOverflowScrolling: "touch",
+            overscrollBehaviorY: "contain",
             touchAction: "pan-y",
             padding: "16px 24px calc(env(safe-area-inset-bottom) + 40px)",
             boxSizing: "border-box",

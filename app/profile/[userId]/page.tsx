@@ -143,7 +143,7 @@ export default function UserProfilePage() {
   const workoutsReady = !isRealMode ? true : profileWorkouts !== null;
 
   useEffect(() => {
-    if (!isRealMode || !userId || isMe || !friend) return;
+    if (!isRealMode || !userId || isMe) return;
     let cancelled = false;
     setProfileWorkouts(null);
     fetchWorkoutsForUser(userId)
@@ -156,7 +156,9 @@ export default function UserProfilePage() {
     return () => {
       cancelled = true;
     };
-  }, [isRealMode, userId, isMe, friend]);
+    // Intentionally omit `friend` from deps: follow/unfollow only mutates `following` on the
+    // same object shape, and re-running would null `profileWorkouts` and flash the skeleton.
+  }, [userId, isMe]);
 
   const workoutIds = useMemo(() => workouts.map((w) => w.id), [workouts]);
   const promptLikeIds = useMemo(
@@ -342,7 +344,7 @@ export default function UserProfilePage() {
     );
   }
 
-  function renderFeedPost(workout: Workout) {
+  function renderFriendFeedPost(workout: Workout, showMoveDate?: boolean) {
     const feedItem: FeedItem = {
       ...workout,
       userId: friend!.id,
@@ -361,6 +363,8 @@ export default function UserProfilePage() {
         onToggleLike={() => toggleLike(workout.id)}
         onLikeIfNeeded={() => likeIfNeeded(workout.id)}
         resolveLikers={resolveLikers}
+        showMoveDate={Boolean(showMoveDate)}
+        disableProfileNavigation
       />
     );
   }
@@ -558,7 +562,7 @@ export default function UserProfilePage() {
                       {label}
                     </h2>
                     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                      {monthWorkouts.map(renderFeedPost)}
+                      {monthWorkouts.map((w) => renderFriendFeedPost(w, true))}
                     </div>
                   </section>
                 ))
@@ -575,7 +579,7 @@ export default function UserProfilePage() {
           onClose={closeSheet}
           moveCount={sheetWorkouts.length}
         >
-          {sheetWorkouts.map(renderFeedPost)}
+          {sheetWorkouts.map((w) => renderFriendFeedPost(w))}
         </ProfileDayMovesSheet>
       )}
 

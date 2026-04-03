@@ -11,6 +11,10 @@ import {
   updateWorkoutSupabase,
 } from "@/lib/data-adapter";
 import { useToast } from "@/contexts/toast";
+import { useUser } from "@/hooks/use-user";
+import { WORKOUTS_CHANGED_EVENT, type WorkoutsChangedDetail } from "@/lib/taya-events";
+import { flushMoveLogToast, queueMoveLogToast } from "@/lib/move-log-toast";
+import { MOVE_LOG_TOAST_FALLBACK_MS } from "@/lib/feedEntranceMotion";
 
 const adapter = getAdapter();
 
@@ -21,7 +25,9 @@ export type Stats = {
   thisWeek: number;
 };
 
-const WORKOUTS_CHANGED_EVENT = "taya:workouts-changed";
+function dispatchWorkoutsChanged(detail: WorkoutsChangedDetail) {
+  window.dispatchEvent(new CustomEvent(WORKOUTS_CHANGED_EVENT, { detail }));
+}
 
 function getStats(workouts: Workout[]): Stats {
   const now = new Date();
@@ -54,6 +60,7 @@ export function useWorkouts() {
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const { toast } = useToast();
+  const { user } = useUser();
 
   useEffect(() => {
     if (isRealMode) {
@@ -80,7 +87,7 @@ export function useWorkouts() {
   const persist = useCallback((next: Workout[]) => {
     setWorkouts(next);
     adapter.setWorkouts(next);
-    window.dispatchEvent(new CustomEvent(WORKOUTS_CHANGED_EVENT));
+    dispatchWorkoutsChanged({ source: "local" });
   }, []);
 
   const addWorkout = useCallback(
@@ -91,7 +98,11 @@ export function useWorkouts() {
             if (w) {
               setWorkouts((prev) => [w, ...prev]);
               adapter.setWorkouts(adapter.getWorkouts());
-              window.dispatchEvent(new CustomEvent(WORKOUTS_CHANGED_EVENT));
+              queueMoveLogToast(user.handle);
+              dispatchWorkoutsChanged({ source: "add", workoutId: w.id });
+              window.setTimeout(() => {
+                flushMoveLogToast((msg) => toast(msg, "success"));
+              }, MOVE_LOG_TOAST_FALLBACK_MS);
             } else {
               toast("Couldn't save workout — try again", "error");
             }
@@ -105,9 +116,14 @@ export function useWorkouts() {
       const created = new Date().toISOString();
       const newWorkout: Workout = { id, date, description, createdAt: created, activityType };
       const current = adapter.getWorkouts();
+      queueMoveLogToast(user.handle);
       persist([...current, newWorkout]);
+      dispatchWorkoutsChanged({ source: "add", workoutId: id });
+      window.setTimeout(() => {
+        flushMoveLogToast((msg) => toast(msg, "success"));
+      }, MOVE_LOG_TOAST_FALLBACK_MS);
     },
-    [persist, toast],
+    [persist, toast, user.handle],
   );
 
   const deleteWorkout = useCallback(
@@ -118,12 +134,12 @@ export function useWorkouts() {
           adapter.setWorkouts(next);
           return next;
         });
-        window.dispatchEvent(new CustomEvent(WORKOUTS_CHANGED_EVENT));
+        dispatchWorkoutsChanged({ source: "delete", workoutId: id });
         deleteWorkoutSupabase(id).catch(() => {
           fetchWorkouts().then((fresh) => {
             setWorkouts(fresh);
             adapter.setWorkouts(fresh);
-            window.dispatchEvent(new CustomEvent(WORKOUTS_CHANGED_EVENT));
+            dispatchWorkoutsChanged({ source: "local" });
           });
           toast("Couldn't delete workout — try again", "error");
         });
@@ -146,19 +162,24 @@ export function useWorkouts() {
           adapter.setWorkouts(next);
           return next;
         });
-        window.dispatchEvent(new CustomEvent(WORKOUTS_CHANGED_EVENT));
-        updateWorkoutSupabase(id, updates).catch(() => {
-          fetchWorkouts().then((fresh) => {
-            setWorkouts(fresh);
-            adapter.setWorkouts(fresh);
-            window.dispatchEvent(new CustomEvent(WORKOUTS_CHANGED_EVENT));
+        dispatchWorkoutsChanged({ source: "update", workoutId: id });
+        updateWorkoutSupabase(id, updates)
+          .then(() => {
+            toast("Move updated", "success");
+          })
+          .catch(() => {
+            fetchWorkouts().then((fresh) => {
+              setWorkouts(fresh);
+              adapter.setWorkouts(fresh);
+              dispatchWorkoutsChanged({ source: "local" });
+            });
+            toast("Couldn't update workout — try again", "error");
           });
-          toast("Couldn't update workout — try again", "error");
-        });
         return;
       }
       const current = adapter.getWorkouts();
       persist(current.map((w) => (w.id === id ? { ...w, ...updates } : w)));
+      toast("Move updated", "success");
     },
     [persist, toast],
   );
