@@ -116,6 +116,14 @@ function getOrderedActivities(
   return [...top5, ...rest];
 }
 
+/** Pixels of bottom browser chrome (e.g. Safari toolbar) not covered by `env(safe-area)`. */
+function getVisualViewportBottomOverlapPx(): number {
+  if (typeof window === "undefined") return 0;
+  const vv = window.visualViewport;
+  if (!vv) return 0;
+  return Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+}
+
 export function LogSheet() {
   const { isOpen, close, initialDateKey, workoutToEdit } = useLogSheet();
   const { workouts, addWorkout, updateWorkout } = useWorkouts();
@@ -141,6 +149,7 @@ export function LogSheet() {
   const endSheetDragRef = useRef<() => void>(() => {});
   const chipsRef = useRef<HTMLDivElement>(null);
   const chipsInnerRef = useRef<HTMLDivElement>(null);
+  const [browserOvhPx, setBrowserOvhPx] = useState(0);
   const chipsDragRef = useRef({
     active: false,
     startX: 0,
@@ -151,6 +160,29 @@ export function LogSheet() {
     velocity: 0,
     rafId: 0,
   });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const vv = window.visualViewport;
+    if (!vv) {
+      setBrowserOvhPx(0);
+      return;
+    }
+    const root = document.documentElement;
+    const update = () => {
+      const px = getVisualViewportBottomOverlapPx();
+      setBrowserOvhPx(px);
+      root.style.setProperty("--log-sheet-browser-ovh", `${px}px`);
+    };
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+      root.style.removeProperty("--log-sheet-browser-ovh");
+    };
+  }, []);
 
   useEffect(() => {
     const el = chipsRef.current;
@@ -972,8 +1004,7 @@ export function LogSheet() {
           style={{
             flexShrink: 0,
             padding: "10px 24px",
-            paddingBottom:
-              "calc(8px + env(safe-area-inset-bottom, 0px))",
+            paddingBottom: `calc(8px + env(safe-area-inset-bottom, 0px) + ${browserOvhPx}px)`,
           }}
         >
           <button
@@ -1051,8 +1082,7 @@ export function LogSheet() {
               style={{
                 flexShrink: 0,
                 padding: "12px 24px",
-                paddingBottom:
-                  "max(20px, calc(10px + env(safe-area-inset-bottom)))",
+                paddingBottom: `max(20px, calc(10px + env(safe-area-inset-bottom, 0px) + ${browserOvhPx}px))`,
                 boxSizing: "border-box",
               }}
             >
