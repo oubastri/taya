@@ -687,7 +687,8 @@ export function LogSheet() {
         }
         style={{
           position: "fixed",
-          bottom: 0,
+          /* Sit on the visual viewport bottom (above virtual keyboard / browser chrome). */
+          bottom: browserOvhPx,
           left: "50%",
           width: "100%",
           maxWidth: 428,
@@ -853,6 +854,19 @@ export function LogSheet() {
               pointerEvents: datePickerOpen ? "none" : "auto",
             }}
           >
+        {/* Scroll when the keyboard shrinks the viewport so chips + note are not clipped. */}
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            display: "flex",
+            flexDirection: "column",
+            overflowY: "auto",
+            overflowX: "hidden",
+            WebkitOverflowScrolling: "touch",
+            overscrollBehaviorY: "contain",
+          }}
+        >
         {/* Activity chips — horizontal scroll only */}
         <div
           id={LOG_SHEET_CHIPS_ID}
@@ -1030,10 +1044,18 @@ export function LogSheet() {
             }
             maxLength={MAX_DESCRIPTION_LENGTH}
             rows={5}
+            onFocus={(e) => {
+              requestAnimationFrame(() => {
+                e.target.scrollIntoView({ block: "nearest", inline: "nearest" });
+              });
+            }}
             style={{
               width: "100%",
               minHeight: 120,
-              maxHeight: "min(220px, 32svh)",
+              maxHeight:
+                visualVhPx > 0
+                  ? `${Math.min(220, 32 * visualVhPx)}px`
+                  : "min(220px, 32svh)",
               boxSizing: "border-box",
               resize: "none",
               padding: 0,
@@ -1052,12 +1074,14 @@ export function LogSheet() {
             }}
           />
         </div>
+        </div>
 
         <div
           style={{
             flexShrink: 0,
             padding: "10px 24px",
-            paddingBottom: `calc(8px + env(safe-area-inset-bottom, 0px) + ${browserOvhPx}px)`,
+            paddingBottom:
+              "max(8px, calc(8px + env(safe-area-inset-bottom, 0px)))",
           }}
         >
           <button
@@ -1135,7 +1159,8 @@ export function LogSheet() {
               style={{
                 flexShrink: 0,
                 padding: "12px 24px",
-                paddingBottom: `max(20px, calc(10px + env(safe-area-inset-bottom, 0px) + ${browserOvhPx}px))`,
+                paddingBottom:
+                  "max(20px, calc(10px + env(safe-area-inset-bottom, 0px)))",
                 boxSizing: "border-box",
               }}
             >
