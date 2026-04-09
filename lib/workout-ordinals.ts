@@ -1,11 +1,11 @@
-import type { Workout } from "@/types/workout";
+import { type Workout, localNoonFromDateKey, toDateKey } from "@/types/workout";
 
 function getWeekKey(dateStr: string): string {
-  const d = new Date(dateStr + "T12:00:00");
+  const d = localNoonFromDateKey(dateStr);
   const day = d.getDay();
   const toMon = day === 0 ? 6 : day - 1;
   d.setDate(d.getDate() - toMon);
-  return d.toISOString().slice(0, 10);
+  return toDateKey(d);
 }
 
 /** Returns map of workout id -> { week ordinal, month ordinal } for a single user's workouts. */

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { Workout, ActivityType } from "@/types/workout";
+import { type Workout, type ActivityType, localNoonFromDateKey } from "@/types/workout";
 import {
   getAdapter,
   isRealMode,
@@ -44,7 +44,7 @@ function getStats(workouts: Workout[]): Stats {
       return y === year && m === month + 1;
     }).length,
     thisWeek: workouts.filter((w) => {
-      const d = new Date(w.date + "T12:00:00");
+      const d = localNoonFromDateKey(w.date);
       return d >= weekStart && d <= endOfToday;
     }).length,
   };

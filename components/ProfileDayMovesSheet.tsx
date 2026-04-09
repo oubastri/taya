@@ -10,11 +10,12 @@ import {
 } from "@/lib/sheetMotion";
 import { useLockBodyScroll } from "@/hooks/useLockBodyScroll";
 import { useSheetScrollPullDown } from "@/hooks/useSheetScrollPullDown";
+import { localNoonFromDateKey, toDateKey } from "@/types/workout";
 
 export function formatProfileDaySheetDateLabel(dateStr: string): string {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = toDateKey(new Date());
   if (dateStr === today) return "Today";
-  const d = new Date(dateStr + "T12:00:00");
+  const d = localNoonFromDateKey(dateStr);
   return d.toLocaleDateString("en-US", {
     weekday: "long",
     month: "short",

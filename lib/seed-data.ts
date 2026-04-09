@@ -1,5 +1,5 @@
 import type { FriendData } from "@/types/user";
-import type { Workout } from "@/types/workout";
+import { type Workout, localNoonFromDateKey } from "@/types/workout";
 
 function w(
   id: string,
@@ -11,7 +11,7 @@ function w(
     id,
     date,
     description,
-    createdAt: new Date(date + "T12:00:00").toISOString(),
+    createdAt: localNoonFromDateKey(date).toISOString(),
     activityType,
   };
 }

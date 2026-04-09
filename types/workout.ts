@@ -169,28 +169,55 @@ export const ACTIVITY_GROUPS: { activities: ActivityType[] }[] = [
 
 export type Workout = {
   id: string;
-  date: string; // YYYY-MM-DD
+  /**
+   * Civil calendar day when the member logged the move (YYYY-MM-DD).
+   * Always chosen in the member's device timezone when they log; stored as plain text (not shifted by UTC or server TZ).
+   */
+  date: string;
   description: string;
   createdAt: string; // ISO
   activityType?: ActivityType;
 };
 
-/** Get YYYY-MM-DD for a Date */
+/**
+ * YYYY-MM-DD for a `Date` in the environment's local calendar (`Date` in the browser = viewer's / member's device TZ).
+ * Use this for "today", calendar cells, and any `Date` the user would recognize on their device.
+ */
 export function toDateKey(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
-/** Parse YYYY-MM-DD to Date at start of day (local) */
+/** Parse YYYY-MM-DD to Date at local midnight. */
 export function fromDateKey(key: string): Date {
   const [y, m, d] = key.split("-").map(Number);
   return new Date(y, m - 1, d);
 }
 
 /**
+ * Local noon on that calendar day. Prefer over ISO strings like `YYYY-MM-DDT12:00:00` so parsing is unambiguously local.
+ * Noon avoids DST edge cases when deriving weekdays or comparing ranges.
+ */
+export function localNoonFromDateKey(key: string): Date {
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(y, m - 1, d, 12, 0, 0, 0);
+}
+
+/** Add whole calendar days to a YYYY-MM-DD in local time. */
+export function offsetDateKey(key: string, deltaDays: number): string {
+  const [y, m, d] = key.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + deltaDays);
+  return toDateKey(dt);
+}
+
+/**
  * Day label for profile Moves list: `FEB 13` (en-US short month, uppercase, no leading zero on day).
  */
 export function formatProfileMovesListDayLabel(dateKey: string): string {
-  const d = new Date(`${dateKey}T12:00:00`);
+  const d = localNoonFromDateKey(dateKey);
   const mon = d.toLocaleDateString("en-US", { month: "short" }).toUpperCase();
   return `${mon} ${d.getDate()}`;
 }

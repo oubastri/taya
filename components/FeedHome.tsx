@@ -32,6 +32,7 @@ import { useToast } from "@/contexts/toast";
 import type { FeedItem } from "@/hooks/use-friends";
 import { WORKOUTS_CHANGED_EVENT, type WorkoutsChangedDetail } from "@/lib/taya-events";
 import { flushMoveLogToast } from "@/lib/move-log-toast";
+import { useLocalTodayYesterday } from "@/hooks/use-local-today-yesterday";
 import {
   FEED_ENTRANCE,
   FEED_ENTRANCE_FALLBACK_MS,
@@ -450,16 +451,7 @@ export default function FeedHome() {
   );
   const { getLike, toggleLike, likeIfNeeded } = useLikes(workoutIds, likeViewer);
 
-  const today = useMemo(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  }, []);
-
-  const yesterday = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 1);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  }, []);
+  const { today, yesterday } = useLocalTodayYesterday();
 
   function dateLabel(dateStr: string): string {
     if (dateStr === today) return "Today";

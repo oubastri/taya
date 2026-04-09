@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import type { Workout } from "@/types/workout";
-import { toDateKey } from "@/types/workout";
+import { localNoonFromDateKey, toDateKey } from "@/types/workout";
 
 interface ProfileChartsProps {
   workouts: Workout[];
@@ -50,7 +50,7 @@ export function ProfileCharts({ workouts }: ProfileChartsProps) {
 
     const dowCounts = Array(7).fill(0);
     for (const w of workouts) {
-      const d = new Date(w.date + "T12:00:00");
+      const d = localNoonFromDateKey(w.date);
       const dow = (d.getDay() + 6) % 7;
       dowCounts[dow]++;
     }

@@ -24,7 +24,7 @@ import type { FeedItem } from "@/hooks/use-friends";
 import type { LikePerson } from "@/types/likes";
 import { UserAvatar } from "@/components/UserAvatar";
 import { ProfileFollowButton } from "@/components/ProfileFollowButton";
-import type { Workout } from "@/types/workout";
+import { type Workout, localNoonFromDateKey } from "@/types/workout";
 
 /** Matches athletes tab search control (`app/athletes/page.tsx`) */
 const PROFILE_NAV_HEIGHT = 54;
@@ -92,7 +92,7 @@ function getStats(workouts: Workout[]) {
       return y === year && m === month + 1;
     }).length,
     thisWeek: workouts.filter((w) => {
-      const d = new Date(w.date + "T12:00:00");
+      const d = localNoonFromDateKey(w.date);
       return d >= weekStart && d <= endOfToday;
     }).length,
   };
