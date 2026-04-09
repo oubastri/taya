@@ -67,6 +67,8 @@ const LOG_VIEW_TRANSITION = `0.36s cubic-bezier(0.32, 0.72, 0, 1)`;
 /** "View more" expand — matches sheet motion feel */
 const LOG_CHIP_EXPAND_EASE = [0.32, 0.72, 0, 1] as const;
 const CLOSE_BTN = 54;
+/** Matches `MOBILE_MENU_MQ` in AccountMenu — tall, keyboard-friendly sheet on phone-sized viewports. */
+const LOG_SHEET_COMPACT_MQ = "(max-width: 599px)";
 
 /** Matches `fieldErrorText` in settings sheets (e.g. ChangePasswordSheet) */
 const logSheetFieldError: CSSProperties = {
@@ -152,9 +154,19 @@ export function LogSheet() {
   const endSheetDragRef = useRef<() => void>(() => {});
   const chipsRef = useRef<HTMLDivElement>(null);
   const chipsInnerRef = useRef<HTMLDivElement>(null);
+  const logSheetBodyScrollRef = useRef<HTMLDivElement>(null);
+  const noteRef = useRef<HTMLTextAreaElement>(null);
   const [browserOvhPx, setBrowserOvhPx] = useState(0);
   /** `visualViewport.height / 100` in px — drives min/max height so the sheet tracks visible viewport. */
   const [visualVhPx, setVisualVhPx] = useState(0);
+  /** Phone layout: sheet uses ~full visual height so the CTA sits on the keyboard edge. */
+  const [compactSheet, setCompactSheet] = useState(() =>
+    typeof window !== "undefined"
+      ? window.matchMedia(LOG_SHEET_COMPACT_MQ).matches
+      : false
+  );
+  /** Visual viewport shrunk (virtual keyboard / browser UI) — tone down home-indicator padding on footer. */
+  const [keyboardLikelyOpen, setKeyboardLikelyOpen] = useState(false);
   const chipsDragRef = useRef({
     active: false,
     startX: 0,
@@ -174,6 +186,7 @@ export function LogSheet() {
       if (!vv) {
         setBrowserOvhPx(0);
         setVisualVhPx(window.innerHeight / 100);
+        setKeyboardLikelyOpen(false);
         root.style.removeProperty("--log-sheet-browser-ovh");
         root.style.removeProperty("--log-sheet-vvh");
         return;
@@ -182,6 +195,7 @@ export function LogSheet() {
       const vvh = vv.height / 100;
       setBrowserOvhPx(px);
       setVisualVhPx(vvh);
+      setKeyboardLikelyOpen(vv.height < window.innerHeight * 0.88);
       root.style.setProperty("--log-sheet-browser-ovh", `${px}px`);
       root.style.setProperty("--log-sheet-vvh", `${vvh}px`);
     };
@@ -214,6 +228,7 @@ export function LogSheet() {
       const vvh = vv.height / 100;
       setBrowserOvhPx(px);
       setVisualVhPx(vvh);
+      setKeyboardLikelyOpen(vv.height < window.innerHeight * 0.88);
       root.style.setProperty("--log-sheet-browser-ovh", `${px}px`);
       root.style.setProperty("--log-sheet-vvh", `${vvh}px`);
     };
@@ -226,6 +241,48 @@ export function LogSheet() {
       cancelAnimationFrame(raf2);
     };
   }, [isOpen, panelOpen]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia(LOG_SHEET_COMPACT_MQ);
+    const sync = () => setCompactSheet(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  const scrollNoteIntoView = useCallback(() => {
+    const scrollEl = logSheetBodyScrollRef.current;
+    const ta = noteRef.current;
+    if (!scrollEl || !ta) return;
+    const pad = 12;
+    const s = scrollEl.getBoundingClientRect();
+    const t = ta.getBoundingClientRect();
+    if (t.bottom > s.bottom - pad) {
+      scrollEl.scrollTop += t.bottom - s.bottom + pad;
+    }
+    if (t.top < s.top + pad) {
+      scrollEl.scrollTop -= s.top + pad - t.top;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen || !panelOpen || typeof window === "undefined") return;
+    const vv = window.visualViewport;
+    const onVvChange = () => {
+      if (document.activeElement === noteRef.current) scrollNoteIntoView();
+    };
+    if (vv) {
+      vv.addEventListener("resize", onVvChange);
+      vv.addEventListener("scroll", onVvChange);
+    }
+    return () => {
+      if (vv) {
+        vv.removeEventListener("resize", onVvChange);
+        vv.removeEventListener("scroll", onVvChange);
+      }
+    };
+  }, [isOpen, panelOpen, scrollNoteIntoView]);
 
   useEffect(() => {
     const el = chipsRef.current;
@@ -638,18 +695,32 @@ export function LogSheet() {
 
   const isEditing = !!workoutToEdit;
 
-  const sheetMainSize =
-    visualVhPx > 0
-      ? {
-          minHeight: `min(${54 * visualVhPx}px, calc(${100 * visualVhPx}px - env(safe-area-inset-bottom, 0px) - 8px))`,
-          maxHeight: `min(${74 * visualVhPx}px, calc(${100 * visualVhPx}px - env(safe-area-inset-bottom, 0px) - 8px))`,
-        }
-      : {
-          minHeight:
-            "min(54svh, calc(100dvh - env(safe-area-inset-bottom, 0px) - 8px))",
-          maxHeight:
-            "min(74svh, calc(100dvh - env(safe-area-inset-bottom, 0px) - 8px))",
-        };
+  const sheetMainSize = useMemo(() => {
+    if (compactSheet) {
+      if (visualVhPx > 0) {
+        const cap = `calc(${100 * visualVhPx}px - env(safe-area-inset-bottom, 0px) - 6px)`;
+        return { minHeight: cap, maxHeight: cap };
+      }
+      return {
+        minHeight:
+          "calc(100dvh - env(safe-area-inset-bottom, 0px) - 6px)",
+        maxHeight:
+          "calc(100dvh - env(safe-area-inset-bottom, 0px) - 6px)",
+      };
+    }
+    if (visualVhPx > 0) {
+      return {
+        minHeight: `min(${54 * visualVhPx}px, calc(${100 * visualVhPx}px - env(safe-area-inset-bottom, 0px) - 8px))`,
+        maxHeight: `min(${74 * visualVhPx}px, calc(${100 * visualVhPx}px - env(safe-area-inset-bottom, 0px) - 8px))`,
+      };
+    }
+    return {
+      minHeight:
+        "min(54svh, calc(100dvh - env(safe-area-inset-bottom, 0px) - 8px))",
+      maxHeight:
+        "min(74svh, calc(100dvh - env(safe-area-inset-bottom, 0px) - 8px))",
+    };
+  }, [compactSheet, visualVhPx]);
 
   return (
     <>
@@ -856,6 +927,7 @@ export function LogSheet() {
           >
         {/* Scroll when the keyboard shrinks the viewport so chips + note are not clipped. */}
         <div
+          ref={logSheetBodyScrollRef}
           style={{
             flex: 1,
             minHeight: 0,
@@ -1036,6 +1108,7 @@ export function LogSheet() {
 
         <div style={{ flexShrink: 0, padding: "12px 24px 0" }}>
           <textarea
+            ref={noteRef}
             id="log-sheet-note"
             placeholder="Tell us about it (optional)"
             value={description}
@@ -1044,10 +1117,18 @@ export function LogSheet() {
             }
             maxLength={MAX_DESCRIPTION_LENGTH}
             rows={5}
-            onFocus={(e) => {
+            onInput={(e) => {
+              const el = e.currentTarget;
+              if (el.selectionStart === el.value.length) {
+                el.scrollTop = el.scrollHeight;
+              }
+            }}
+            onFocus={() => {
+              const run = () => scrollNoteIntoView();
               requestAnimationFrame(() => {
-                e.target.scrollIntoView({ block: "nearest", inline: "nearest" });
+                requestAnimationFrame(run);
               });
+              window.setTimeout(run, 120);
             }}
             style={{
               width: "100%",
@@ -1080,8 +1161,9 @@ export function LogSheet() {
           style={{
             flexShrink: 0,
             padding: "10px 24px",
-            paddingBottom:
-              "max(8px, calc(8px + env(safe-area-inset-bottom, 0px)))",
+            paddingBottom: keyboardLikelyOpen
+              ? 10
+              : "max(8px, calc(8px + env(safe-area-inset-bottom, 0px)))",
           }}
         >
           <button

@@ -28,5 +28,5 @@ export default function MockHomeEntry() {
     );
   }
 
-  return hasUser ? <FeedHome /> : <HomeLanding />;
+  return hasUser ? <FeedHome /> : <HomeLanding serverLandingProfiles={null} />;
 }

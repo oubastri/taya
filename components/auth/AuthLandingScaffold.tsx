@@ -93,7 +93,7 @@ export function AuthLandingScaffold({ children }: AuthLandingScaffoldProps) {
           {searchParams.get("bg") === "manifesto" ? (
             <ManifestoView />
           ) : (
-            <HomeLanding />
+            <HomeLanding serverLandingProfiles={null} />
           )}
         </div>
         <motion.button

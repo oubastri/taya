@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import FeedHome from "@/components/FeedHome";
 import HomeLanding from "@/components/HomeLanding";
 import MockHomeEntry from "@/components/MockHomeEntry";
+import { fetchLandingProfiles } from "@/lib/landing-profiles";
 
 export default async function HomePage() {
   if (process.env.NEXT_PUBLIC_DATA_MODE !== "real") {
@@ -14,7 +15,8 @@ export default async function HomePage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return <HomeLanding />;
+    const landingProfiles = await fetchLandingProfiles(supabase);
+    return <HomeLanding serverLandingProfiles={landingProfiles} />;
   }
 
   return <FeedHome />;

@@ -1,7 +1,26 @@
 const isProd = process.env.NODE_ENV === "production";
 
+let supabaseImageHost = null;
+try {
+  const u = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (u) supabaseImageHost = new URL(u).hostname;
+} catch {
+  supabaseImageHost = null;
+}
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  images: {
+    remotePatterns: supabaseImageHost
+      ? [
+          {
+            protocol: "https",
+            hostname: supabaseImageHost,
+            pathname: "/storage/v1/**",
+          },
+        ]
+      : [],
+  },
   // Supabase in server bundles is split into vendor-chunks; under dev/HMR those
   // chunk paths can go stale (Cannot find module './vendor-chunks/@supabase.js').
   // Externalizing uses Node resolution instead of webpack vendor chunks.

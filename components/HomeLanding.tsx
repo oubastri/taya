@@ -1,36 +1,63 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { setSiteCustomCursorSuppressed } from "@/components/CustomCursor";
-import AthletesGlobeView, {
-  type AthletesGlobeUser,
-} from "@/components/athletes/AthletesGlobeView";
-import {
-  LandingFigmaHero,
-  LANDING_DEMO_PROFILE_ROWS,
-} from "@/components/landing/LandingFigmaHero";
+import AthletesGlobeView from "@/components/athletes/AthletesGlobeView";
+import { LandingFigmaHero } from "@/components/landing/LandingFigmaHero";
 import { TayaWordmark } from "@/components/TayaWordmark";
-function buildLandingGlobeUsers(): AthletesGlobeUser[] {
-  return LANDING_DEMO_PROFILE_ROWS.map((row, i) => {
-    const handle = row.handle.replace(/^@/, "");
-    return {
-      id: `landing-globe-${i}-${handle}`,
-      name: handle
-        .split("_")
-        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-        .join(" "),
-      handle,
-      avatarUrl: row.src,
-      isYou: false,
-    };
-  });
-}
+import { createClient } from "@/lib/supabase/client";
+import {
+  fetchLandingProfiles,
+  landingProfilesToGlobeUsers,
+  landingProfilesToHeroStrip,
+  type LandingProfilePublic,
+} from "@/lib/landing-profiles";
 
 const sans = 'var(--font-sans), system-ui, sans-serif';
 
-export default function HomeLanding() {
-  const landingGlobeUsers = useMemo(() => buildLandingGlobeUsers(), []);
+type HomeLandingProps = {
+  /**
+   * From the server: profile rows for globe + hero strip.
+   * `null`: fetch in the browser (mock entry + auth modal backdrop).
+   */
+  serverLandingProfiles: LandingProfilePublic[] | null;
+};
+
+export default function HomeLanding({
+  serverLandingProfiles,
+}: HomeLandingProps) {
+  const [clientProfiles, setClientProfiles] = useState<
+    LandingProfilePublic[] | null
+  >(null);
+
+  useEffect(() => {
+    if (serverLandingProfiles !== null) return;
+    let cancelled = false;
+    (async () => {
+      const supabase = createClient();
+      const rows = await fetchLandingProfiles(supabase);
+      if (!cancelled) setClientProfiles(rows);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [serverLandingProfiles]);
+
+  const effectiveProfiles =
+    serverLandingProfiles !== null
+      ? serverLandingProfiles
+      : (clientProfiles ?? []);
+
+  const landingGlobeUsers = useMemo(
+    () => landingProfilesToGlobeUsers(effectiveProfiles),
+    [effectiveProfiles],
+  );
+
+  const heroStripProfiles = useMemo(
+    () => landingProfilesToHeroStrip(effectiveProfiles),
+    [effectiveProfiles],
+  );
 
   useEffect(() => {
     setSiteCustomCursorSuppressed(true);
@@ -205,7 +232,7 @@ export default function HomeLanding() {
             paddingBottom: "max(20px, env(safe-area-inset-bottom))",
           }}
         >
-          <LandingFigmaHero />
+          <LandingFigmaHero stripProfiles={heroStripProfiles} />
         </div>
       </main>
     </div>

@@ -6,11 +6,14 @@ import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { ActivityIcon } from "@/components/ActivityIcon";
 import { LandingSlotStrip } from "@/components/landing/LandingSlotStrip";
 import type { ActivityType } from "@/types/workout";
+import type { LandingHeroStripProfile } from "@/lib/landing-profiles";
 import {
   ACTIVITY_FEED_HIGHLIGHT,
   ACTIVITY_FEED_PHRASE,
   ACTIVITY_TYPES,
 } from "@/types/workout";
+
+export type { LandingHeroStripProfile };
 
 /** Landing demo only — skip generic “other / something” (no icon, not a showcase activity) */
 const LANDING_ACTIVITY_TYPES = ACTIVITY_TYPES.filter((t) => t !== "other");
@@ -33,28 +36,8 @@ const HERO_DEMO_TILE_RADIUS = "32%";
 const PAGE_PAD_X = "max(20px, env(safe-area-inset-left))";
 const PAGE_PAD_RIGHT = "max(20px, env(safe-area-inset-right))";
 
-/** Shared with landing globe / demos — profile strip + spatial view */
-export const LANDING_DEMO_PROFILE_ROWS: { src: string; handle: string }[] = [
-  { src: "/profilephotos/user1.png", handle: "@pjo" },
-  { src: "/profilephotos/user2.png", handle: "@mara.zip" },
-  { src: "/profilephotos/user3.png", handle: "@jasprr" },
-  { src: "/profilephotos/user4.png", handle: "@zo3e" },
-  { src: "/profilephotos/user5.png", handle: "@dnvn" },
-  { src: "/profilephotos/user6.jpg", handle: "@vickks" },
-  { src: "/profilephotos/user7.jpg", handle: "@nico.tm" },
-  { src: "/profilephotos/user8.jpg", handle: "@uh.lex" },
-  { src: "/profilephotos/user9.jpg", handle: "@graci3st" },
-  { src: "/profilephotos/user10.jpg", handle: "@luisito" },
-  { src: "/profilephotos/user11.jpg", handle: "@han_raw" },
-  { src: "/profilephotos/user12.jpg", handle: "@rowanjpg" },
-  { src: "/profilephotos/user13.jpg", handle: "@kiyoxx" },
-  { src: "/profilephotos/user14.jpg", handle: "@miawmiaw" },
-  { src: "/profilephotos/user15.jpg", handle: "@zen.yuki" },
-  { src: "/profilephotos/user16.jpg", handle: "@crt3r" },
-  { src: "/profilephotos/user17.jpg", handle: "@pete2go" },
-  { src: "/profilephotos/user18.jpg", handle: "@tesssss" },
-  { src: "/profilephotos/user19.jpg", handle: "@livvyxo" },
-  { src: "/profilephotos/user20.jpg", handle: "@mokochan" },
+const STRIP_FALLBACK: LandingHeroStripProfile[] = [
+  { avatarUrl: null, handle: "taya", name: "TAYA" },
 ];
 
 function activityConnectorHighlight(type: ActivityType): {
@@ -110,8 +93,18 @@ function useIconSizeForLanding() {
   return iconSize;
 }
 
-export function LandingFigmaHero() {
+type LandingFigmaHeroProps = {
+  /** Real TAYA users for the left strip; cycles avatar + @handle */
+  stripProfiles: LandingHeroStripProfile[];
+};
+
+export function LandingFigmaHero({ stripProfiles }: LandingFigmaHeroProps) {
   const iconSize = useIconSizeForLanding();
+
+  const stripRows = useMemo(
+    () => (stripProfiles.length > 0 ? stripProfiles : STRIP_FALLBACK),
+    [stripProfiles],
+  );
 
   const activityOrder = useMemo(
     () => shuffleOrder([...LANDING_ACTIVITY_TYPES], 42),
@@ -122,11 +115,12 @@ export function LandingFigmaHero() {
   const [ai, setAi] = useState(0);
 
   useEffect(() => {
+    const n = stripRows.length;
     const t = window.setInterval(() => {
-      setPi((p) => (p + 1) % LANDING_DEMO_PROFILE_ROWS.length);
+      setPi((p) => (p + 1) % n);
     }, PROFILE_ROTATE_MS);
     return () => clearInterval(t);
-  }, []);
+  }, [stripRows.length]);
 
   useEffect(() => {
     const t = window.setInterval(() => {
@@ -135,7 +129,8 @@ export function LandingFigmaHero() {
     return () => clearInterval(t);
   }, [activityOrder.length]);
 
-  const profile = LANDING_DEMO_PROFILE_ROWS[pi];
+  const profile = stripRows[Math.min(pi, stripRows.length - 1)]!;
+  const handleLabel = `@${profile.handle}`;
   const activityType = activityOrder[ai];
   const { connector, highlight } = activityConnectorHighlight(activityType);
 
@@ -148,10 +143,12 @@ export function LandingFigmaHero() {
     lineHeight: 1.25,
   };
 
+  const profileInitial = (profile.name || profile.handle).charAt(0).toUpperCase();
+
   const profileBlock = (
     <LandingSlotStrip
       anchor="left"
-      slotKey={profile.handle}
+      slotKey={handleLabel}
       minHeight={SLOT_MIN_H}
       style={{ width: "100%", minWidth: 0 }}
     >
@@ -178,18 +175,36 @@ export function LandingFigmaHero() {
             background: "var(--avatar-placeholder-bg)",
           }}
         >
-          <Image
-            src={profile.src}
-            alt=""
-            width={220}
-            height={220}
-            sizes="(max-width: 768px) 120px, 220px"
-            style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-            }}
-          />
+          {profile.avatarUrl ? (
+            <Image
+              src={profile.avatarUrl}
+              alt=""
+              width={220}
+              height={220}
+              sizes="(max-width: 768px) 120px, 220px"
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+              }}
+            />
+          ) : (
+            <span
+              style={{
+                width: "100%",
+                height: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontFamily: sans,
+                fontSize: "clamp(18px, 5vw, 52px)",
+                fontWeight: 600,
+                color: "var(--foreground-muted)",
+              }}
+            >
+              {profileInitial}
+            </span>
+          )}
         </div>
         <span
           style={{
@@ -201,7 +216,7 @@ export function LandingFigmaHero() {
             textOverflow: "ellipsis",
           }}
         >
-          {profile.handle}
+          {handleLabel}
         </span>
       </div>
     </LandingSlotStrip>

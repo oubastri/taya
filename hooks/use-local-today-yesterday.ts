@@ -13,7 +13,7 @@ export function useLocalTodayYesterday(): { today: string; yesterday: string } {
   useEffect(() => {
     const sync = () => setToday(toDateKey(new Date()));
 
-    let timeoutId: ReturnType<typeof setTimeout>;
+    let timeoutId: number;
     const scheduleMidnight = () => {
       const now = new Date();
       const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
