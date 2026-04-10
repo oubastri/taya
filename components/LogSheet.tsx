@@ -67,6 +67,10 @@ const LOG_VIEW_TRANSITION = `0.36s cubic-bezier(0.32, 0.72, 0, 1)`;
 /** "View more" expand — matches sheet motion feel */
 const LOG_CHIP_EXPAND_EASE = [0.32, 0.72, 0, 1] as const;
 const CLOSE_BTN = 54;
+/** Main CTA row — space above home indicator / sheet edge (both compact and wide). */
+const LOG_SHEET_CTA_PAD_BOTTOM_SAFE =
+  "max(22px, calc(22px + env(safe-area-inset-bottom, 0px)))";
+const LOG_SHEET_CTA_PAD_BOTTOM_KEYBOARD = 18;
 /** Matches `MOBILE_MENU_MQ` in AccountMenu — tall, keyboard-friendly sheet on phone-sized viewports. */
 const LOG_SHEET_COMPACT_MQ = "(max-width: 599px)";
 
@@ -148,6 +152,7 @@ export function LogSheet() {
 
   const sheetRef = useRef<HTMLDivElement>(null);
   const scrimRef = useRef<HTMLDivElement>(null);
+  const dismissZoneRef = useRef<HTMLDivElement>(null);
   const calendarScrollRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef({ dy: 0 });
   const sheetPanRef = useRef<LogSheetPan | null>(null);
@@ -285,6 +290,7 @@ export function LogSheet() {
   }, [isOpen, panelOpen, scrollNoteIntoView]);
 
   useEffect(() => {
+    if (compactSheet) return;
     const el = chipsRef.current;
     const inner = chipsInnerRef.current;
     if (!el || !inner) return;
@@ -438,7 +444,7 @@ export function LogSheet() {
       el.removeEventListener("pointerdown", onPointerDown);
       el.removeEventListener("click", onClickCapture, true);
     };
-  }, []);
+  }, [compactSheet]);
 
   const orderedActivities = useMemo(
     () => getOrderedActivities(workouts),
@@ -612,6 +618,21 @@ export function LogSheet() {
       if (!downEl) return;
 
       if (st.phase === "deciding") {
+        if (compactSheet) {
+          const dz = dismissZoneRef.current;
+          if (!dz || !dz.contains(downEl)) {
+            st.phase = "rejected";
+            return;
+          }
+          if (dy > 10 && dy >= Math.abs(dx)) {
+            st.phase = "sheet";
+            e.preventDefault();
+            sheet.setPointerCapture(e.pointerId);
+            sheet.style.transition = "none";
+          }
+          return;
+        }
+
         const inChips = chipsRef.current?.contains(downEl) ?? false;
         if (inChips) {
           if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) {
@@ -691,7 +712,7 @@ export function LogSheet() {
       window.removeEventListener("pointercancel", onUp);
       sheetPanRef.current = null;
     };
-  }, [isOpen, panelOpen, datePickerOpen]);
+  }, [isOpen, panelOpen, datePickerOpen, compactSheet]);
 
   const isEditing = !!workoutToEdit;
 
@@ -780,316 +801,99 @@ export function LogSheet() {
           overscrollBehavior: "contain",
         }}
       >
-        {/* Drag handle (visual); dismiss gesture is handled on the whole sheet. */}
-        <div style={SHEET_DRAG_REGION_STYLE} aria-hidden>
-          <div
-            style={{
-              width: 36,
-              height: 4,
-              borderRadius: 2,
-              background: "var(--drag-handle)",
-            }}
-          />
-        </div>
-
-        {/* Close button */}
-        <button
-          type="button"
-          data-log-sheet-close
-          onClick={handleClose}
-          aria-label="Close"
-          style={{
-            position: "absolute",
-            top: 16,
-            right: 16,
-            zIndex: 1,
-            width: CLOSE_BTN,
-            height: CLOSE_BTN,
-            borderRadius: "100px",
-            background: "var(--close-btn-bg)",
-            border: "1px solid var(--close-btn-border)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            WebkitTapHighlightColor: "transparent",
-            flexShrink: 0,
-          }}
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="var(--close-btn-icon)"
-            strokeWidth="2.6"
-            strokeLinecap="round"
-            aria-hidden
-          >
-            <line x1="6" y1="6" x2="18" y2="18" />
-            <line x1="18" y1="6" x2="6" y2="18" />
-          </svg>
-        </button>
-
-        {/* Date chip toggles inline calendar (same sheet); top inset matches close (16) */}
-        <div
-          style={{
-            paddingTop: 0,
-            paddingLeft: 16,
-            paddingRight: 16 + CLOSE_BTN + 10,
-          }}
-        >
-          <button
-            type="button"
-            onClick={() =>
-              datePickerOpen ? cancelInlineDatePicker() : openInlineDatePicker()
-            }
-            aria-expanded={datePickerOpen}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "8px 14px",
-              borderRadius: 100,
-              border: "none",
-              background: "var(--chip-bg)",
-              cursor: "pointer",
-              fontFamily: '"B612 Mono", ui-monospace, monospace',
-              fontSize: 12,
-              fontWeight: 500,
-              color: "var(--chip-color)",
-              letterSpacing: "-0.48px",
-              WebkitTapHighlightColor: "transparent",
-              lineHeight: "normal",
-              transition: "background 0.18s, color 0.18s",
-            }}
-            className="active:opacity-90"
-          >
-            {formatSheetDate(datePickerOpen ? draftDate : date)}
-            <svg
-              width="10"
-              height="10"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
-              style={{
-                opacity: 0.85,
-                transition: "transform 0.22s ease",
-                transform: datePickerOpen ? "rotate(180deg)" : "rotate(0deg)",
-              }}
+        {compactSheet ? (
+          <>
+            <div
+              ref={dismissZoneRef}
+              style={{ flexShrink: 0, position: "relative" }}
             >
-              <path d="M6 9l6 6 6-6" />
-            </svg>
-          </button>
-
-          <h2
-            style={{
-              ...sheetHeroTitle,
-              marginTop: 28,
-            }}
-          >
-            {datePickerOpen ? "Select date" : "What did you do?"}
-          </h2>
-          {datePickerOpen && datePickerFutureErr ? (
-            <p role="alert" style={{ ...logSheetFieldError, marginTop: 8 }}>
-              {datePickerFutureErr}
-            </p>
-          ) : null}
-        </div>
-
-        {/* Fills space below the header within maxHeight; abs layers for log vs calendar. */}
-        <div
-          style={{
-            flex: 1,
-            minHeight: 0,
-            position: "relative",
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
-          {/* Log form — fades out when picking a date */}
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              flexDirection: "column",
-              overflow: "hidden",
-              minHeight: 0,
-              opacity: datePickerOpen ? 0 : 1,
-              transition: `opacity ${LOG_VIEW_TRANSITION}`,
-              pointerEvents: datePickerOpen ? "none" : "auto",
-            }}
-          >
-        {/* Scroll when the keyboard shrinks the viewport so chips + note are not clipped. */}
-        <div
-          ref={logSheetBodyScrollRef}
-          style={{
-            flex: 1,
-            minHeight: 0,
-            display: "flex",
-            flexDirection: "column",
-            overflowY: "auto",
-            overflowX: "hidden",
-            WebkitOverflowScrolling: "touch",
-            overscrollBehaviorY: "contain",
-          }}
-        >
-        {/* Activity chips — horizontal scroll only */}
-        <div
-          id={LOG_SHEET_CHIPS_ID}
-          ref={chipsRef}
-          style={{
-            overflowX: "auto",
-            overflowY: "hidden",
-            scrollbarWidth: "none",
-            flexShrink: 0,
-            touchAction: "pan-x",
-            cursor: "grab",
-            userSelect: "none",
-          }}
-        >
-          <motion.div
-            ref={chipsInnerRef}
-            layout
-            style={{
-              display: "flex",
-              gap: 8,
-              padding: "26px 24px 10px 16px",
-              width: "max-content",
-              willChange: "transform",
-            }}
-            transition={
-              reduceMotion
-                ? { layout: { duration: 0 } }
-                : {
-                    layout: {
-                      type: "spring",
-                      stiffness: 380,
-                      damping: 34,
-                      mass: 0.85,
-                    },
-                  }
-            }
-          >
-            {visibleActivities.map((activity, index) => {
-              const isSelected = selected === activity;
-              const isReveal = showAll && index >= 5;
-              const stagger = Math.max(0, index - 5);
-              return (
-                <motion.button
-                  key={activity}
-                  layout
-                  type="button"
-                  onClick={() => setSelected(isSelected ? null : activity)}
-                  aria-pressed={isSelected}
-                  className={
-                    isSelected ? "log-sheet-activity-chip--selected" : undefined
-                  }
-                  initial={
-                    reduceMotion || !isReveal
-                      ? false
-                      : { opacity: 0, x: -14 }
-                  }
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{
-                    layout: reduceMotion
-                      ? { duration: 0 }
-                      : {
-                          type: "spring",
-                          stiffness: 420,
-                          damping: 32,
-                          mass: 0.78,
-                        },
-                    opacity: reduceMotion
-                      ? { duration: 0 }
-                      : {
-                          duration: 0.34,
-                          ease: LOG_CHIP_EXPAND_EASE,
-                          delay: stagger * 0.038,
-                        },
-                    x: reduceMotion
-                      ? { duration: 0 }
-                      : {
-                          duration: 0.34,
-                          ease: LOG_CHIP_EXPAND_EASE,
-                          delay: stagger * 0.038,
-                        },
-                  }}
+              <div style={SHEET_DRAG_REGION_STYLE} aria-hidden>
+                <div
                   style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 7,
-                    padding: "0 14px 0 10px",
-                    height: 40,
-                    borderRadius: 100,
-                    border: "none",
-                    background: isSelected ? "var(--chip-selected-bg)" : "var(--chip-bg)",
-                    cursor: "pointer",
-                    fontFamily: "var(--font-sans), sans-serif",
-                    fontSize: 14,
-                    fontWeight: 500,
-                    letterSpacing: "-0.02em",
-                    color: isSelected ? "var(--chip-selected-color)" : "var(--chip-color)",
-                    WebkitTapHighlightColor: "transparent",
-                    flexShrink: 0,
-                    whiteSpace: "nowrap",
+                    width: 36,
+                    height: 4,
+                    borderRadius: 2,
+                    background: "var(--drag-handle)",
                   }}
+                />
+              </div>
+              <button
+                type="button"
+                data-log-sheet-close
+                onClick={handleClose}
+                aria-label="Close"
+                style={{
+                  position: "absolute",
+                  top: 16,
+                  right: 16,
+                  zIndex: 1,
+                  width: CLOSE_BTN,
+                  height: CLOSE_BTN,
+                  borderRadius: "100px",
+                  background: "var(--close-btn-bg)",
+                  border: "1px solid var(--close-btn-border)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  WebkitTapHighlightColor: "transparent",
+                  flexShrink: 0,
+                }}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="var(--close-btn-icon)"
+                  strokeWidth="2.6"
+                  strokeLinecap="round"
+                  aria-hidden
                 >
-                  <ActivityIcon type={activity} size={22} invert={isSelected} />
-                  {ACTIVITY_LABELS[activity]}
-                </motion.button>
-              );
-            })}
-
-            <AnimatePresence initial={false} mode="popLayout">
-              {!showAll && remaining.length > 0 ? (
-                <motion.button
-                  key="log-sheet-view-more"
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                </svg>
+              </button>
+              {/* Date chip — same block order as web: above the title */}
+              <div
+                style={{
+                  paddingTop: 0,
+                  paddingLeft: 16,
+                  paddingRight: 16 + CLOSE_BTN + 10,
+                }}
+              >
+                <button
                   type="button"
-                  layout
-                  onClick={() => setShowAll(true)}
-                  initial={false}
-                  exit={
-                    reduceMotion
-                      ? { opacity: 0, transition: { duration: 0 } }
-                      : {
-                          opacity: 0,
-                          scale: 0.94,
-                          transition: {
-                            duration: 0.22,
-                            ease: LOG_CHIP_EXPAND_EASE,
-                          },
-                        }
+                  onClick={() =>
+                    datePickerOpen
+                      ? cancelInlineDatePicker()
+                      : openInlineDatePicker()
                   }
+                  aria-expanded={datePickerOpen}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: 5,
-                    padding: "0 14px",
-                    height: 40,
+                    gap: 6,
+                    padding: "8px 14px",
                     borderRadius: 100,
                     border: "none",
                     background: "var(--chip-bg)",
                     cursor: "pointer",
-                    fontFamily: "var(--font-sans), sans-serif",
-                    fontSize: 14,
+                    fontFamily: '"B612 Mono", ui-monospace, monospace',
+                    fontSize: 12,
                     fontWeight: 500,
-                    letterSpacing: "-0.02em",
                     color: "var(--chip-color)",
+                    letterSpacing: "-0.48px",
                     WebkitTapHighlightColor: "transparent",
-                    flexShrink: 0,
-                    whiteSpace: "nowrap",
+                    lineHeight: "normal",
+                    transition: "background 0.18s, color 0.18s",
                   }}
+                  className="active:opacity-90"
                 >
-                  View more
+                  {formatSheetDate(datePickerOpen ? draftDate : date)}
                   <svg
-                    width="12"
-                    height="12"
+                    width="10"
+                    height="10"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
@@ -1097,179 +901,842 @@ export function LogSheet() {
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     aria-hidden
+                    style={{
+                      opacity: 0.85,
+                      transition: "transform 0.22s ease",
+                      transform: datePickerOpen
+                        ? "rotate(180deg)"
+                        : "rotate(0deg)",
+                    }}
                   >
-                    <path d="M9 18l6-6-6-6" />
+                    <path d="M6 9l6 6 6-6" />
                   </svg>
-                </motion.button>
-              ) : null}
-            </AnimatePresence>
-          </motion.div>
-        </div>
+                </button>
+                {datePickerOpen && datePickerFutureErr ? (
+                  <p
+                    role="alert"
+                    style={{ ...logSheetFieldError, marginTop: 8 }}
+                  >
+                    {datePickerFutureErr}
+                  </p>
+                ) : null}
+              </div>
+              <div
+                style={{
+                  paddingTop: 0,
+                  paddingLeft: 16,
+                  paddingRight: 16 + CLOSE_BTN + 10,
+                  paddingBottom: 8,
+                }}
+              >
+                <h2
+                  style={{
+                    ...sheetHeroTitle,
+                    margin: 0,
+                    marginTop: 28,
+                  }}
+                >
+                  {datePickerOpen
+                    ? "Select date"
+                    : isEditing
+                      ? "Edit workout"
+                      : "What did you do?"}
+                </h2>
+              </div>
+            </div>
 
-        <div style={{ flexShrink: 0, padding: "12px 24px 0" }}>
-          <textarea
-            ref={noteRef}
-            id="log-sheet-note"
-            placeholder="Tell us about it (optional)"
-            value={description}
-            onChange={(e) =>
-              setDescription(e.target.value.slice(0, MAX_DESCRIPTION_LENGTH))
-            }
-            maxLength={MAX_DESCRIPTION_LENGTH}
-            rows={5}
-            onInput={(e) => {
-              const el = e.currentTarget;
-              if (el.selectionStart === el.value.length) {
-                el.scrollTop = el.scrollHeight;
-              }
-            }}
-            onFocus={() => {
-              const run = () => scrollNoteIntoView();
-              requestAnimationFrame(() => {
-                requestAnimationFrame(run);
-              });
-              window.setTimeout(run, 120);
-            }}
-            style={{
-              width: "100%",
-              minHeight: 120,
-              maxHeight:
-                visualVhPx > 0
-                  ? `${Math.min(220, 32 * visualVhPx)}px`
-                  : "min(220px, 32svh)",
-              boxSizing: "border-box",
-              resize: "none",
-              padding: 0,
-              border: "none",
-              outline: "none",
-              background: "transparent",
-              fontFamily: "var(--font-sans), sans-serif",
-              fontSize: 16,
-              fontWeight: 400,
-              color: "var(--input-color)",
-              letterSpacing: "-0.025em",
-              lineHeight: 1.55,
-              display: "block",
-              overflowY: "auto",
-              WebkitOverflowScrolling: "touch",
-            }}
-          />
-        </div>
-        </div>
-
-        <div
-          style={{
-            flexShrink: 0,
-            padding: "10px 24px",
-            paddingBottom: keyboardLikelyOpen
-              ? 10
-              : "max(8px, calc(8px + env(safe-area-inset-bottom, 0px)))",
-          }}
-        >
-          <button
-            type="button"
-            onClick={handleSubmit}
-            className={`app-cta ${selected ? "" : "app-cta--inactive"}`}
-            style={{
-              width: "100%",
-              height: 54,
-              borderRadius: 50,
-              border: "none",
-              fontFamily: "var(--font-sans), sans-serif",
-              fontSize: 16,
-              fontWeight: 500,
-              letterSpacing: "-0.03em",
-              cursor: selected ? "pointer" : "default",
-              WebkitTapHighlightColor: "transparent",
-              transition:
-                "opacity 0.2s ease, background-color var(--duration-fast) var(--ease-out-expo), box-shadow var(--duration-fast) var(--ease-out-expo), transform var(--duration-fast) var(--ease-out-expo)",
-              opacity: selected ? 1 : 0.3,
-            }}
-          >
-            {isEditing ? "Save" : "Log move"}
-          </button>
-        </div>
-          </div>
-
-          {/* Inline calendar — fades in over the same region */}
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              flexDirection: "column",
-              overflow: "hidden",
-              minHeight: 0,
-              opacity: datePickerOpen ? 1 : 0,
-              transition: datePickerOpen
-                ? `opacity ${LOG_VIEW_TRANSITION} 70ms`
-                : `opacity 0.28s cubic-bezier(0.32, 0.72, 0, 1)`,
-              pointerEvents: datePickerOpen ? "auto" : "none",
-            }}
-          >
             <div
-              ref={calendarScrollRef}
+              ref={logSheetBodyScrollRef}
               style={{
                 flex: 1,
                 minHeight: 0,
+                display: "flex",
+                flexDirection: "column",
                 overflowY: "auto",
+                overflowX: "hidden",
                 WebkitOverflowScrolling: "touch",
                 overscrollBehaviorY: "contain",
-                touchAction: "pan-y",
-                padding: "22px 24px 4px",
-                boxSizing: "border-box",
               }}
             >
-              <ProfileCalendar
-                workouts={[]}
-                preventFutureDates
-                onAttemptSelectFuture={() =>
-                  setDatePickerFutureErr(
-                    "You can only log workouts on or before today."
-                  )
-                }
-                pickDate={(dk) => {
-                  setDatePickerFutureErr(null);
-                  setDraftDate(dk);
-                  setDate(dk);
-                  setDatePickerOpen(false);
+              {datePickerOpen ? (
+                <div
+                  ref={calendarScrollRef}
+                  style={{
+                    flex: 1,
+                    minHeight: 160,
+                    maxHeight:
+                      visualVhPx > 0
+                        ? `${Math.min(52 * visualVhPx, 520)}px`
+                        : "min(52vh, 520px)",
+                    overflowY: "auto",
+                    WebkitOverflowScrolling: "touch",
+                    overscrollBehaviorY: "contain",
+                    touchAction: "pan-y",
+                    padding: "12px 16px 8px",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <ProfileCalendar
+                    workouts={[]}
+                    preventFutureDates
+                    onAttemptSelectFuture={() =>
+                      setDatePickerFutureErr(
+                        "You can only log workouts on or before today."
+                      )
+                    }
+                    pickDate={(dk) => {
+                      setDatePickerFutureErr(null);
+                      setDraftDate(dk);
+                      setDate(dk);
+                      setDatePickerOpen(false);
+                    }}
+                    selectedDateKey={draftDate}
+                  />
+                </div>
+              ) : (
+                <>
+                  <div
+                    id={LOG_SHEET_CHIPS_ID}
+                    style={{
+                      overflowX: "auto",
+                      overflowY: "hidden",
+                      scrollbarWidth: "none",
+                      flexShrink: 0,
+                      touchAction: "pan-x",
+                      WebkitOverflowScrolling: "touch",
+                      cursor: "grab",
+                      userSelect: "none",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 8,
+                        padding: "16px 16px 10px",
+                        width: "max-content",
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      {visibleActivities.map((activity) => {
+                        const isSelected = selected === activity;
+                        return (
+                          <button
+                            key={activity}
+                            type="button"
+                            onClick={() =>
+                              setSelected(isSelected ? null : activity)
+                            }
+                            aria-pressed={isSelected}
+                            className={
+                              isSelected
+                                ? "log-sheet-activity-chip--selected"
+                                : undefined
+                            }
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 7,
+                              padding: "0 14px 0 10px",
+                              height: 40,
+                              borderRadius: 100,
+                              border: "none",
+                              background: isSelected
+                                ? "var(--chip-selected-bg)"
+                                : "var(--chip-bg)",
+                              cursor: "pointer",
+                              fontFamily: "var(--font-sans), sans-serif",
+                              fontSize: 14,
+                              fontWeight: 500,
+                              letterSpacing: "-0.02em",
+                              color: isSelected
+                                ? "var(--chip-selected-color)"
+                                : "var(--chip-color)",
+                              WebkitTapHighlightColor: "transparent",
+                              flexShrink: 0,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            <ActivityIcon
+                              type={activity}
+                              size={22}
+                              invert={isSelected}
+                            />
+                            {ACTIVITY_LABELS[activity]}
+                          </button>
+                        );
+                      })}
+                      {!showAll && remaining.length > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => setShowAll(true)}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 5,
+                            padding: "0 14px",
+                            height: 40,
+                            borderRadius: 100,
+                            border: "none",
+                            background: "var(--chip-bg)",
+                            cursor: "pointer",
+                            fontFamily: "var(--font-sans), sans-serif",
+                            fontSize: 14,
+                            fontWeight: 500,
+                            letterSpacing: "-0.02em",
+                            color: "var(--chip-color)",
+                            WebkitTapHighlightColor: "transparent",
+                            flexShrink: 0,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          View more
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden
+                          >
+                            <path d="M9 18l6-6-6-6" />
+                          </svg>
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div
+                    style={{ flexShrink: 0, padding: "12px 24px 0", flex: 1 }}
+                  >
+                    <textarea
+                      ref={noteRef}
+                      id="log-sheet-note"
+                      placeholder="Tell us about it (optional)"
+                      value={description}
+                      onChange={(e) =>
+                        setDescription(
+                          e.target.value.slice(0, MAX_DESCRIPTION_LENGTH)
+                        )
+                      }
+                      maxLength={MAX_DESCRIPTION_LENGTH}
+                      rows={5}
+                      onInput={(e) => {
+                        const el = e.currentTarget;
+                        if (el.selectionStart === el.value.length) {
+                          el.scrollTop = el.scrollHeight;
+                        }
+                      }}
+                      onFocus={() => {
+                        const run = () => scrollNoteIntoView();
+                        requestAnimationFrame(() => {
+                          requestAnimationFrame(run);
+                        });
+                        window.setTimeout(run, 120);
+                      }}
+                      style={{
+                        width: "100%",
+                        minHeight: 120,
+                        maxHeight:
+                          visualVhPx > 0
+                            ? `${Math.min(220, 32 * visualVhPx)}px`
+                            : "min(220px, 32svh)",
+                        boxSizing: "border-box",
+                        resize: "none",
+                        padding: 0,
+                        border: "none",
+                        outline: "none",
+                        background: "transparent",
+                        fontFamily: "var(--font-sans), sans-serif",
+                        fontSize: 16,
+                        fontWeight: 400,
+                        color: "var(--input-color)",
+                        letterSpacing: "-0.025em",
+                        lineHeight: 1.55,
+                        display: "block",
+                        overflowY: "auto",
+                        WebkitOverflowScrolling: "touch",
+                      }}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
+            {datePickerOpen ? (
+              <div
+                style={{
+                  flexShrink: 0,
+                  padding: "10px 24px",
+                  paddingBottom: LOG_SHEET_CTA_PAD_BOTTOM_SAFE,
                 }}
-                selectedDateKey={draftDate}
+              >
+                <button
+                  type="button"
+                  onClick={cancelInlineDatePicker}
+                  style={{
+                    width: "100%",
+                    height: 52,
+                    borderRadius: 50,
+                    border: "1px solid var(--border-strong)",
+                    background: "transparent",
+                    color: "var(--foreground)",
+                    fontFamily: "var(--font-sans), sans-serif",
+                    fontSize: 16,
+                    fontWeight: 500,
+                    letterSpacing: "-0.02em",
+                    cursor: "pointer",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                  className="active:opacity-90"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <div
+                style={{
+                  flexShrink: 0,
+                  padding: "10px 24px",
+                  paddingBottom: keyboardLikelyOpen
+                    ? LOG_SHEET_CTA_PAD_BOTTOM_KEYBOARD
+                    : LOG_SHEET_CTA_PAD_BOTTOM_SAFE,
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  className={`app-cta ${selected ? "" : "app-cta--inactive"}`}
+                  style={{
+                    width: "100%",
+                    height: 54,
+                    borderRadius: 50,
+                    border: "none",
+                    fontFamily: "var(--font-sans), sans-serif",
+                    fontSize: 16,
+                    fontWeight: 500,
+                    letterSpacing: "-0.03em",
+                    cursor: selected ? "pointer" : "default",
+                    WebkitTapHighlightColor: "transparent",
+                    transition:
+                      "opacity 0.2s ease, background-color var(--duration-fast) var(--ease-out-expo), box-shadow var(--duration-fast) var(--ease-out-expo), transform var(--duration-fast) var(--ease-out-expo)",
+                    opacity: selected ? 1 : 0.3,
+                  }}
+                >
+                  {isEditing ? "Save" : "Log move"}
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            {/* Drag handle (visual); wide: dismiss from body with chip/calendar exceptions. */}
+            <div style={SHEET_DRAG_REGION_STYLE} aria-hidden>
+              <div
+                style={{
+                  width: 36,
+                  height: 4,
+                  borderRadius: 2,
+                  background: "var(--drag-handle)",
+                }}
               />
             </div>
+
+            <button
+              type="button"
+              data-log-sheet-close
+              onClick={handleClose}
+              aria-label="Close"
+              style={{
+                position: "absolute",
+                top: 16,
+                right: 16,
+                zIndex: 1,
+                width: CLOSE_BTN,
+                height: CLOSE_BTN,
+                borderRadius: "100px",
+                background: "var(--close-btn-bg)",
+                border: "1px solid var(--close-btn-border)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                WebkitTapHighlightColor: "transparent",
+                flexShrink: 0,
+              }}
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="var(--close-btn-icon)"
+                strokeWidth="2.6"
+                strokeLinecap="round"
+                aria-hidden
+              >
+                <line x1="6" y1="6" x2="18" y2="18" />
+                <line x1="18" y1="6" x2="6" y2="18" />
+              </svg>
+            </button>
+
             <div
               style={{
-                flexShrink: 0,
-                padding: "12px 24px",
-                paddingBottom:
-                  "max(20px, calc(10px + env(safe-area-inset-bottom, 0px)))",
-                boxSizing: "border-box",
+                paddingTop: 0,
+                paddingLeft: 16,
+                paddingRight: 16 + CLOSE_BTN + 10,
               }}
             >
               <button
                 type="button"
-                onClick={cancelInlineDatePicker}
+                onClick={() =>
+                  datePickerOpen
+                    ? cancelInlineDatePicker()
+                    : openInlineDatePicker()
+                }
+                aria-expanded={datePickerOpen}
                 style={{
-                  width: "100%",
-                  height: 52,
-                  borderRadius: 50,
-                  border: "1px solid var(--border-strong)",
-                  background: "transparent",
-                  color: "var(--foreground)",
-                  fontFamily: "var(--font-sans), sans-serif",
-                  fontSize: 16,
-                  fontWeight: 500,
-                  letterSpacing: "-0.02em",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "8px 14px",
+                  borderRadius: 100,
+                  border: "none",
+                  background: "var(--chip-bg)",
                   cursor: "pointer",
+                  fontFamily: '"B612 Mono", ui-monospace, monospace',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  color: "var(--chip-color)",
+                  letterSpacing: "-0.48px",
                   WebkitTapHighlightColor: "transparent",
+                  lineHeight: "normal",
+                  transition: "background 0.18s, color 0.18s",
                 }}
                 className="active:opacity-90"
               >
-                Cancel
+                {formatSheetDate(datePickerOpen ? draftDate : date)}
+                <svg
+                  width="10"
+                  height="10"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                  style={{
+                    opacity: 0.85,
+                    transition: "transform 0.22s ease",
+                    transform: datePickerOpen
+                      ? "rotate(180deg)"
+                      : "rotate(0deg)",
+                  }}
+                >
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
               </button>
+
+              <h2
+                style={{
+                  ...sheetHeroTitle,
+                  marginTop: 28,
+                }}
+              >
+                {datePickerOpen
+                  ? "Select date"
+                  : isEditing
+                    ? "Edit workout"
+                    : "What did you do?"}
+              </h2>
+              {datePickerOpen && datePickerFutureErr ? (
+                <p role="alert" style={{ ...logSheetFieldError, marginTop: 8 }}>
+                  {datePickerFutureErr}
+                </p>
+              ) : null}
             </div>
-          </div>
-        </div>
+
+            <div
+              style={{
+                flex: 1,
+                minHeight: 0,
+                position: "relative",
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  overflow: "hidden",
+                  minHeight: 0,
+                  opacity: datePickerOpen ? 0 : 1,
+                  transition: `opacity ${LOG_VIEW_TRANSITION}`,
+                  pointerEvents: datePickerOpen ? "none" : "auto",
+                }}
+              >
+                <div
+                  ref={logSheetBodyScrollRef}
+                  style={{
+                    flex: 1,
+                    minHeight: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    overflowY: "auto",
+                    overflowX: "hidden",
+                    WebkitOverflowScrolling: "touch",
+                    overscrollBehaviorY: "contain",
+                  }}
+                >
+                  <div
+                    id={LOG_SHEET_CHIPS_ID}
+                    ref={chipsRef}
+                    style={{
+                      overflowX: "auto",
+                      overflowY: "hidden",
+                      scrollbarWidth: "none",
+                      flexShrink: 0,
+                      touchAction: "pan-x",
+                      cursor: "grab",
+                      userSelect: "none",
+                    }}
+                  >
+                    <motion.div
+                      ref={chipsInnerRef}
+                      layout
+                      style={{
+                        display: "flex",
+                        gap: 8,
+                        padding: "26px 24px 10px 16px",
+                        width: "max-content",
+                        willChange: "transform",
+                      }}
+                      transition={
+                        reduceMotion
+                          ? { layout: { duration: 0 } }
+                          : {
+                              layout: {
+                                type: "spring",
+                                stiffness: 380,
+                                damping: 34,
+                                mass: 0.85,
+                              },
+                            }
+                      }
+                    >
+                      {visibleActivities.map((activity, index) => {
+                        const isSelected = selected === activity;
+                        const isReveal = showAll && index >= 5;
+                        const stagger = Math.max(0, index - 5);
+                        return (
+                          <motion.button
+                            key={activity}
+                            layout
+                            type="button"
+                            onClick={() =>
+                              setSelected(isSelected ? null : activity)
+                            }
+                            aria-pressed={isSelected}
+                            className={
+                              isSelected
+                                ? "log-sheet-activity-chip--selected"
+                                : undefined
+                            }
+                            initial={
+                              reduceMotion || !isReveal
+                                ? false
+                                : { opacity: 0, x: -14 }
+                            }
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{
+                              layout: reduceMotion
+                                ? { duration: 0 }
+                                : {
+                                    type: "spring",
+                                    stiffness: 420,
+                                    damping: 32,
+                                    mass: 0.78,
+                                  },
+                              opacity: reduceMotion
+                                ? { duration: 0 }
+                                : {
+                                    duration: 0.34,
+                                    ease: LOG_CHIP_EXPAND_EASE,
+                                    delay: stagger * 0.038,
+                                  },
+                              x: reduceMotion
+                                ? { duration: 0 }
+                                : {
+                                    duration: 0.34,
+                                    ease: LOG_CHIP_EXPAND_EASE,
+                                    delay: stagger * 0.038,
+                                  },
+                            }}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 7,
+                              padding: "0 14px 0 10px",
+                              height: 40,
+                              borderRadius: 100,
+                              border: "none",
+                              background: isSelected
+                                ? "var(--chip-selected-bg)"
+                                : "var(--chip-bg)",
+                              cursor: "pointer",
+                              fontFamily: "var(--font-sans), sans-serif",
+                              fontSize: 14,
+                              fontWeight: 500,
+                              letterSpacing: "-0.02em",
+                              color: isSelected
+                                ? "var(--chip-selected-color)"
+                                : "var(--chip-color)",
+                              WebkitTapHighlightColor: "transparent",
+                              flexShrink: 0,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            <ActivityIcon
+                              type={activity}
+                              size={22}
+                              invert={isSelected}
+                            />
+                            {ACTIVITY_LABELS[activity]}
+                          </motion.button>
+                        );
+                      })}
+
+                      <AnimatePresence initial={false} mode="popLayout">
+                        {!showAll && remaining.length > 0 ? (
+                          <motion.button
+                            key="log-sheet-view-more"
+                            type="button"
+                            layout
+                            onClick={() => setShowAll(true)}
+                            initial={false}
+                            exit={
+                              reduceMotion
+                                ? { opacity: 0, transition: { duration: 0 } }
+                                : {
+                                    opacity: 0,
+                                    scale: 0.94,
+                                    transition: {
+                                      duration: 0.22,
+                                      ease: LOG_CHIP_EXPAND_EASE,
+                                    },
+                                  }
+                            }
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 5,
+                              padding: "0 14px",
+                              height: 40,
+                              borderRadius: 100,
+                              border: "none",
+                              background: "var(--chip-bg)",
+                              cursor: "pointer",
+                              fontFamily: "var(--font-sans), sans-serif",
+                              fontSize: 14,
+                              fontWeight: 500,
+                              letterSpacing: "-0.02em",
+                              color: "var(--chip-color)",
+                              WebkitTapHighlightColor: "transparent",
+                              flexShrink: 0,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            View more
+                            <svg
+                              width="12"
+                              height="12"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              aria-hidden
+                            >
+                              <path d="M9 18l6-6-6-6" />
+                            </svg>
+                          </motion.button>
+                        ) : null}
+                      </AnimatePresence>
+                    </motion.div>
+                  </div>
+
+                  <div style={{ flexShrink: 0, padding: "12px 24px 0" }}>
+                    <textarea
+                      ref={noteRef}
+                      id="log-sheet-note"
+                      placeholder="Tell us about it (optional)"
+                      value={description}
+                      onChange={(e) =>
+                        setDescription(
+                          e.target.value.slice(0, MAX_DESCRIPTION_LENGTH)
+                        )
+                      }
+                      maxLength={MAX_DESCRIPTION_LENGTH}
+                      rows={5}
+                      onInput={(e) => {
+                        const el = e.currentTarget;
+                        if (el.selectionStart === el.value.length) {
+                          el.scrollTop = el.scrollHeight;
+                        }
+                      }}
+                      onFocus={() => {
+                        const run = () => scrollNoteIntoView();
+                        requestAnimationFrame(() => {
+                          requestAnimationFrame(run);
+                        });
+                        window.setTimeout(run, 120);
+                      }}
+                      style={{
+                        width: "100%",
+                        minHeight: 120,
+                        maxHeight:
+                          visualVhPx > 0
+                            ? `${Math.min(220, 32 * visualVhPx)}px`
+                            : "min(220px, 32svh)",
+                        boxSizing: "border-box",
+                        resize: "none",
+                        padding: 0,
+                        border: "none",
+                        outline: "none",
+                        background: "transparent",
+                        fontFamily: "var(--font-sans), sans-serif",
+                        fontSize: 16,
+                        fontWeight: 400,
+                        color: "var(--input-color)",
+                        letterSpacing: "-0.025em",
+                        lineHeight: 1.55,
+                        display: "block",
+                        overflowY: "auto",
+                        WebkitOverflowScrolling: "touch",
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    flexShrink: 0,
+                    padding: "10px 24px",
+                    paddingBottom: keyboardLikelyOpen
+                      ? LOG_SHEET_CTA_PAD_BOTTOM_KEYBOARD
+                      : LOG_SHEET_CTA_PAD_BOTTOM_SAFE,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={handleSubmit}
+                    className={`app-cta ${selected ? "" : "app-cta--inactive"}`}
+                    style={{
+                      width: "100%",
+                      height: 54,
+                      borderRadius: 50,
+                      border: "none",
+                      fontFamily: "var(--font-sans), sans-serif",
+                      fontSize: 16,
+                      fontWeight: 500,
+                      letterSpacing: "-0.03em",
+                      cursor: selected ? "pointer" : "default",
+                      WebkitTapHighlightColor: "transparent",
+                      transition:
+                        "opacity 0.2s ease, background-color var(--duration-fast) var(--ease-out-expo), box-shadow var(--duration-fast) var(--ease-out-expo), transform var(--duration-fast) var(--ease-out-expo)",
+                      opacity: selected ? 1 : 0.3,
+                    }}
+                  >
+                    {isEditing ? "Save" : "Log move"}
+                  </button>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  overflow: "hidden",
+                  minHeight: 0,
+                  opacity: datePickerOpen ? 1 : 0,
+                  transition: datePickerOpen
+                    ? `opacity ${LOG_VIEW_TRANSITION} 70ms`
+                    : `opacity 0.28s cubic-bezier(0.32, 0.72, 0, 1)`,
+                  pointerEvents: datePickerOpen ? "auto" : "none",
+                }}
+              >
+                <div
+                  ref={calendarScrollRef}
+                  style={{
+                    flex: 1,
+                    minHeight: 0,
+                    overflowY: "auto",
+                    WebkitOverflowScrolling: "touch",
+                    overscrollBehaviorY: "contain",
+                    touchAction: "pan-y",
+                    padding: "22px 24px 4px",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <ProfileCalendar
+                    workouts={[]}
+                    preventFutureDates
+                    onAttemptSelectFuture={() =>
+                      setDatePickerFutureErr(
+                        "You can only log workouts on or before today."
+                      )
+                    }
+                    pickDate={(dk) => {
+                      setDatePickerFutureErr(null);
+                      setDraftDate(dk);
+                      setDate(dk);
+                      setDatePickerOpen(false);
+                    }}
+                    selectedDateKey={draftDate}
+                  />
+                </div>
+                <div
+                  style={{
+                    flexShrink: 0,
+                    padding: "12px 24px",
+                    paddingBottom: LOG_SHEET_CTA_PAD_BOTTOM_SAFE,
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={cancelInlineDatePicker}
+                    style={{
+                      width: "100%",
+                      height: 52,
+                      borderRadius: 50,
+                      border: "1px solid var(--border-strong)",
+                      background: "transparent",
+                      color: "var(--foreground)",
+                      fontFamily: "var(--font-sans), sans-serif",
+                      fontSize: 16,
+                      fontWeight: 500,
+                      letterSpacing: "-0.02em",
+                      cursor: "pointer",
+                      WebkitTapHighlightColor: "transparent",
+                    }}
+                    className="active:opacity-90"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </>
   );
