@@ -188,7 +188,9 @@ export default function SettingsPage() {
       const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
       const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
 
-      await supabase.from("profiles").update({ avatar_url: publicUrl }).eq("id", user.id);
+      await supabase
+        .from("profiles")
+        .upsert({ id: user.id, avatar_url: publicUrl }, { onConflict: "id" });
       updateUser({ avatarUrl: publicUrl });
       toast("Photo updated", "success");
     } finally {

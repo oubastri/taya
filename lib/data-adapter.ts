@@ -195,6 +195,18 @@ export function clearAuthCache() {
 
 // ---- User / Profile ----
 
+/** Insert a stub row if missing (e.g. trigger absent at signup). Safe to call repeatedly. */
+async function ensureProfileRow(
+  client: ReturnType<typeof createClient>,
+  uid: string,
+  email: string | null | undefined,
+): Promise<void> {
+  await client.from("profiles").upsert(
+    { id: uid, email: email ?? null },
+    { onConflict: "id", ignoreDuplicates: true },
+  );
+}
+
 export async function fetchUserProfile(): Promise<User | null> {
   const client = supabase();
 
@@ -208,7 +220,12 @@ export async function fetchUserProfile(): Promise<User | null> {
   const uid = authUser.id;
   cachedAuthUserId = uid;
 
-  const { data: row } = await client.from("profiles").select("*").eq("id", uid).maybeSingle();
+  let row = (await client.from("profiles").select("*").eq("id", uid).maybeSingle()).data;
+
+  if (!row) {
+    await ensureProfileRow(client, uid, authUser.email);
+    row = (await client.from("profiles").select("*").eq("id", uid).maybeSingle()).data;
+  }
 
   if (row) {
     const user = mapProfileRowToUser(row as Record<string, unknown>);
@@ -240,7 +257,11 @@ export async function updateUserProfile(updates: Partial<User>): Promise<void> {
   if (updates.bio !== undefined) dbUpdates.bio = updates.bio;
   if (updates.prompts !== undefined) dbUpdates.prompts = updates.prompts;
 
-  await supabase().from("profiles").update(dbUpdates).eq("id", uid);
+  if (Object.keys(dbUpdates).length === 0) return;
+
+  await supabase()
+    .from("profiles")
+    .upsert({ id: uid, ...dbUpdates }, { onConflict: "id" });
 }
 
 // ---- Workouts ----

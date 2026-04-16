@@ -361,7 +361,9 @@ export default function OnboardingPage() {
       if (tagline.trim()) updates.tagline = tagline.trim();
       if (prompts.length > 0) updates.prompts = prompts;
 
-      const { error } = await supabase.from("profiles").update(updates).eq("id", user.id);
+      const { error } = await supabase
+        .from("profiles")
+        .upsert({ ...updates, id: user.id }, { onConflict: "id" });
 
       if (error) {
         setHandleError(error.message);
