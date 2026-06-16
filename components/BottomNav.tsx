@@ -14,6 +14,8 @@ const isRealMode = process.env.NEXT_PUBLIC_DATA_MODE === "real";
 const AUTH_PATHS = ["/login", "/signup", "/forgot-password", "/onboarding", "/manifesto"];
 /** Settings hub (edit profile, etc.) — hide tab bar and log FAB like auth flows */
 const SETTINGS_PREFIX = "/settings";
+/** Standalone legal docs — read like documents, no tab bar or log FAB */
+const LEGAL_PATHS = ["/privacy", "/terms"];
 
 export function BottomNav() {
   const { open } = useLogSheet();
@@ -57,11 +59,20 @@ export function BottomNav() {
   );
   const hideForSettings =
     pathname === SETTINGS_PREFIX || pathname.startsWith(`${SETTINGS_PREFIX}/`);
+  const hideForLegalRoute = LEGAL_PATHS.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`),
+  );
   const hideForGuestHome = isRealMode && pathname === "/" && homeSignedIn !== "yes";
   const hideForMockGuestHome =
     !isRealMode && pathname === "/" && mockHomeGuestNav !== false;
 
-  if (hideForAuthRoute || hideForSettings || hideForGuestHome || hideForMockGuestHome) {
+  if (
+    hideForAuthRoute ||
+    hideForSettings ||
+    hideForLegalRoute ||
+    hideForGuestHome ||
+    hideForMockGuestHome
+  ) {
     return null;
   }
 
