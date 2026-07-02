@@ -1,656 +1,245 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-
-const SENTENCES = [
-  "Fitness got weird.",
-  "Somewhere between the influencers and the algorithms, between the before-and-afters and the gym selfies,",
-  "it stopped being about moving and started being about being seen moving.",
-  "Your body became content.",
-  "Your sweat became strategy.",
-  "Your rest day became a caption.",
-  "We're done with that.",
-  "TAYA is for the people who show up anyway.",
-  "The 6am run in the rain. The session nobody filmed. The workout you logged for yourself and the three friends who actually care.",
-  "No strangers. No performance.",
-  "No algorithm deciding if your effort was worth seeing.",
-  "Just your people.",
-  "Watching you show up. Showing up because you are.",
-  "That's the whole thing.",
-  "Every face on this page moved today.",
-  "Not for an audience. For each other.",
-  "To all you athletes, we see you.",
-  "This is my love letter to all you athletes.",
-];
-
-/** No accent color on this line (plain greeting). */
-const GREETING_SENTENCE_INDEX = SENTENCES.length - 2;
-
-const GREEN_SET = new Set([
-  "TAYA",
-  "Athletes",
-  "athletes",
-  "athlete",
-  "Athlete",
-]);
-
-const LOVE_LETTER_SENTENCE_INDEX = SENTENCES.length - 1;
-
-/** Signup modal over manifesto (see AuthLandingScaffold `bg=manifesto`). */
-const MANIFESTO_SIGNUP_HREF = "/signup?bg=manifesto";
-
-const MANIFESTO_SCROLL_RESTORE_KEY = "manifesto-scroll-restore";
-
-/** Line breaks before these token indices once `wordsToShow` reveals past the prior line. */
-const LINE_BREAK_BEFORE_TOKEN: ReadonlyMap<number, readonly number[]> =
-  new Map([
-    // Before "moving" so it stays with "and …" (avoids "moving" alone on a wrapped line).
-    [2, [4]],
-    [8, [6, 10]],
-    // "No strangers." / "No performance." on separate lines.
-    [9, [2]],
-    // Slide 13: manual line breaks; nowrap pairs keep tiny words with their neighbors (see MANIFESTO_SLIDE_13_NOWRAP_PAIRS).
-    [12, [4, 6]],
-    [15, [4]],
-    [LOVE_LETTER_SENTENCE_INDEX, [5]],
-  ]);
+import { useEffect, useState, type ReactNode } from "react";
 
 /**
- * Slide 13 (sentence index 12): word pairs that must not soft-wrap apart
- * (`inline-block` tokens otherwise allow orphans like “up.” or “up”).
+ * The manifesto, mirroring the iOS app's landing experience: the exact same
+ * text, typed out one character at a time in mono with a blinking accent
+ * cursor, over the app background, with a "Get started" / "Log in" way in.
+ *
+ * `variant="backdrop"` renders it statically (fully typed, no CTA/close) for use
+ * as the dimmed background behind the auth modal.
  */
-const MANIFESTO_SLIDE_13_NOWRAP_PAIRS: readonly (readonly [number, number])[] =
-  [
-    [0, 1],
-    [2, 3],
-    [4, 5],
-    [7, 8],
-  ];
+const MANIFESTO = `Some people live on Strava. Some have never timed a mile. You’re both in the right place.
 
-const MANIFESTO_SLIDE_13_SKIP_TOKEN = new Set(
-  MANIFESTO_SLIDE_13_NOWRAP_PAIRS.map(([, end]) => end)
-);
+An athlete, to us, is simply someone who moves. The marathoner and the morning walker, the pilates regular and the weekend surfer, the yogi and the lifter. All the same. This is the quieter, friendlier side of it all: less about splits and suffer scores, more about what your crew is up to and how everyone’s keeping well.
 
-/** Word vs trailing punctuation so commas/periods stay default color. */
-function splitWordTrailingPunct(token: string): { word: string; trail: string } {
-  const m = token.match(/^(.+?)([.,;:!?]+)$/);
-  if (!m) return { word: token, trail: "" };
-  const word = m[1];
-  if (!/[A-Za-z0-9]/.test(word)) return { word: token, trail: "" };
-  return { word, trail: m[2] };
-}
+Log your moves and keep a small circle in the loop. A nudge here, a bit of applause there. The simple business of staying healthy humans, together.
 
-function accentWordCore(
-  sentenceIdx: number,
-  tokenIdx: number,
-  wordCore: string
-): boolean {
-  if (sentenceIdx === GREETING_SENTENCE_INDEX) {
-    return false;
+Now, go move.`;
+
+const sans = "var(--font-sans), system-ui, sans-serif";
+const mono = "var(--font-mono), ui-monospace, monospace";
+const BLOCK = "▌"; // ▌ block cursor
+
+/** Cadence matching the iOS TypewriterText: quick per-char, a breath after
+ *  sentence/clause punctuation, spaces zipped past so the cursor never lingers. */
+function delayAt(index: number, chars: string[]): number {
+  const next = index + 1 < chars.length ? chars[index + 1] : null;
+  if (next && /\s/.test(next)) return 20;
+  const justTyped = chars[index];
+  if (/\s/.test(justTyped)) {
+    const prev = index - 1 >= 0 ? chars[index - 1] : null;
+    if (prev && ".!?".includes(prev)) return 450;
+    if (prev && ",:;".includes(prev)) return 170;
   }
-  if (sentenceIdx === LOVE_LETTER_SENTENCE_INDEX) {
-    return tokenIdx >= 5 && tokenIdx <= 8;
-  }
-  return GREEN_SET.has(wordCore.replace(/[^a-zA-Z]/g, ""));
+  return 45;
 }
 
-function tokenize(s: string): string[] {
-  return s.split(/\s+/).filter(Boolean);
-}
+function Typewriter({ play }: { play: boolean }) {
+  const chars = Array.from(MANIFESTO);
+  const [count, setCount] = useState(play ? 0 : chars.length);
+  const [cursorOn, setCursorOn] = useState(true);
 
-const ALL_TOKENS = SENTENCES.map(tokenize);
-
-/** Slide 1: only “Fitness” types letter-by-letter; “got” / “weird.” follow as words. */
-const FIRST_SLIDE_FITNESS_CHARS = Array.from("Fitness");
-const FIRST_SLIDE_FITNESS_CHAR_COUNT = FIRST_SLIDE_FITNESS_CHARS.length;
-const FIRST_SLIDE_TAIL_WORD_COUNT = ALL_TOKENS[0].length - 1;
-
-/**
- * Vertical px budget per word while a line is “typing”.
- * Higher = slower progression and harder to accidentally skip slides when scrolling fast.
- */
-const SCROLL_PER_WORD = 84;
-/**
- * Slide 1 only: px per character while “typing”.
- */
-const SCROLL_PER_CHAR = 30;
-/**
- * After a line is complete, scroll this much on the same “slide” before the next starts.
- * Larger = clearer pause between slides (helps fast trackpad / mouse wheels).
- */
-const REST_SCROLL = 320;
-
-interface ScrollZone {
-  /** Present on slide 1: scroll [offset, preludeEnd) keeps text empty (caret only). */
-  preludeEnd?: number;
-  typeStart: number;
-  typeEnd: number;
-  end: number;
-}
-
-/** Scroll distance on slide 1 before the first letter appears (empty frame + caret). */
-const FIRST_SLIDE_INTRO_SCROLL = 260;
-
-const SCROLL_ZONES: ScrollZone[] = (() => {
-  let offset = 0;
-  return ALL_TOKENS.map((tokens, i) => {
-    let preludeEnd: number | undefined;
-    let typeStart = offset;
-    if (i === 0) {
-      preludeEnd = offset + FIRST_SLIDE_INTRO_SCROLL;
-      typeStart = preludeEnd;
+  // Type out on mount (only when playing).
+  useEffect(() => {
+    if (!play) {
+      setCount(chars.length);
+      return;
     }
-    const typeSpan =
-      i === 0
-        ? FIRST_SLIDE_FITNESS_CHAR_COUNT * SCROLL_PER_CHAR +
-          FIRST_SLIDE_TAIL_WORD_COUNT * SCROLL_PER_WORD
-        : tokens.length * SCROLL_PER_WORD;
-    const typeEnd = typeStart + typeSpan;
-    const end = typeEnd + REST_SCROLL;
-    offset = end;
-    return { preludeEnd, typeStart, typeEnd, end };
-  });
-})();
-
-/** Min document scroll height; extra padding added client-side so tall viewports can reach the last slide + CTA. */
-const LAST_ZONE_END = SCROLL_ZONES[SCROLL_ZONES.length - 1].end;
-
-function getFontSize(wordCount: number): string {
-  if (wordCount <= 4) return "clamp(52px, 9vw, 108px)";
-  if (wordCount <= 10) return "clamp(38px, 6.5vw, 80px)";
-  if (wordCount <= 18) return "clamp(28px, 5vw, 64px)";
-  return "clamp(22px, 3.8vw, 50px)";
-}
-
-export default function ManifestoView() {
-  const [scrollY, setScrollY] = useState(0);
-  const [spacerHeight, setSpacerHeight] = useState(
-    () => LAST_ZONE_END + 2600
-  );
-  const rafRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem(MANIFESTO_SCROLL_RESTORE_KEY);
-      if (raw != null) {
-        sessionStorage.removeItem(MANIFESTO_SCROLL_RESTORE_KEY);
-        const y = Number.parseInt(raw, 10);
-        if (Number.isFinite(y)) {
-          requestAnimationFrame(() => {
-            window.scrollTo(0, y);
-          });
-        }
-      }
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  useEffect(() => {
-    const pad = () =>
-      Math.max(960, Math.round(window.innerHeight + 480));
-    setSpacerHeight(LAST_ZONE_END + pad());
-    const onResize = () => setSpacerHeight(LAST_ZONE_END + pad());
-    window.addEventListener("resize", onResize, { passive: true });
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
-
-  useEffect(() => {
-    const onScroll = () => {
-      const y = window.scrollY;
-      if (rafRef.current === null) {
-        rafRef.current = requestAnimationFrame(() => {
-          setScrollY(y);
-          rafRef.current = null;
-        });
-      }
+    setCount(0);
+    let i = 0;
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = () => {
+      setCount(i + 1);
+      const d = delayAt(i, chars);
+      i += 1;
+      if (i < chars.length) timer = setTimeout(tick, d);
     };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-    };
+    timer = setTimeout(tick, 320); // a small beat before it starts
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [play]);
+
+  // Blinking cursor.
+  useEffect(() => {
+    const blink = setInterval(() => setCursorOn((c) => !c), 500);
+    return () => clearInterval(blink);
   }, []);
 
-  let currentIdx = 0;
-  let wordsToShow = 1;
-  /** Slide 1: letters typed in “Fitness” (0 = intro only). */
-  let fitnessCharsToShow = 0;
-  /** Slide 1: “got” / “weird.” after Fitness is complete. */
-  let firstSlideTailWordsToShow = 0;
-  let sentenceComplete = false;
+  const len = chars.length;
+  const finished = count >= len;
+  const typed = chars.slice(0, count).join("");
 
-  let foundZone = false;
-  for (let i = 0; i < SCROLL_ZONES.length; i++) {
-    const zone = SCROLL_ZONES[i];
-    if (scrollY < zone.end) {
-      foundZone = true;
-      currentIdx = i;
-      const wc = ALL_TOKENS[i].length;
-      if (scrollY < zone.typeStart) {
-        sentenceComplete = false;
-        if (i === 0) {
-          fitnessCharsToShow = 0;
-          firstSlideTailWordsToShow = 0;
-        } else {
-          wordsToShow = 1;
-        }
-      } else if (scrollY < zone.typeEnd) {
-        const zoneSpan = zone.typeEnd - zone.typeStart;
-        if (i === 0) {
-          const into = scrollY - zone.typeStart;
-          const prefixScroll =
-            FIRST_SLIDE_FITNESS_CHAR_COUNT * SCROLL_PER_CHAR;
-          if (into < prefixScroll) {
-            const p = Math.min(1, Math.max(0, into / prefixScroll));
-            fitnessCharsToShow = Math.min(
-              FIRST_SLIDE_FITNESS_CHAR_COUNT,
-              Math.floor(p * FIRST_SLIDE_FITNESS_CHAR_COUNT) + 1
-            );
-            firstSlideTailWordsToShow = 0;
-          } else {
-            fitnessCharsToShow = FIRST_SLIDE_FITNESS_CHAR_COUNT;
-            const tailScroll = FIRST_SLIDE_TAIL_WORD_COUNT * SCROLL_PER_WORD;
-            const intoTail = into - prefixScroll;
-            const p2 = Math.min(1, Math.max(0, intoTail / tailScroll));
-            firstSlideTailWordsToShow = Math.min(
-              FIRST_SLIDE_TAIL_WORD_COUNT,
-              Math.floor(p2 * FIRST_SLIDE_TAIL_WORD_COUNT) + 1
-            );
-          }
-          sentenceComplete =
-            fitnessCharsToShow >= FIRST_SLIDE_FITNESS_CHAR_COUNT &&
-            firstSlideTailWordsToShow >= FIRST_SLIDE_TAIL_WORD_COUNT;
-        } else {
-          const progress = Math.min(
-            1,
-            Math.max(0, (scrollY - zone.typeStart) / zoneSpan)
-          );
-          wordsToShow = Math.min(wc, Math.floor(progress * wc) + 1);
-          sentenceComplete = wordsToShow >= wc;
-        }
-      } else {
-        if (i === 0) {
-          fitnessCharsToShow = FIRST_SLIDE_FITNESS_CHAR_COUNT;
-          firstSlideTailWordsToShow = FIRST_SLIDE_TAIL_WORD_COUNT;
-        } else {
-          wordsToShow = wc;
-        }
-        sentenceComplete = true;
-      }
-      break;
+  // The whole string is always laid out (untyped text is transparent) so words
+  // never reflow. In mono, the block cursor is the same width as any glyph, so
+  // it can sit on the next non-space character without shifting anything.
+  let cursor: ReactNode = null;
+  let rest = "";
+  if (!finished) {
+    const nextChar = chars[count];
+    if (cursorOn && !/\s/.test(nextChar)) {
+      cursor = <span style={{ color: "var(--accent)" }}>{BLOCK}</span>;
+      rest = chars.slice(count + 1).join("");
+    } else {
+      rest = chars.slice(count).join("");
     }
   }
-
-  if (!foundZone) {
-    const last = SCROLL_ZONES.length - 1;
-    currentIdx = last;
-    wordsToShow = ALL_TOKENS[last].length;
-    fitnessCharsToShow = FIRST_SLIDE_FITNESS_CHAR_COUNT;
-    firstSlideTailWordsToShow = FIRST_SLIDE_TAIL_WORD_COUNT;
-    sentenceComplete = true;
-  }
-
-  const isVeryEnd = currentIdx === SENTENCES.length - 1 && sentenceComplete;
-  /** Bar tracks content depth; full when the final slide’s line is complete (no dead zone short of 100%). */
-  const overallProgress =
-    LAST_ZONE_END > 0
-      ? Math.min(
-          1,
-          sentenceComplete && currentIdx === SENTENCES.length - 1
-            ? 1
-            : scrollY / LAST_ZONE_END
-        )
-      : 0;
-  const zone0 = SCROLL_ZONES[0];
-  const showFirstSlideScrollCue = currentIdx === 0 && scrollY < zone0.end;
-  const showFirstSlideIntroCaret =
-    currentIdx === 0 && fitnessCharsToShow === 0 && !sentenceComplete;
-
-  const tokens = ALL_TOKENS[currentIdx];
-  const fontSize = getFontSize(tokens.length);
-
-  const firstSlideTailTokens = ALL_TOKENS[0].slice(1);
-
-  /** OS-style caret: next sibling in one inline run, flush after last typed character. */
-  const caretEl = <span className="manifesto-type-caret" aria-hidden />;
-
-  const firstSlideLine =
-    currentIdx === 0 ? (
-      <span className="manifesto-typewriter-line">
-        {showFirstSlideIntroCaret ? (
-          caretEl
-        ) : fitnessCharsToShow < FIRST_SLIDE_FITNESS_CHAR_COUNT ? (
-          <>
-            <span>
-              {FIRST_SLIDE_FITNESS_CHARS.slice(0, fitnessCharsToShow).join("")}
-            </span>
-            {caretEl}
-          </>
-        ) : (
-          <>
-            <span>{FIRST_SLIDE_FITNESS_CHARS.join("")}</span>
-            {firstSlideTailWordsToShow === 0 && !sentenceComplete
-              ? caretEl
-              : null}
-            {firstSlideTailWordsToShow > 0 ? (
-              <>
-                {" "}
-                {firstSlideTailTokens
-                  .slice(0, firstSlideTailWordsToShow)
-                  .map((token, ti) => {
-                    const { word, trail } = splitWordTrailingPunct(token);
-                    const showAccent = accentWordCore(0, ti + 1, word);
-                    return (
-                      <Fragment key={`s0w-${ti}`}>
-                        {ti > 0 ? " " : null}
-                        <span
-                          style={{
-                            color: showAccent ? "var(--accent)" : "inherit",
-                          }}
-                        >
-                          {word}
-                        </span>
-                        {trail ? (
-                          <span style={{ color: "inherit" }}>{trail}</span>
-                        ) : null}
-                      </Fragment>
-                    );
-                  })}
-                {firstSlideTailWordsToShow < FIRST_SLIDE_TAIL_WORD_COUNT &&
-                !sentenceComplete
-                  ? caretEl
-                  : null}
-              </>
-            ) : null}
-          </>
-        )}
-      </span>
-    ) : null;
 
   return (
-    <>
-      {/* Scroll spacer */}
-      <div style={{ height: spacerHeight }} aria-hidden />
+    <p
+      style={{
+        margin: 0,
+        whiteSpace: "pre-wrap",
+        fontFamily: mono,
+        fontSize: "clamp(13px, 3.5vw, 15px)",
+        lineHeight: 1.65,
+        letterSpacing: "-0.01em",
+        color: "var(--foreground)",
+      }}
+    >
+      <span>{typed}</span>
+      {cursor}
+      {rest ? <span style={{ color: "transparent" }}>{rest}</span> : null}
+      {finished
+        ? cursorOn
+          ? <span style={{ color: "var(--accent)" }}>{BLOCK}</span>
+          : <span style={{ color: "transparent" }}>{" "}</span>
+        : null}
+    </p>
+  );
+}
 
-      {/* Fixed canvas */}
-      <div
-        style={{
-          position: "fixed",
-          inset: 0,
-          background: "#000",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          padding:
-            "max(64px, env(safe-area-inset-top)) clamp(20px, 6vw, 80px) max(48px, env(safe-area-inset-bottom))",
-          overflow: "hidden",
-          zIndex: 0,
-        }}
-      >
-        {/* Progress bar */}
-        <div
-          aria-hidden
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            height: 2,
-            background: "rgba(255,255,255,0.08)",
-          }}
-        >
-          <div
-            style={{
-              height: "100%",
-              width: `${overallProgress * 100}%`,
-              background: "var(--accent)",
-            }}
-          />
-        </div>
+export default function ManifestoView({
+  variant = "page",
+}: {
+  variant?: "page" | "backdrop";
+}) {
+  const isPage = variant === "page";
 
-        {/* Close button — uses close.svg icon */}
+  return (
+    <div
+      style={{
+        minHeight: "100dvh",
+        display: "flex",
+        flexDirection: "column",
+        position: "relative",
+        background: "var(--background)",
+        color: "var(--foreground)",
+      }}
+    >
+      {isPage ? (
         <Link
           href="/"
           aria-label="Close"
-          className="manifesto-close-btn"
+          className="active:scale-[0.96] transition-transform"
           style={{
             position: "absolute",
             top: "max(16px, env(safe-area-inset-top))",
-            left: "max(16px, env(safe-area-inset-left))",
+            right: 16,
+            zIndex: 20,
             width: 40,
             height: 40,
             borderRadius: "50%",
-            border: "1.5px solid rgba(255,255,255,0.22)",
-            display: "flex",
+            display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
-            color: "rgba(255,255,255,0.6)",
+            border: "2px solid var(--foreground)",
+            color: "var(--foreground)",
             textDecoration: "none",
             WebkitTapHighlightColor: "transparent",
-            flexShrink: 0,
-            transition: "border-color 0.2s ease, color 0.2s ease",
           }}
         >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden
-          >
-            <path d="M18 6L6 18M6 6l12 12" />
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+            <path
+              d="M6 6l12 12M18 6L6 18"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="square"
+            />
           </svg>
         </Link>
+      ) : null}
 
-        {/* Sentence — full final line breaks + stable column width so centering doesn’t reflow */}
+      <div
+        style={{
+          flex: 1,
+          overflowY: isPage ? "auto" : "hidden",
+          width: "100%",
+          maxWidth: 720,
+          margin: "0 auto",
+          padding: "clamp(52px, 9vh, 88px) clamp(20px, 6vw, 40px) 24px",
+        }}
+      >
         <div
           style={{
-            boxSizing: "border-box",
-            alignSelf: "stretch",
+            fontFamily: sans,
+            fontWeight: 500,
+            letterSpacing: "-0.06em",
+            lineHeight: 1.04,
+            fontSize: "clamp(30px, 8.5vw, 44px)",
+            marginBottom: "clamp(20px, 4vh, 34px)",
+          }}
+        >
+          <div>To All You</div>
+          <div style={{ color: "var(--accent)" }}>Athletes</div>
+        </div>
+
+        <Typewriter play={isPage} />
+      </div>
+
+      {isPage ? (
+        <div
+          style={{
             width: "100%",
-            maxWidth: "min(900px, 92vw)",
-            marginLeft: "auto",
-            marginRight: "auto",
-            minWidth: 0,
-            fontFamily: "var(--font-sans), system-ui, sans-serif",
-            fontSize,
-            lineHeight: 1.15,
-            fontWeight: 600,
-            color: "#fff",
-            letterSpacing: "-0.03em",
-            textAlign: "center",
+            maxWidth: 720,
+            margin: "0 auto",
+            padding:
+              "12px clamp(20px, 6vw, 40px) max(20px, env(safe-area-inset-bottom))",
+            background: "var(--background)",
           }}
         >
-          {currentIdx === 0 ? (
-            firstSlideLine
-          ) : (
-            tokens.map((token, i) => {
-              if (currentIdx === 12 && MANIFESTO_SLIDE_13_SKIP_TOKEN.has(i)) {
-                return null;
-              }
-              if (currentIdx === 12) {
-                const pair = MANIFESTO_SLIDE_13_NOWRAP_PAIRS.find(
-                  ([start]) => start === i
-                );
-                if (pair) {
-                  const [a, b] = pair;
-                  const breakTokens = LINE_BREAK_BEFORE_TOKEN.get(currentIdx);
-                  const lineBreakBefore = Boolean(breakTokens?.includes(a));
-                  return (
-                    <Fragment key={`${currentIdx}-${a}-${b}`}>
-                      {lineBreakBefore ? <br aria-hidden /> : null}
-                      <span style={{ whiteSpace: "nowrap" }}>
-                        {[a, b].map((j) => {
-                          const t = tokens[j];
-                          const { word, trail } = splitWordTrailingPunct(t);
-                          const showAccent = accentWordCore(currentIdx, j, word);
-                          return (
-                            <span
-                              key={j}
-                              style={{
-                                display: "inline-block",
-                                opacity: j < wordsToShow ? 1 : 0,
-                                marginRight:
-                                  j < tokens.length - 1 ? "0.28em" : 0,
-                                pointerEvents:
-                                  j < wordsToShow ? undefined : "none",
-                              }}
-                            >
-                              <span
-                                style={{
-                                  color: showAccent
-                                    ? "var(--accent)"
-                                    : "inherit",
-                                }}
-                              >
-                                {word}
-                              </span>
-                              {trail ? (
-                                <span style={{ color: "inherit" }}>{trail}</span>
-                              ) : null}
-                            </span>
-                          );
-                        })}
-                      </span>
-                    </Fragment>
-                  );
-                }
-              }
-              const { word, trail } = splitWordTrailingPunct(token);
-              const showAccent = accentWordCore(currentIdx, i, word);
-              const breakTokens = LINE_BREAK_BEFORE_TOKEN.get(currentIdx);
-              const lineBreakBefore = Boolean(breakTokens?.includes(i));
-              return (
-                <Fragment key={`${currentIdx}-${i}`}>
-                  {lineBreakBefore ? <br aria-hidden /> : null}
-                  <span
-                    style={{
-                      display: "inline-block",
-                      opacity: i < wordsToShow ? 1 : 0,
-                      marginRight: i < tokens.length - 1 ? "0.28em" : 0,
-                      pointerEvents: i < wordsToShow ? undefined : "none",
-                    }}
-                  >
-                    <span
-                      style={{
-                        color: showAccent ? "var(--accent)" : "inherit",
-                      }}
-                    >
-                      {word}
-                    </span>
-                    {trail ? (
-                      <span style={{ color: "inherit" }}>{trail}</span>
-                    ) : null}
-                  </span>
-                </Fragment>
-              );
-            })
-          )}
-        </div>
-
-        {/* Sentence counter */}
-        <div
-          aria-hidden
-          style={{
-            position: "absolute",
-            bottom: "max(22px, env(safe-area-inset-bottom))",
-            right: "max(20px, env(safe-area-inset-right))",
-            fontFamily: "var(--font-sans), system-ui, sans-serif",
-            fontSize: 11,
-            letterSpacing: "0.12em",
-            color: "rgba(255,255,255,0.18)",
-            fontWeight: 400,
-            textTransform: "uppercase",
-            userSelect: "none",
-          }}
-        >
-          {currentIdx + 1} / {SENTENCES.length}
-        </div>
-
-        {/* Scroll cue: after first line finishes typing, fade in + pulsing chevron */}
-        {showFirstSlideScrollCue && (
-          <div
-            aria-hidden
-            className="manifesto-scroll-hint manifesto-scroll-hint--intro"
+          <Link
+            href="/signup"
+            className="app-cta landing-nav-signup active:scale-[0.98] active:opacity-90"
             style={{
-              position: "absolute",
-              bottom: "max(28px, env(safe-area-inset-bottom))",
-              left: "50%",
-              fontFamily: "var(--font-sans), system-ui, sans-serif",
-              fontSize: 12,
-              letterSpacing: "0.2em",
-              textTransform: "uppercase",
-              color: "rgba(255,255,255,0.94)",
-              fontWeight: 500,
-              display: "flex",
-              flexDirection: "column",
+              display: "inline-flex",
               alignItems: "center",
-              gap: 7,
-              userSelect: "none",
-              textShadow: "0 1px 2px rgba(0,0,0,0.85)",
+              justifyContent: "center",
+              borderRadius: 100,
+              fontFamily: sans,
+              fontWeight: 400,
+              letterSpacing: "-0.02em",
+              textDecoration: "none",
+              WebkitTapHighlightColor: "transparent",
+              border: "1px solid color-mix(in srgb, var(--foreground) 14%, transparent)",
             }}
           >
-            <span>scroll</span>
-            <svg
-              className="manifesto-scroll-hint__chevron"
-              width="11"
-              height="15"
-              viewBox="0 0 10 14"
-              fill="none"
-              aria-hidden
-            >
-              <path
-                d="M5 1v12M1 9l4 4 4-4"
-                stroke="currentColor"
-                strokeWidth="1.75"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </div>
-        )}
-
-        {/* End CTA */}
-        {isVeryEnd && (
+            Get started
+          </Link>
           <div
-            className="manifesto-end-cta"
             style={{
-              position: "absolute",
-              bottom: "max(48px, calc(env(safe-area-inset-bottom) + 24px))",
-              left: "50%",
-              transform: "translateX(-50%)",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: 16,
+              marginTop: 14,
+              textAlign: "left",
+              fontFamily: sans,
+              fontSize: 14,
+              color: "color-mix(in srgb, var(--foreground) 55%, transparent)",
             }}
           >
+            Already have an account?{" "}
             <Link
-              href={MANIFESTO_SIGNUP_HREF}
-              className="app-cta manifesto-signup-cta active:opacity-90 active:scale-[0.98]"
-              onClick={() => {
-                try {
-                  sessionStorage.setItem(
-                    MANIFESTO_SCROLL_RESTORE_KEY,
-                    String(window.scrollY)
-                  );
-                } catch {
-                  /* ignore */
-                }
+              href="/login"
+              style={{
+                color: "var(--foreground)",
+                textDecoration: "underline",
               }}
             >
-              Join TAYA
+              Log in
             </Link>
           </div>
-        )}
-      </div>
-    </>
+        </div>
+      ) : null}
+    </div>
   );
 }

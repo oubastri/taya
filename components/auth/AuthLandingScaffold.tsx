@@ -91,7 +91,7 @@ export function AuthLandingScaffold({ children }: AuthLandingScaffoldProps) {
       <div className="auth-landing-scaffold">
         <div className="auth-landing-scaffold__bg" aria-hidden>
           {searchParams.get("bg") === "manifesto" ? (
-            <ManifestoView />
+            <ManifestoView variant="backdrop" />
           ) : (
             <HomeLanding serverLandingProfiles={null} />
           )}
