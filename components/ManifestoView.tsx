@@ -37,7 +37,7 @@ function delayAt(index: number, chars: string[]): number {
   return 45;
 }
 
-function Typewriter({ play }: { play: boolean }) {
+export function Typewriter({ play }: { play: boolean }) {
   const chars = Array.from(MANIFESTO);
   const [count, setCount] = useState(play ? 0 : chars.length);
   const [cursorOn, setCursorOn] = useState(true);

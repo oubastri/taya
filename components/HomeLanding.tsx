@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { setSiteCustomCursorSuppressed } from "@/components/CustomCursor";
 import AthletesGlobeView from "@/components/athletes/AthletesGlobeView";
 import { LandingFigmaHero } from "@/components/landing/LandingFigmaHero";
+import { Typewriter } from "@/components/ManifestoView";
 import { TayaWordmark } from "@/components/TayaWordmark";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -30,6 +31,8 @@ export default function HomeLanding({
   const [clientProfiles, setClientProfiles] = useState<
     LandingProfilePublic[] | null
   >(null);
+  /** The "?" toggles the manifesto in over the globe; everything else stays. */
+  const [showManifesto, setShowManifesto] = useState(false);
 
   useEffect(() => {
     if (serverLandingProfiles !== null) return;
@@ -125,6 +128,30 @@ export default function HomeLanding({
         />
       </div>
 
+      {showManifesto ? (
+        // Manifesto takes the globe's place: an opaque layer between the
+        // globe (z 0) and the page chrome (header z 20, hero z 10), so the
+        // wordmark, hero strip, and activities stay exactly where they are.
+        // Remounts on every toggle-on, so the typewriter starts fresh.
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1,
+            background: "var(--background)",
+            display: "flex",
+            flexDirection: "column",
+            overflowY: "auto",
+            padding:
+              "min(17vh, 185px) clamp(20px, 6vw, 40px) min(20vh, 220px)",
+          }}
+        >
+          <div style={{ margin: "auto", width: "100%", maxWidth: 720 }}>
+            <Typewriter play />
+          </div>
+        </div>
+      ) : null}
+
       <header className="landing-header">
         <div className="landing-header__wordmark">
           <TayaWordmark variant="landing" />
@@ -133,9 +160,11 @@ export default function HomeLanding({
         <div className="landing-header__actions-bar">
           <nav className="landing-header__auth" aria-label="Account">
             <div className="landing-nav-auth-pair">
-              <Link
-                href="/manifesto"
+              <button
+                type="button"
                 aria-label="Our manifesto"
+                aria-pressed={showManifesto}
+                onClick={() => setShowManifesto((v) => !v)}
                 className="landing-nav-manifesto-btn landing-nav-auth-cta active:opacity-85 active:scale-[0.98]"
                 style={{
                   fontFamily: sans,
@@ -147,7 +176,11 @@ export default function HomeLanding({
                   WebkitTapHighlightColor: "transparent",
                   border: "2px solid var(--foreground)",
                   flexShrink: 0,
-                  color: "var(--foreground)",
+                  padding: 0,
+                  cursor: "pointer",
+                  // Filled while the manifesto is up, so the toggle reads as "on".
+                  background: showManifesto ? "var(--foreground)" : "transparent",
+                  color: showManifesto ? "var(--background)" : "var(--foreground)",
                 }}
               >
                 <svg
@@ -167,7 +200,7 @@ export default function HomeLanding({
                   />
                   <circle cx="12" cy="20.5" r="1.5" fill="currentColor" />
                 </svg>
-              </Link>
+              </button>
 
               <Link
                 href="/login"
