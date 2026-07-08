@@ -21,8 +21,21 @@ import {
 import { useLockBodyScroll } from "@/hooks/useLockBodyScroll";
 import { useSheetScrollPullDown } from "@/hooks/useSheetScrollPullDown";
 import type { FriendData } from "@/types/user";
+import {
+  SPHERE,
+  SphereMotion,
+  buildPeriodGrid,
+  cellHash,
+  clamp,
+  easeOutBack,
+  lens,
+  userAtCell,
+  warp,
+  type MotionSnapshot,
+  type PeriodGrid,
+} from "@/components/athletes/sphereField";
 
-// ─── constants ───────────────────────────────────────────────────────────────
+// ─── chrome constants ─────────────────────────────────────────────────────────
 const NAV_HEIGHT = 54;
 const FONT = '"Lexend Deca", -apple-system, sans-serif';
 
@@ -41,64 +54,16 @@ const APP_TOP_BAR_GLASS_BTN: CSSProperties = {
   flexShrink: 0,
 };
 
-const AVATAR_SIZE = 110;   // rounded-square side length
-const AVATAR_RADIUS = 32;  // corner radius
-const WORLD_W = 2800;      // globe world-space period width  — wide enough to give desktop room to zoom out
-const WORLD_H = 3600;      // globe world-space period height — tall enough to exceed any phone screen
-// Reference cluster size in world-units at the landing zoom.
-// Using a square reference (geometric mean of portrait viewport dims) so
-// avatars spread in a circular/2-D pattern rather than stacking vertically.
-const LANDING_Z      = 68 / AVATAR_SIZE;                      // landing zoom (must match TARGET_Z below)
-const REF_VP_W       = 390  / LANDING_Z;                      // ≈ 549 world units
-const REF_VP_H       = 844  / LANDING_Z;                      // ≈ 1365 world units
-const REF_VP_SIZE    = Math.sqrt(REF_VP_W * REF_VP_H);        // geometric mean ≈ 866 (square reference)
-const TARGET_IN_VIEW = 4;                                      // desired avatars visible on first load
-const DOT_SPACING = 42;    // distance between dot-grid points in world units
-const DOT_RADIUS  = 1.8;   // dot radius in CSS px at z=1, before depth scaling
-
-// ZOOM_MIN is computed dynamically from the viewport so the world always fills
-// the screen (no seam ever visible).  See zoomMinRef below.
-const ZOOM_MAX = 4;
-
-/** Landing: idle drift — pauses while dragging / momentum / wheel ease */
-const LAND_SPIN_PX_PER_SEC = 12;
-const LAND_SPIN_RAMP_MS = 280;
-const LAND_SPIN_AMP_ATTACK = 14;
-const LAND_SPIN_AMP_RELEASE = 22;
-
-/**
- * Persists landing pan + idle drift across HomeLanding unmount/remount
- * (e.g. navigating to /login or /signup and closing back to /).
- */
-type LandingGlobeDriftSnapshot = {
-  px: number;
-  py: number;
-  z: number;
-  landSpinAmp: number;
-  landSpinAngle: number;
-  vx: number;
-  vy: number;
-  landSpinRampStartAt: number | null;
-};
-let landingGlobeDriftSnapshot: LandingGlobeDriftSnapshot | null = null;
-
-// ── Bowl warp ── screen-space distortion that makes the grid look like a dish
-const BOWL_K     = 0.55;  // how far edges are pushed outward (fraction × r²)
-const BOWL_SCALE = 0.35;  // edge avatars are (1 + BOWL_SCALE × r²) times larger
-const BOWL_TILT  = 1.05;  // max radial-compression angle in radians (~60° at the lip)
-
-const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-
-// ─── types (used by overlap layout) ───────────────────────────────────────────
+// ─── types ────────────────────────────────────────────────────────────────────
 export type AthletesGlobeUser = {
   id: string;
   name: string;
   handle: string;
   avatarUrl?: string;
   isYou: boolean;
-  /** Full line, e.g. "@paulito went for a run" — @handle is muted, rest in accent when possible */
+  /** Full line, e.g. "@paulito went for a run" — reserved for future label modes */
   activityLine?: string;
-  /** Structured moves — renders as a 3-column row (clearer than a single sentence) */
+  /** Structured moves — reserved for future label modes */
   movesStats?: { total: number; month: number; week: number };
   /** Fallback if movesStats omitted */
   statsLine?: string;
@@ -112,87 +77,26 @@ export type AthletesGlobeViewProps = {
   hydrated: boolean;
   friendsForSearch?: FriendData[];
   onNavigateToProfile: (userId: string) => void;
-  /** Default true. When false, only avatar tiles are drawn (no names, handles, or stats). */
+  /** Default true. When false, only avatar tiles are drawn (no names or handles). */
   showAvatarLabels?: boolean;
   /**
-   * Landing: second canvas draws only dots above `chromeOverlay`, while avatars (+ world fill)
-   * stay below it — scrims hide photos but grid dots stay visible on the fade.
+   * Landing: second canvas draws only dots above `chromeOverlay`, while avatars
+   * (+ vignette) stay below it — scrims hide photos but membrane dots stay
+   * visible on the fade.
    */
   dotsOverlayAboveChrome?: boolean;
   /** Rendered between avatar and dot canvases (fixed, pointer-events: none). */
   chromeOverlay?: ReactNode;
   /** App mode: open the search sheet once on mount (e.g. dev menu `?sheet=search`). */
   openSearchOnMount?: boolean;
+  /**
+   * True while something opaque covers the globe (e.g. the landing manifesto):
+   * the field stops ticking and drawing until uncovered.
+   */
+  paused?: boolean;
 };
 
-// Push overlapping avatar positions apart so neither the image nor the text
-// label below clips a neighbour.  Uses an axis-aligned bounding box (AABB).
-const SLOT_W_BASE = AVATAR_SIZE + 16;
-const SLOT_H_AVATAR_ONLY = AVATAR_SIZE + 14; // image tile only (no caption)
-const SLOT_H_SHORT = AVATAR_SIZE + 56;   // name + @handle
-const SLOT_H_LONG = AVATAR_SIZE + 128;    // + activity + moves pill (landing)
-
-function slotDimensionsForUsers(
-  users: AthletesGlobeUser[],
-  showAvatarLabels: boolean,
-): { w: number; h: number } {
-  if (!showAvatarLabels) {
-    return { w: SLOT_W_BASE, h: SLOT_H_AVATAR_ONLY };
-  }
-  const hasExtra = users.some(
-    (u) => u.activityLine || u.statsLine || u.movesStats,
-  );
-  return { w: SLOT_W_BASE, h: hasExtra ? SLOT_H_LONG : SLOT_H_SHORT };
-}
-
-function resolveOverlaps(
-  positions: { x: number; y: number }[],
-  bx0: number, by0: number, bx1: number, by1: number,
-  slotW: number,
-  slotH: number,
-): { x: number; y: number }[] {
-  if (positions.length < 2) return positions;
-  const res = positions.map((p) => ({ x: p.x, y: p.y }));
-  for (let pass = 0; pass < 120; pass++) {
-    let moved = false;
-    for (let i = 0; i < res.length; i++) {
-      for (let j = i + 1; j < res.length; j++) {
-        const dx = res[j].x - res[i].x;
-        const dy = res[j].y - res[i].y;
-        const overlapX = slotW - Math.abs(dx);
-        const overlapY = slotH - Math.abs(dy);
-        if (overlapX <= 0 || overlapY <= 0) continue;
-        moved = true;
-        if (overlapX < overlapY) {
-          const push = overlapX / 2 + 0.5;
-          const sign = dx >= 0 ? 1 : -1;
-          res[i].x = clamp(res[i].x - sign * push, bx0, bx1 - AVATAR_SIZE);
-          res[j].x = clamp(res[j].x + sign * push, bx0, bx1 - AVATAR_SIZE);
-        } else {
-          const push = overlapY / 2 + 0.5;
-          const sign = dy >= 0 ? 1 : -1;
-          res[i].y = clamp(res[i].y - sign * push, by0, by1 - AVATAR_SIZE);
-          res[j].y = clamp(res[j].y + sign * push, by0, by1 - AVATAR_SIZE);
-        }
-      }
-    }
-    if (!moved) break;
-  }
-  return res;
-}
-
-// ─── helpers ──────────────────────────────────────────────────────────────────
-
-// Stable seeded hash for a user ID (used to derive a deterministic position).
-function seedHash(userId: string): number {
-  let h = 0xdeadbeef;
-  for (let i = 0; i < userId.length; i++) {
-    h = Math.imul(h ^ userId.charCodeAt(i), 0x9e3779b9);
-    h = (h ^ (h >>> 16)) >>> 0;
-  }
-  return h;
-}
-
+// ─── small helpers ────────────────────────────────────────────────────────────
 // Draw a rounded rectangle path using arcTo (universally supported)
 function roundedRectPath(
   ctx: CanvasRenderingContext2D,
@@ -222,250 +126,43 @@ function getInitials(name: string): string {
 }
 
 const ACCENT_HEX = "#01EF54";
+const ACCENT_RGB = { r: 0x01, g: 0xef, b: 0x54 };
 
-/** @returns next baseline y below this line */
-function drawLandingActivityLine(
-  ctx: CanvasRenderingContext2D,
-  line: string,
-  y: number,
-  ts: number,
-  maxW: number,
-  isDark: boolean,
-): number {
-  ctx.textBaseline = "alphabetic";
-  const muted = isDark ? "rgba(255,255,255,0.62)" : "rgba(0,0,0,0.5)";
-  const m = line.match(/^(@\S+)\s+(.+)$/);
-  ctx.font = `600 ${10 * ts}px ${FONT}`;
-  if (!m) {
-    ctx.fillStyle = muted;
-    ctx.textAlign = "center";
-    ctx.fillText(line, 0, y, maxW);
-    return y + 12 * ts;
-  }
-  const [, handleTok, action] = m;
-  const spaceW = ctx.measureText(" ").width;
-  const w0 = ctx.measureText(handleTok).width;
-  const w1 = ctx.measureText(action).width;
-  const tw = w0 + spaceW + w1;
-  const useW = Math.min(tw, maxW);
-  ctx.textAlign = "left";
-  let x = -useW / 2;
-  const x0 = x;
-  ctx.fillStyle = muted;
-  ctx.fillText(handleTok, x, y);
-  x += w0;
-  ctx.fillText(" ", x, y);
-  x += spaceW;
-  ctx.fillStyle = ACCENT_HEX;
-  ctx.fillText(action, x, y, Math.max(24, maxW - (x - x0)));
-  ctx.textAlign = "center";
-  return y + 12 * ts;
-}
+type RGB = { r: number; g: number; b: number };
 
-/** @returns y below the stats block */
-function drawLandingMovesStats(
-  ctx: CanvasRenderingContext2D,
-  stats: { total: number; month: number; week: number },
-  y: number,
-  ts: number,
-  spread: number,
-  isDark: boolean,
-): number {
-  const cols: { v: number; l: string }[] = [
-    { v: stats.total, l: "total moves" },
-    { v: stats.month, l: "this month" },
-    { v: stats.week, l: "this week" },
-  ];
-  const half = spread / 2;
-  const xs = [-half, 0, half] as const;
-  const numCol = isDark ? "#F0F0F0" : "#0A0A0A";
-  const labCol = isDark ? "rgba(255,255,255,0.44)" : "rgba(0,0,0,0.4)";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "alphabetic";
-  cols.forEach((c, i) => {
-    ctx.fillStyle = numCol;
-    ctx.font = `700 ${11 * ts}px ${FONT}`;
-    ctx.fillText(c.v.toLocaleString("en-US"), xs[i]!, y);
-    ctx.fillStyle = labCol;
-    ctx.font = `600 ${6.5 * ts}px ${FONT}`;
-    ctx.fillText(c.l, xs[i]!, y + 10.5 * ts);
-  });
-  return y + 22 * ts;
-}
-
-// Draw a single user in screen space.
-// cx/cy = avatar center in CSS pixels (already bowl-warped).
-// S     = avatar side length in CSS pixels (already depth-scaled).
-// The tilt transform (radial compression) is applied once and all drawing
-// (image, border, text) happens inside that compressed coordinate space.
-function drawUserBowl(
-  ctx: CanvasRenderingContext2D,
-  cx: number,
-  cy: number,
-  S: number,
-  user: UserEntry,
-  img: HTMLImageElement | undefined,
-  zoom: number,
-  radialCompress: number,
-  radialAngle: number,
-  isDark: boolean,
-  showAvatarLabels: boolean,
-) {
-  const R = (AVATAR_RADIUS / AVATAR_SIZE) * S;
-
-  ctx.save();
-
-  // Move origin to avatar center, apply radial tilt, then draw around (0,0)
-  ctx.translate(cx, cy);
-  if (radialCompress < 0.998) {
-    ctx.rotate(radialAngle);
-    ctx.scale(radialCompress, 1);
-    ctx.rotate(-radialAngle);
-  }
-
-  const half = S / 2;
-
-  // ── clip + draw image (or initials placeholder) ───────────────────────
-  ctx.save();
-  roundedRectPath(ctx, -half, -half, S, S, R);
-  ctx.clip();
-  if (img && img.complete && img.naturalWidth > 0) {
-    ctx.drawImage(img, -half, -half, S, S);
-  } else {
-    ctx.fillStyle = isDark ? "#2a2a2a" : "#e8e8ef";
-    ctx.fillRect(-half, -half, S, S);
-    ctx.fillStyle = isDark ? "#555" : "#999";
-    ctx.font = `700 ${Math.round(S * 0.28)}px ${FONT}`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(getInitials(user.name), 0, 0);
-  }
-  ctx.restore();
-
-  // ── text labels ────────────────────────────────────────────────────────
-  if (showAvatarLabels && zoom >= 0.3) {
-    const alpha = Math.min(1, (zoom - 0.3) / 0.15);
-    const ts = S / AVATAR_SIZE;
-    const nameY = half + 18 * ts;
-    ctx.globalAlpha = alpha;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "alphabetic";
-    ctx.fillStyle = isDark ? "#E0E0E0" : "#111";
-    ctx.font = `700 ${13 * ts}px ${FONT}`;
-    ctx.fillText(user.name, 0, nameY, S * 1.2);
-    ctx.fillStyle = isDark ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.42)";
-    ctx.font = `500 ${11 * ts}px ${FONT}`;
-    let lineY = nameY + 17 * ts;
-    ctx.fillText(`@${user.handle}`, 0, lineY, S * 1.2);
-    lineY += 15 * ts;
-
-    const hasLandingBlock =
-      user.activityLine || user.movesStats || user.statsLine;
-    if (hasLandingBlock) {
-      const maxW = Math.min(S * 1.48, 210);
-      const padX = 9 * ts;
-      const padY = 8 * ts;
-      let innerH = 0;
-      if (user.activityLine) innerH += 12 * ts;
-      if (user.movesStats) {
-        innerH += (user.activityLine ? 6 * ts : 0) + 22 * ts;
-      } else if (user.statsLine) {
-        innerH += (user.activityLine ? 5 * ts : 0) + 11 * ts;
-      }
-      const pillW = maxW + padX * 2;
-      const pillH = innerH + padY * 2;
-      const pillTop = lineY;
-
-      ctx.save();
-      roundedRectPath(ctx, -pillW / 2, pillTop, pillW, pillH, 9 * ts);
-      ctx.fillStyle = isDark ? "rgba(18,18,18,0.9)" : "rgba(255,255,255,0.94)";
-      ctx.fill();
-      ctx.strokeStyle = isDark ? "rgba(255,255,255,0.11)" : "rgba(0,0,0,0.07)";
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.restore();
-
-      let ty = pillTop + padY + 10 * ts;
-      if (user.activityLine) {
-        ty = drawLandingActivityLine(ctx, user.activityLine, ty, ts, maxW - 4, isDark);
-        ty += user.movesStats || user.statsLine ? 5 * ts : 0;
-      }
-      if (user.movesStats) {
-        drawLandingMovesStats(
-          ctx,
-          user.movesStats,
-          ty,
-          ts,
-          Math.min(S * 0.95, 172),
-          isDark,
-        );
-      } else if (user.statsLine) {
-        ctx.fillStyle = isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.42)";
-        ctx.font = `500 ${8.5 * ts}px ${FONT}`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "alphabetic";
-        ctx.fillText(user.statsLine, 0, ty, maxW);
-      }
+/** Parse a CSS color custom-property value (#rgb / #rrggbb / rgb()) to RGB. */
+function parseColor(value: string, fallback: RGB): RGB {
+  const v = value.trim();
+  if (v.startsWith("#")) {
+    const hex = v.slice(1);
+    if (hex.length === 3) {
+      return {
+        r: parseInt(hex[0] + hex[0], 16),
+        g: parseInt(hex[1] + hex[1], 16),
+        b: parseInt(hex[2] + hex[2], 16),
+      };
     }
-
-    ctx.globalAlpha = 1;
-  }
-
-  ctx.restore();
-}
-
-/** Bowl-warp hit test (same projection as drawAvatarPass). */
-function findAvatarIndexAtScreen(
-  screenX: number,
-  screenY: number,
-  px: number,
-  py: number,
-  z: number,
-  tw: number,
-  th: number,
-  bpos: { x: number; y: number }[],
-  userCount: number,
-): number | null {
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  const scx = vw / 2;
-  const scy = vh / 2;
-  const maxR = Math.hypot(vw, vh) * 0.5;
-  const periodX = tw * z;
-  const periodY = th * z;
-  const normPx = -(((-px % periodX) + periodX) % periodX);
-  const normPy = -(((-py % periodY) + periodY) % periodY);
-
-  for (let tty = 0; tty <= 1; tty++) {
-    for (let ttx = 0; ttx <= 1; ttx++) {
-      for (let i = 0; i < userCount; i++) {
-        const wx = bpos[i]!.x + AVATAR_SIZE / 2 + ttx * tw;
-        const wy = bpos[i]!.y + AVATAR_SIZE / 2 + tty * th;
-        const sx0 = normPx + wx * z;
-        const sy0 = normPy + wy * z;
-        const dvx = sx0 - scx;
-        const dvy = sy0 - scy;
-        const dist = Math.hypot(dvx, dvy);
-        const r = dist / maxR;
-        const warp = 1 + BOWL_K * r * r;
-        const sx = scx + dvx * warp;
-        const sy = scy + dvy * warp;
-        const depthScale = 1 + BOWL_SCALE * r * r;
-        const S = AVATAR_SIZE * z * depthScale;
-        if (
-          screenX >= sx - S / 2 &&
-          screenX <= sx + S / 2 &&
-          screenY >= sy - S / 2 &&
-          screenY <= sy + S / 2
-        ) {
-          return i;
-        }
-      }
+    if (hex.length >= 6) {
+      return {
+        r: parseInt(hex.slice(0, 2), 16),
+        g: parseInt(hex.slice(2, 4), 16),
+        b: parseInt(hex.slice(4, 6), 16),
+      };
     }
   }
-  return null;
+  const m = v.match(/rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/);
+  if (m) return { r: +m[1], g: +m[2], b: +m[3] };
+  return fallback;
 }
 
+const rgba = (c: RGB, a: number) => `rgba(${c.r},${c.g},${c.b},${a})`;
+
+/**
+ * Persists landing pan/zoom + entrance state across HomeLanding
+ * unmount/remount (navigating to /login or /signup and back).
+ */
+type LandingSphereSnapshot = MotionSnapshot & { settled: boolean };
+let landingSphereSnapshot: LandingSphereSnapshot | null = null;
 // ─── SearchSheet ──────────────────────────────────────────────────────────────
 function SearchSheet({
   friends,
@@ -861,6 +558,31 @@ function SearchSheet({
 }
 
 // ─── AthletesGlobeView ────────────────────────────────────────────────────────
+
+// ─── the sphere ───────────────────────────────────────────────────────────────
+/**
+ * Canvas-rendered port of the iOS athlete sphere (AthleteGridView.swift):
+ * an infinite pannable field of avatars over a dotted membrane, warped so the
+ * plane reads as the face of a globe. Physics, projection, and constants live
+ * in sphereField.ts; this component owns canvases, pointers, and drawing.
+ *
+ * Layers (inside a fixed inset-0 wrapper that paints --background):
+ *   app:     dots canvas z0 → avatar canvas z1 (vignette + avatars)
+ *   landing: avatar canvas z1 → chromeOverlay z2 (scrims) → dots canvas z3
+ * The avatar canvas is transparent and carries the micro-tilt CSS transform.
+ */
+
+type PlacedAvatar = {
+  userIdx: number;
+  x: number;        // screen center
+  y: number;
+  size: number;     // screen px
+  alpha: number;
+  worldCX: number;  // world-space center (for the magnetic settle)
+  worldCY: number;
+  isYou: boolean;
+};
+
 export default function AthletesGlobeView({
   mode,
   users: allUsers,
@@ -871,6 +593,7 @@ export default function AthletesGlobeView({
   dotsOverlayAboveChrome = false,
   chromeOverlay = null,
   openSearchOnMount = false,
+  paused = false,
 }: AthletesGlobeViewProps) {
   const [searchOpen, setSearchOpen] = useState(false);
 
@@ -879,39 +602,6 @@ export default function AthletesGlobeView({
     setSearchOpen(true);
   }, [mode, openSearchOnMount]);
 
-  const modeRef = useRef(mode);
-  const hydratedRef = useRef(hydrated);
-  modeRef.current = mode;
-  hydratedRef.current = hydrated;
-
-  const landSpinRampStartRef = useRef<number | null>(null);
-  const landSpinPrevTRef = useRef(0);
-  const landSpinAmpRef = useRef(0);
-  const landSpinAngleRef = useRef(0);
-  const landSpinVelTargetRef = useRef({ vx: LAND_SPIN_PX_PER_SEC, vy: 0 });
-  const reduceMotionRef = useRef(false);
-
-  const pickLandingDriftDirection = useCallback(() => {
-    landSpinAngleRef.current += Math.PI * (0.38 + Math.random() * 0.82);
-    const sp = LAND_SPIN_PX_PER_SEC;
-    const a = landSpinAngleRef.current;
-    const vert = 0.36 + Math.random() * 0.38;
-    landSpinVelTargetRef.current = {
-      vx: Math.cos(a) * sp,
-      vy: Math.sin(a) * sp * vert,
-    };
-  }, []);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    reduceMotionRef.current = mq.matches;
-    const onChange = () => {
-      reduceMotionRef.current = mq.matches;
-    };
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, []);
-
   // Hide bottom nav while search sheet is open (in-app athletes tab only)
   useEffect(() => {
     if (mode !== "app") return;
@@ -919,65 +609,57 @@ export default function AthletesGlobeView({
     return () => document.body.classList.remove("search-open");
   }, [mode, searchOpen]);
 
-  // ── Avatar positions: dynamic cluster scaled to user count ───────────────
-  const basePositions = useMemo(() => {
-    const n = allUsers.length;
-    if (n === 0) return [];
-
-    const { w: slotW, h: slotH } = slotDimensionsForUsers(allUsers, showAvatarLabels);
-
-    // Cluster grows as √(n / TARGET_IN_VIEW) × a square reference size so
-    // avatars spread in all directions equally (circular scatter, not vertical stack).
-    const k    = Math.sqrt(n / TARGET_IN_VIEW);
-    const clW  = clamp(k * REF_VP_SIZE, REF_VP_SIZE * 0.85, WORLD_W * 0.92);
-    const clH  = clamp(k * REF_VP_SIZE, REF_VP_SIZE * 0.85, WORLD_H * 0.92);
-    const clX  = (WORLD_W - clW) / 2;
-    const clY  = (WORLD_H - clH) / 2;
-
-    const raw = allUsers.map((u) => {
-      let h = seedHash(u.id);
-      const x = clX + (h % Math.max(1, Math.floor(clW - AVATAR_SIZE)));
-      h = Math.imul(h ^ 0x5f3759df, 2246822519) >>> 0;
-      const y = clY + (h % Math.max(1, Math.floor(clH - AVATAR_SIZE)));
-      return { x, y };
-    });
-
-    return resolveOverlaps(raw, clX, clY, clX + clW, clY + clH, slotW, slotH);
-  }, [allUsers, showAvatarLabels]);
-
-  // ── Core refs ────────────────────────────────────────────────────────────
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  // ── core refs ─────────────────────────────────────────────────────────────
+  const avatarCanvasRef = useRef<HTMLCanvasElement>(null);
   const dotsCanvasRef = useRef<HTMLCanvasElement>(null);
-  const viewRef = useRef({ px: 0, py: 90, z: 1 });
-  // Minimum zoom is the level at which the world exactly fills the screen —
-  // guarantees the tiling seam is never visible.
-  const zoomMinRef = useRef(0.5);
+  const motionRef = useRef<SphereMotion | null>(null);
+  if (!motionRef.current) motionRef.current = new SphereMotion();
+
   const imagesRef = useRef(new Map<string, HTMLImageElement>());
-  const rafDrawRef = useRef<number | null>(null);
-  const ptrs = useRef(new Map<number, { x: number; y: number }>());
-  const rafPanRef = useRef<number | null>(null);
-  const rafZoomRef = useRef<number | null>(null);
-  const rafWheelRef = useRef<number | null>(null);
+  const gridRef = useRef<PeriodGrid | null>(null);
+  const placedRef = useRef<PlacedAvatar[]>([]);
+  const sizeRef = useRef({ w: 0, h: 0 });
+  const colorsRef = useRef({ bg: { r: 243, g: 243, b: 243 }, fg: { r: 10, g: 10, b: 10 } });
+  const entranceStartRef = useRef<number | null>(null);
+  const pointerPosRef = useRef<{ x: number; y: number } | null>(null);
+  const didInitViewRef = useRef(false);
 
-  // Live grid data — always up to date for the draw loop and pointer handlers
-  const gridRef = useRef({
-    TILE_W: WORLD_W,
-    TILE_H: WORLD_H,
-    basePositions,
-    allUsers,
-    showAvatarLabels,
-  });
-  useEffect(() => {
-    gridRef.current = {
-      TILE_W: WORLD_W,
-      TILE_H: WORLD_H,
-      basePositions,
-      allUsers,
-      showAvatarLabels,
+  // Latest props for the rAF loop without re-subscribing.
+  const stateRef = useRef({ mode, allUsers, showAvatarLabels, paused, hydrated, onNavigateToProfile });
+  stateRef.current = { mode, allUsers, showAvatarLabels, paused, hydrated, onNavigateToProfile };
+
+  // Cell geometry: label mode gets taller cells so names never collide.
+  const tileDims = useCallback(() => {
+    const labels = stateRef.current.showAvatarLabels;
+    return labels
+      ? { tw: 170, th: 215, labelPad: 45 }
+      : { tw: SPHERE.tile, th: SPHERE.tile, labelPad: 0 };
+  }, []);
+
+  /** Deterministic per-cell jitter, adapted to the active cell size. */
+  const jitterFor = useCallback((col: number, row: number) => {
+    const { tw, th, labelPad } = tileDims();
+    const h = cellHash(col, row);
+    const rx = Math.max(8, tw - SPHERE.avatarSize - 20);
+    const ry = Math.max(8, th - SPHERE.avatarSize - 20 - labelPad);
+    return {
+      jx: 10 + ((h >>> 8) & 0xffff) / 65535 * rx,
+      jy: 10 + ((h >>> 16) & 0xffff) / 65535 * ry,
     };
-  });
+  }, [tileDims]);
 
-  // ── Image preloading — only unique users need a load ─────────────────────
+  // ── reduced motion ────────────────────────────────────────────────────────
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const apply = () => {
+      motionRef.current!.reducedMotion = mq.matches;
+    };
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  // ── image preloading — crossOrigin required for canvas drawImage ─────────
   useEffect(() => {
     allUsers.forEach((u) => {
       if (!u.avatarUrl || imagesRef.current.has(u.id)) return;
@@ -988,696 +670,578 @@ export default function AthletesGlobeView({
     });
   }, [allUsers]);
 
-  // ── Initial view: world fills screen, zoom in 30 % so edges bleed ───────
+  // ── period grid + entrance ────────────────────────────────────────────────
   useEffect(() => {
     if (!hydrated) return;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    // zoomMin = the level at which the world exactly covers the screen (no seam visible).
-    const zoomMin = Math.max(vw / WORLD_W, vh / WORLD_H);
-    zoomMinRef.current = zoomMin;
-    // Fixed target avatar size on landing (~84 px) consistent across devices.
-    const TARGET_Z = 68 / AVATAR_SIZE; // z ≈ 0.62
-    const zDefault = clamp(TARGET_Z, zoomMin, ZOOM_MAX);
-
-    // Center on the centroid of all avatar positions so avatars are always
-    // in view on landing rather than the geometric center of an empty world.
-    const bpos = gridRef.current.basePositions;
-    let worldCx = WORLD_W / 2;
-    let worldCy = WORLD_H / 2;
-    if (bpos.length > 0) {
-      worldCx = bpos.reduce((s, p) => s + p.x + AVATAR_SIZE / 2, 0) / bpos.length;
-      worldCy = bpos.reduce((s, p) => s + p.y + AVATAR_SIZE / 2, 0) / bpos.length;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    gridRef.current = buildPeriodGrid(allUsers.length, w, h);
+    if (allUsers.length > 0 && entranceStartRef.current === null) {
+      entranceStartRef.current = performance.now() / 1000 + 0.1;
     }
+  }, [allUsers, hydrated, showAvatarLabels]);
 
-    if (mode === "landing" && landingGlobeDriftSnapshot) {
-      const snap = landingGlobeDriftSnapshot;
-      const z = clamp(snap.z, zoomMin, ZOOM_MAX);
-      viewRef.current = { px: snap.px, py: snap.py, z };
-      landSpinAmpRef.current = snap.landSpinAmp;
-      landSpinAngleRef.current = snap.landSpinAngle;
-      landSpinVelTargetRef.current = { vx: snap.vx, vy: snap.vy };
-      landSpinRampStartRef.current = snap.landSpinRampStartAt;
-      landSpinPrevTRef.current = performance.now();
+  // ── initial view (once) ───────────────────────────────────────────────────
+  useEffect(() => {
+    if (!hydrated || didInitViewRef.current) return;
+    didInitViewRef.current = true;
+    const motion = motionRef.current!;
+
+    if (mode === "landing" && landingSphereSnapshot) {
+      motion.restore(landingSphereSnapshot);
+      // Returning visitor within the session: field arrives already settled.
+      entranceStartRef.current = performance.now() / 1000 - 10;
+      return;
+    }
+    // Center the origin cell's avatar (slot 0 = self in app mode).
+    const j = jitterFor(0, 0);
+    motion.panX = -(j.jx + SPHERE.avatarSize / 2);
+    motion.panY = -(j.jy + SPHERE.avatarSize / 2);
+    const z = mode === "landing" ? 1.1 : 1.0;
+    motion.zoom = clamp(z, SPHERE.minZoom, SPHERE.maxZoom);
+    motion.zoomTarget = motion.zoom;
+  }, [hydrated, mode, jitterFor]);
+
+  // Save the landing view across unmount/remount.
+  useEffect(() => {
+    if (mode !== "landing") return;
+    const motion = motionRef.current!;
+    return () => {
+      landingSphereSnapshot = { ...motion.snapshot(), settled: true };
+    };
+  }, [mode]);
+
+  // ── pointers ──────────────────────────────────────────────────────────────
+  const ptrs = useRef(new Map<number, { x: number; y: number }>());
+  const pinchRef = useRef<{ dist: number; midX: number; midY: number } | null>(null);
+  const downRef = useRef({ x: 0, y: 0, moved: 0 });
+  const nowSec = () => performance.now() / 1000;
+
+  const hitTest = useCallback((sx: number, sy: number): PlacedAvatar | null => {
+    let best: PlacedAvatar | null = null;
+    let bestD = Infinity;
+    for (const p of placedRef.current) {
+      const d = Math.hypot(sx - p.x, sy - p.y);
+      if (d <= p.size / 2 + SPHERE.touchPadding && d < bestD) {
+        best = p;
+        bestD = d;
+      }
+    }
+    return best;
+  }, []);
+
+  const onPointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    const el = e.currentTarget;
+    el.setPointerCapture(e.pointerId);
+    ptrs.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (ptrs.current.size === 1) {
+      motionRef.current!.beginDrag(nowSec());
+      downRef.current = { x: e.clientX, y: e.clientY, moved: 0 };
+      pointerPosRef.current = { x: e.clientX, y: e.clientY };
+    } else if (ptrs.current.size === 2) {
+      const [a, b] = Array.from(ptrs.current.values());
+      motionRef.current!.beginPinch();
+      pinchRef.current = {
+        dist: Math.hypot(a.x - b.x, a.y - b.y),
+        midX: (a.x + b.x) / 2,
+        midY: (a.y + b.y) / 2,
+      };
+    }
+  }, []);
+
+  const onPointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    const motion = motionRef.current!;
+    if (!ptrs.current.has(e.pointerId)) {
+      // Hover (app mode): pointer cursor over a tappable avatar.
+      if (stateRef.current.mode === "app") {
+        const hit = hitTest(e.clientX, e.clientY);
+        e.currentTarget.style.cursor = hit && !hit.isYou ? "pointer" : "";
+      }
+      return;
+    }
+    const prev = ptrs.current.get(e.pointerId)!;
+    ptrs.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (ptrs.current.size === 1) {
+      const dx = e.clientX - prev.x;
+      const dy = e.clientY - prev.y;
+      motion.dragBy(dx, dy, nowSec());
+      downRef.current.moved += Math.hypot(dx, dy);
+      pointerPosRef.current = { x: e.clientX, y: e.clientY };
+    } else if (ptrs.current.size === 2 && pinchRef.current) {
+      const [a, b] = Array.from(ptrs.current.values());
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      const midX = (a.x + b.x) / 2;
+      const midY = (a.y + b.y) / 2;
+      const { w, h } = sizeRef.current;
+      if (pinchRef.current.dist > 0) {
+        motion.zoomBy(dist / pinchRef.current.dist, midX, midY, w / 2, h / 2);
+      }
+      motion.panX += (midX - pinchRef.current.midX) / motion.zoom;
+      motion.panY += (midY - pinchRef.current.midY) / motion.zoom;
+      pinchRef.current = { dist, midX, midY };
+    }
+  }, [hitTest]);
+
+  const onPointerUp = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!ptrs.current.has(e.pointerId)) return;
+    ptrs.current.delete(e.pointerId);
+    const motion = motionRef.current!;
+
+    if (pinchRef.current) {
+      if (ptrs.current.size < 2) {
+        motion.endPinch();
+        pinchRef.current = null;
+        if (ptrs.current.size === 1) {
+          // One finger stays down: resume dragging from here.
+          motion.beginDrag(nowSec());
+          const rest = Array.from(ptrs.current.values())[0];
+          downRef.current = { x: rest.x, y: rest.y, moved: 99 }; // never a tap
+        }
+      }
       return;
     }
 
-    viewRef.current = {
-      px: vw / 2 - worldCx * zDefault,
-      py: vh / 2 - worldCy * zDefault,
-      z: zDefault,
-    };
-  }, [hydrated, mode]);
+    if (ptrs.current.size === 0) {
+      const wasTap = downRef.current.moved <= SPHERE.tapSlop;
+      motion.endDrag(nowSec());
+      if (wasTap) {
+        // Hit at the DOWN location — matches iOS.
+        const hit = hitTest(downRef.current.x, downRef.current.y);
+        if (hit && stateRef.current.mode === "app") {
+          const u = stateRef.current.allUsers[hit.userIdx];
+          if (u && !u.isYou) stateRef.current.onNavigateToProfile(u.id);
+        }
+      }
+    }
+  }, [hitTest]);
 
-  // ── Canvas DPR resize + perpetual draw loop ──────────────────────────────
+  const onPointerLeaveGlobe = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    e.currentTarget.style.cursor = "";
+  }, []);
+
+  // ── canvases, theme, wheel, and the render loop ───────────────────────────
   useEffect(() => {
-    if (!canvasRef.current) return;
-    if (dotsOverlayAboveChrome && !dotsCanvasRef.current) return;
+    const avatarCanvas = avatarCanvasRef.current;
+    const dotsCanvas = dotsCanvasRef.current;
+    if (!avatarCanvas || !dotsCanvas) return;
+    const motion = motionRef.current!;
+
+    function readColors() {
+      const cs = getComputedStyle(document.documentElement);
+      const dark = document.documentElement.getAttribute("data-theme") === "dark";
+      colorsRef.current = {
+        bg: parseColor(cs.getPropertyValue("--background"), dark
+          ? { r: 13, g: 13, b: 13 } : { r: 243, g: 243, b: 243 }),
+        fg: parseColor(cs.getPropertyValue("--foreground"), dark
+          ? { r: 255, g: 255, b: 255 } : { r: 10, g: 10, b: 10 }),
+      };
+    }
 
     function resizeBoth() {
-      const avatar = canvasRef.current;
-      if (!avatar) return;
       const dpr = window.devicePixelRatio || 1;
       const w = window.innerWidth;
       const h = window.innerHeight;
-      avatar.width = w * dpr;
-      avatar.height = h * dpr;
-      avatar.style.width = `${w}px`;
-      avatar.style.height = `${h}px`;
-      if (dotsOverlayAboveChrome) {
-        const dots = dotsCanvasRef.current;
-        if (dots) {
-          dots.width = w * dpr;
-          dots.height = h * dpr;
-          dots.style.width = `${w}px`;
-          dots.style.height = `${h}px`;
-        }
+      sizeRef.current = { w, h };
+      for (const c of [avatarCanvas!, dotsCanvas!]) {
+        c.width = w * dpr;
+        c.height = h * dpr;
+        c.style.width = `${w}px`;
+        c.style.height = `${h}px`;
       }
-      zoomMinRef.current = Math.max(w / WORLD_W, h / WORLD_H);
-      if (viewRef.current.z < zoomMinRef.current) {
-        viewRef.current = { ...viewRef.current, z: zoomMinRef.current };
+      if (stateRef.current.hydrated) {
+        gridRef.current = buildPeriodGrid(stateRef.current.allUsers.length, w, h);
       }
+      readColors();
     }
 
     resizeBoth();
     window.addEventListener("resize", resizeBoth);
 
-    let running = true;
+    const themeObserver = new MutationObserver(readColors);
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme", "class", "style"],
+    });
 
-    function drawDotGrid(
-      ctx: CanvasRenderingContext2D,
-      cssW: number,
-      cssH: number,
-      px: number,
-      py: number,
-      z: number,
-      isDark: boolean,
-    ) {
-      const margin = AVATAR_SIZE * 2;
-      const visLeft = (-px / z) - margin;
-      const visRight = ((cssW - px) / z) + margin;
-      const visTop = (-py / z) - margin;
-      const visBottom = ((cssH - py) / z) + margin;
-      const scx = cssW / 2;
-      const scy = cssH / 2;
-      const maxR = Math.hypot(cssW, cssH) * 0.5;
-
-      const globeR = Math.hypot(cssW, cssH) * 0.55;
-      const dotGrad = ctx.createRadialGradient(scx, scy, 0, scx, scy, globeR);
-      if (isDark) {
-        dotGrad.addColorStop(0.0, "rgba(255,255,255,0.18)");
-        dotGrad.addColorStop(0.55, "rgba(255,255,255,0.13)");
-        dotGrad.addColorStop(0.85, "rgba(255,255,255,0.07)");
-        dotGrad.addColorStop(1.0, "rgba(255,255,255,0.02)");
-      } else {
-        dotGrad.addColorStop(0.0, "rgba(0,0,0,0.22)");
-        dotGrad.addColorStop(0.55, "rgba(0,0,0,0.18)");
-        dotGrad.addColorStop(0.85, "rgba(0,0,0,0.10)");
-        dotGrad.addColorStop(1.0, "rgba(0,0,0,0.04)");
-      }
-
-      const gcMin = Math.floor(visLeft / DOT_SPACING) - 1;
-      const gcMax = Math.ceil(visRight / DOT_SPACING) + 1;
-      const grMin = Math.floor(visTop / DOT_SPACING) - 1;
-      const grMax = Math.ceil(visBottom / DOT_SPACING) + 1;
-
-      ctx.beginPath();
-      for (let gr = grMin; gr <= grMax; gr++) {
-        for (let gc = gcMin; gc <= gcMax; gc++) {
-          const wx = gc * DOT_SPACING;
-          const wy = gr * DOT_SPACING;
-          const sx0 = px + wx * z;
-          const sy0 = py + wy * z;
-          const dvx = sx0 - scx;
-          const dvy = sy0 - scy;
-          const dist = Math.hypot(dvx, dvy);
-          const r = dist / maxR;
-          if (r > 1.05) continue;
-          const warp = 1 + BOWL_K * r * r;
-          const sx = scx + dvx * warp;
-          const sy = scy + dvy * warp;
-          if (sx < -8 || sx > cssW + 8 || sy < -8 || sy > cssH + 8) continue;
-          const depthScale = 1 + BOWL_SCALE * r * r;
-          const dR = Math.max(DOT_RADIUS * z * depthScale, 0.6);
-          ctx.moveTo(sx + dR, sy);
-          ctx.arc(sx, sy, dR, 0, Math.PI * 2);
-        }
-      }
-      ctx.fillStyle = dotGrad;
-      ctx.fill();
-    }
-
-    function drawAvatarPass(
-      ctx: CanvasRenderingContext2D,
-      cssW: number,
-      cssH: number,
-      px: number,
-      py: number,
-      z: number,
-      tw: number,
-      th: number,
-      bpos: { x: number; y: number }[],
-      users: AthletesGlobeUser[],
-      isDark: boolean,
-      drawLabels: boolean,
-    ) {
-      const scx = cssW / 2;
-      const scy = cssH / 2;
-      const maxR = Math.hypot(cssW, cssH) * 0.5;
-      const periodX = tw * z;
-      const periodY = th * z;
-      const normPx = -(((-px % periodX) + periodX) % periodX);
-      const normPy = -(((-py % periodY) + periodY) % periodY);
-
-      for (let ty = 0; ty <= 1; ty++) {
-        for (let tx = 0; tx <= 1; tx++) {
-          for (let i = 0; i < users.length; i++) {
-            const wx = bpos[i]!.x + AVATAR_SIZE / 2 + tx * tw;
-            const wy = bpos[i]!.y + AVATAR_SIZE / 2 + ty * th;
-
-            const sx0 = normPx + wx * z;
-            const sy0 = normPy + wy * z;
-            const dvx = sx0 - scx;
-            const dvy = sy0 - scy;
-            const dist = Math.hypot(dvx, dvy);
-            const r = dist / maxR;
-            const warp = 1 + BOWL_K * r * r;
-            const sx = scx + dvx * warp;
-            const sy = scy + dvy * warp;
-            const depthScale = 1 + BOWL_SCALE * r * r;
-            const S = AVATAR_SIZE * z * depthScale;
-
-            if (sx + S < 0 || sx - S > cssW || sy + S < 0 || sy - S > cssH) continue;
-
-            const tiltAngle = BOWL_TILT * Math.min(r, 1);
-            const radialCompress = Math.cos(tiltAngle);
-            const radialAngle = dist > 0.5 ? Math.atan2(dvy, dvx) : 0;
-
-            drawUserBowl(
-              ctx,
-              sx,
-              sy,
-              S,
-              users[i]!,
-              imagesRef.current.get(users[i]!.id),
-              z,
-              radialCompress,
-              radialAngle,
-              isDark,
-              drawLabels,
-            );
-          }
-        }
-      }
-    }
-
-    function draw() {
-      if (!running) return;
-      const avatar = canvasRef.current;
-      if (!avatar) return;
-      const actx = avatar.getContext("2d");
-      if (!actx) return;
-
-      const dpr = window.devicePixelRatio || 1;
-      const cssW = avatar.width / dpr;
-      const cssH = avatar.height / dpr;
-
-      const now = performance.now();
-      const prevSpinT = landSpinPrevTRef.current || now;
-      const spinDt = Math.min(0.1, Math.max(0, (now - prevSpinT) / 1000));
-      landSpinPrevTRef.current = now;
-
-      const baseLandSpin =
-        modeRef.current === "landing" &&
-        hydratedRef.current &&
-        !reduceMotionRef.current &&
-        ptrs.current.size === 0;
-
-      const noMomentum =
-        rafPanRef.current === null &&
-        rafZoomRef.current === null &&
-        rafWheelRef.current === null;
-
-      const canRampDrift = baseLandSpin && noMomentum;
-
-      if (!canRampDrift) {
-        landSpinRampStartRef.current = null;
-      } else if (landSpinRampStartRef.current === null) {
-        landSpinRampStartRef.current = now;
-      }
-
-      let goalAmp = 0;
-      if (canRampDrift && landSpinRampStartRef.current !== null) {
-        goalAmp = Math.min(1, (now - landSpinRampStartRef.current) / LAND_SPIN_RAMP_MS);
-      }
-
-      const ampSmooth = canRampDrift ? LAND_SPIN_AMP_ATTACK : LAND_SPIN_AMP_RELEASE;
-      landSpinAmpRef.current +=
-        (goalAmp - landSpinAmpRef.current) * Math.min(1, spinDt * ampSmooth);
-
-      const amp = landSpinAmpRef.current;
-      if (amp > 0.0004 && spinDt > 0) {
-        const t = landSpinVelTargetRef.current;
-        const w = amp * amp;
-        const wobVx = Math.sin(now * 0.00106) * 4.8 * w;
-        const wobVy = Math.cos(now * 0.00088) * 3.8 * w;
-        const v = viewRef.current;
-        viewRef.current = {
-          ...v,
-          px: v.px + (t.vx * amp + wobVx) * spinDt,
-          py: v.py + (t.vy * amp + wobVy) * spinDt,
-        };
-      }
-
-      if (modeRef.current === "landing" && hydratedRef.current) {
-        const v = viewRef.current;
-        landingGlobeDriftSnapshot = {
-          px: v.px,
-          py: v.py,
-          z: v.z,
-          landSpinAmp: landSpinAmpRef.current,
-          landSpinAngle: landSpinAngleRef.current,
-          vx: landSpinVelTargetRef.current.vx,
-          vy: landSpinVelTargetRef.current.vy,
-          landSpinRampStartAt: landSpinRampStartRef.current,
-        };
-      }
-
-      const { px, py, z } = viewRef.current;
-      const {
-        TILE_W: tw,
-        TILE_H: th,
-        basePositions: bpos,
-        allUsers: users,
-        showAvatarLabels: drawLabels,
-      } = gridRef.current;
-
-      const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-
-      const dotsEl = dotsOverlayAboveChrome ? dotsCanvasRef.current : null;
-      if (dotsOverlayAboveChrome && dotsEl) {
-        actx.clearRect(0, 0, avatar.width, avatar.height);
-        actx.fillStyle = isDark ? "#0D0D0D" : "#F2F2F2";
-        actx.fillRect(0, 0, avatar.width, avatar.height);
-        actx.save();
-        actx.scale(dpr, dpr);
-        drawAvatarPass(actx, cssW, cssH, px, py, z, tw, th, bpos, users, isDark, drawLabels);
-        actx.restore();
-
-        const dctx = dotsEl.getContext("2d");
-        if (dctx) {
-          dctx.clearRect(0, 0, dotsEl.width, dotsEl.height);
-          dctx.save();
-          dctx.scale(dpr, dpr);
-          drawDotGrid(dctx, cssW, cssH, px, py, z, isDark);
-          dctx.restore();
-        }
-      } else {
-        actx.clearRect(0, 0, avatar.width, avatar.height);
-        actx.fillStyle = isDark ? "#0D0D0D" : "#F2F2F2";
-        actx.fillRect(0, 0, avatar.width, avatar.height);
-        actx.save();
-        actx.scale(dpr, dpr);
-        drawDotGrid(actx, cssW, cssH, px, py, z, isDark);
-        drawAvatarPass(actx, cssW, cssH, px, py, z, tw, th, bpos, users, isDark, drawLabels);
-        actx.restore();
-      }
-
-      rafDrawRef.current = requestAnimationFrame(draw);
-    }
-
-    rafDrawRef.current = requestAnimationFrame(draw);
-
-    return () => {
-      running = false;
-      window.removeEventListener("resize", resizeBoth);
-      if (rafDrawRef.current !== null) {
-        cancelAnimationFrame(rafDrawRef.current);
-        rafDrawRef.current = null;
-      }
-    };
-  }, [dotsOverlayAboveChrome]);
-
-  // ── commit: write to viewRef only (draw loop picks it up via rAF) ───────
-  const commit = useCallback((v: { px: number; py: number; z: number }) => {
-    viewRef.current = v;
-  }, []);
-
-  // ── Inertia refs ─────────────────────────────────────────────────────────
-  const prevPinchDist = useRef(0);
-  const velRef = useRef({ x: 0, y: 0 });
-  const ptrHistory = useRef<Array<{ x: number; y: number; t: number }>>([]);
-  const pinchHistory = useRef<Array<{ dist: number; t: number }>>([]);
-  const zoomVelRef = useRef(1);
-  const zoomMidRef = useRef({ x: 0, y: 0 });
-  const wheelTargetRef = useRef<number | null>(null);
-  const wheelCursorRef = useRef({ x: 0, y: 0 });
-  const didDragRef = useRef(false);
-
-  const stopInertia = useCallback(() => {
-    if (rafPanRef.current !== null) {
-      cancelAnimationFrame(rafPanRef.current);
-      rafPanRef.current = null;
-    }
-    if (rafZoomRef.current !== null) {
-      cancelAnimationFrame(rafZoomRef.current);
-      rafZoomRef.current = null;
-    }
-    if (rafWheelRef.current !== null) {
-      cancelAnimationFrame(rafWheelRef.current);
-      rafWheelRef.current = null;
-    }
-    velRef.current = { x: 0, y: 0 };
-    zoomVelRef.current = 1;
-    wheelTargetRef.current = null;
-  }, []);
-
-  const startInertia = useCallback(() => {
-    const FRICTION = 0.95;
-    const step = () => {
-      velRef.current.x *= FRICTION;
-      velRef.current.y *= FRICTION;
-      if (Math.abs(velRef.current.x) < 0.25 && Math.abs(velRef.current.y) < 0.25) {
-        rafPanRef.current = null;
-        return;
-      }
-      const { px, py, z } = viewRef.current;
-      commit({ px: px + velRef.current.x, py: py + velRef.current.y, z });
-      rafPanRef.current = requestAnimationFrame(step);
-    };
-    rafPanRef.current = requestAnimationFrame(step);
-  }, [commit]);
-
-  const startZoomInertia = useCallback(() => {
-    const FRICTION = 0.95;
-    const step = () => {
-      zoomVelRef.current = 1 + (zoomVelRef.current - 1) * FRICTION;
-      if (Math.abs(zoomVelRef.current - 1) < 0.0001) {
-        rafZoomRef.current = null;
-        return;
-      }
-      const { px, py, z } = viewRef.current;
-      const newZ = clamp(z * zoomVelRef.current, zoomMinRef.current, ZOOM_MAX);
-      const ratio = newZ / z;
-      const { x: mx, y: my } = zoomMidRef.current;
-      commit({
-        px: mx - (mx - px) * ratio,
-        py: my - (my - py) * ratio,
-        z: newZ,
-      });
-      rafZoomRef.current = requestAnimationFrame(step);
-    };
-    rafZoomRef.current = requestAnimationFrame(step);
-  }, [commit]);
-
-  const startWheelEase = useCallback(() => {
-    if (rafWheelRef.current !== null) return;
-    const EASE = 0.13;
-    const step = () => {
-      const target = wheelTargetRef.current;
-      if (target === null) {
-        rafWheelRef.current = null;
-        return;
-      }
-      const { z, px, py } = viewRef.current;
-      const { x: cx, y: cy } = wheelCursorRef.current;
-      const diff = target - z;
-      if (Math.abs(diff) < 0.0006) {
-        const r = target / z;
-        commit({ z: target, px: cx - (cx - px) * r, py: cy - (cy - py) * r });
-        wheelTargetRef.current = null;
-        rafWheelRef.current = null;
-        return;
-      }
-      const newZ = z + diff * EASE;
-      const r = newZ / z;
-      commit({ z: newZ, px: cx - (cx - px) * r, py: cy - (cy - py) * r });
-      rafWheelRef.current = requestAnimationFrame(step);
-    };
-    rafWheelRef.current = requestAnimationFrame(step);
-  }, [commit]);
-
-  // Wheel — non-passive so we can preventDefault
-  useEffect(() => {
-    const el = canvasRef.current;
-    if (!el) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      if (rafPanRef.current) {
-        cancelAnimationFrame(rafPanRef.current);
-        rafPanRef.current = null;
-        velRef.current = { x: 0, y: 0 };
-      }
-      if (rafZoomRef.current) {
-        cancelAnimationFrame(rafZoomRef.current);
-        rafZoomRef.current = null;
-        zoomVelRef.current = 1;
-      }
-      const factor = e.ctrlKey ? 0.012 : 0.0008;
-      const prev = wheelTargetRef.current ?? viewRef.current.z;
-      wheelTargetRef.current = clamp(prev * (1 + -e.deltaY * factor), zoomMinRef.current, ZOOM_MAX);
-      wheelCursorRef.current = { x: e.clientX, y: e.clientY };
-      startWheelEase();
+      const factor = Math.exp(-e.deltaY * (e.ctrlKey ? 0.012 : 0.0008));
+      const { w, h } = sizeRef.current;
+      motion.zoomBy(factor, e.clientX, e.clientY, w / 2, h / 2);
+      motion.zoomTarget = clamp(motion.zoom, SPHERE.minZoom, SPHERE.maxZoom);
     };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, [startWheelEase]);
+    avatarCanvas.addEventListener("wheel", onWheel, { passive: false });
 
-  // ── Tap hit-test ──────────────────────────────────────────────────────────
-  // Because the bowl warp means a world position no longer maps linearly to
-  // screen space, we forward-project each visible avatar (same math as the
-  // draw loop) and check whether the tap lands inside its warped bounds.
-  const updateGlobeCanvasCursor = useCallback(
-    (clientX: number, clientY: number) => {
-      const el = canvasRef.current;
-      if (!el) return;
-      if (modeRef.current !== "app" || ptrs.current.size > 0) {
-        el.style.cursor = "";
-        return;
+    // ── per-frame placement + draw ──────────────────────────────────────────
+    function placeAvatars(now: number): PlacedAvatar[] {
+      const grid = gridRef.current;
+      const users = stateRef.current.allUsers;
+      if (!grid || users.length === 0) return [];
+      const { w, h } = sizeRef.current;
+      const cx = w / 2;
+      const cy = h / 2;
+      const rimX = w * SPHERE.rimFractionX;
+      const rimY = h * SPHERE.rimFractionY;
+      const { panX, panY, zoom } = motion;
+      const labels = stateRef.current.showAvatarLabels;
+      const tw = labels ? 170 : SPHERE.tile;
+      const th = labels ? 215 : SPHERE.tile;
+      const labelPad = labels ? 45 : 0;
+
+      // Screen → world bounds, inflated by the worst-case rim decompression:
+      // world = (screen - center) / (zoom · compress) - pan, compress ≥ 0.78.
+      const margin = SPHERE.avatarSize * 2;
+      const inv = 1 / (zoom * (1 - SPHERE.rimCompression));
+      const colMin = Math.floor((((0 - margin) - cx) * inv - panX) / tw) - 1;
+      const colMax = Math.ceil((((w + margin) - cx) * inv - panX) / tw) + 1;
+      const rowMin = Math.floor((((0 - margin) - cy) * inv - panY) / th) - 1;
+      const rowMax = Math.ceil((((h + margin) - cy) * inv - panY) / th) + 1;
+
+      const entrance = entranceStartRef.current;
+      const reduced = motion.reducedMotion;
+      const placed: PlacedAvatar[] = [];
+
+      for (let row = rowMin; row <= rowMax; row++) {
+        for (let col = colMin; col <= colMax; col++) {
+          const idx = userAtCell(grid, col, row);
+          if (idx < 0 || idx >= users.length) continue;
+          const hsh = cellHash(col, row);
+          const rx = Math.max(8, tw - SPHERE.avatarSize - 20);
+          const ry = Math.max(8, th - SPHERE.avatarSize - 20 - labelPad);
+          const jx = 10 + ((hsh >>> 8) & 0xffff) / 65535 * rx;
+          const jy = 10 + ((hsh >>> 16) & 0xffff) / 65535 * ry;
+          const worldCX = col * tw + jx + SPHERE.avatarSize / 2;
+          const worldCY = row * th + jy + SPHERE.avatarSize / 2;
+
+          const wp = warp(worldCX, worldCY, panX, panY, zoom, cx, cy, rimX, rimY);
+          if (wp.scale <= 0.01 || wp.alpha <= 0.01) continue;
+          if (wp.x < -margin || wp.x > w + margin || wp.y < -margin || wp.y > h + margin) continue;
+
+          let scale = wp.scale;
+          let alpha = wp.alpha;
+          const boost = lens(wp.x, wp.y, cx, cy);
+          scale *= 1 + SPHERE.lensBoost * boost;
+          alpha += (1 - alpha) * SPHERE.lensLift * boost;
+
+          if (entrance !== null && !reduced) {
+            const delay = (hsh & 7) * SPHERE.entranceStepDelay;
+            const e = clamp((now - entrance - delay) / SPHERE.entranceDuration, 0, 1);
+            if (e <= 0) continue;
+            scale *= easeOutBack(e);
+            alpha *= e;
+          }
+
+          placed.push({
+            userIdx: idx,
+            x: wp.x,
+            y: wp.y,
+            size: SPHERE.avatarSize * scale * zoom,
+            alpha,
+            worldCX,
+            worldCY,
+            isYou: users[idx].isYou,
+          });
+        }
       }
-      const { px, py, z } = viewRef.current;
-      const { TILE_W: tw, TILE_H: th, basePositions: bpos, allUsers: users } =
-        gridRef.current;
-      const idx = findAvatarIndexAtScreen(
-        clientX,
-        clientY,
-        px,
-        py,
-        z,
-        tw,
-        th,
-        bpos,
-        users.length,
-      );
-      const clickable =
-        idx !== null && idx < users.length && !users[idx]!.isYou;
-      el.style.cursor = clickable ? "pointer" : "";
-    },
-    [],
-  );
+      return placed;
+    }
 
-  const detectTap = useCallback(
-    (screenX: number, screenY: number) => {
-      const { px, py, z } = viewRef.current;
-      const { TILE_W: tw, TILE_H: th, basePositions: bpos, allUsers: users } =
-        gridRef.current;
-      const idx = findAvatarIndexAtScreen(
-        screenX,
-        screenY,
-        px,
-        py,
-        z,
-        tw,
-        th,
-        bpos,
-        users.length,
-      );
-      if (idx === null) return;
-      const u = users[idx]!;
-      if (mode === "app" && !u.isYou) onNavigateToProfile(u.id);
-    },
-    [mode, onNavigateToProfile],
-  );
+    function drawAvatars(placed: PlacedAvatar[]) {
+      const ctx = avatarCanvas!.getContext("2d");
+      if (!ctx) return;
+      const dpr = window.devicePixelRatio || 1;
+      const { w, h } = sizeRef.current;
+      const users = stateRef.current.allUsers;
+      const labels = stateRef.current.showAvatarLabels;
+      const { bg, fg } = colorsRef.current;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
 
-  // ── Pointer handlers ─────────────────────────────────────────────────────
-  const onPointerDown = useCallback(
-    (e: React.PointerEvent) => {
-      stopInertia();
-      if (modeRef.current === "landing") {
-        pickLandingDriftDirection();
+      // Rim vignette: sinks the field's edge into the page background.
+      // Elliptical, matching the warp's per-axis rim (strong top/bottom).
+      const cx = w / 2;
+      const cy = h / 2;
+      const rimX = w * SPHERE.rimFractionX;
+      const rimY = h * SPHERE.rimFractionY;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.scale(rimX, rimY);
+      const grad = ctx.createRadialGradient(0, 0, 0.5, 0, 0, 1.15);
+      grad.addColorStop(0, rgba(bg, 0));
+      grad.addColorStop(1, rgba(bg, 0.45));
+      ctx.fillStyle = grad;
+      ctx.fillRect(-2, -2, 4, 4);
+      ctx.restore();
+
+      for (const p of placed) {
+        const u = users[p.userIdx];
+        const size = p.size;
+        const x = p.x - size / 2;
+        const y = p.y - size / 2;
+        ctx.save();
+        ctx.globalAlpha = p.alpha;
+        roundedRectPath(ctx, x, y, size, size, size * 0.29);
+        ctx.clip();
+        const img = u.avatarUrl ? imagesRef.current.get(u.id) : undefined;
+        if (img && img.complete && img.naturalWidth > 0) {
+          // Cover-crop the source to a square.
+          const s = Math.min(img.naturalWidth, img.naturalHeight);
+          ctx.drawImage(
+            img,
+            (img.naturalWidth - s) / 2, (img.naturalHeight - s) / 2, s, s,
+            x, y, size, size,
+          );
+        } else {
+          ctx.fillStyle = rgba(fg, 0.08);
+          ctx.fillRect(x, y, size, size);
+          ctx.fillStyle = rgba(fg, 0.55);
+          ctx.font = `600 ${Math.max(10, size * 0.3)}px ${FONT}`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(getInitials(u.name), p.x, p.y);
+        }
+        ctx.restore();
+
+        if (labels && p.alpha > 0.08 && size > 26) {
+          const fs = clamp(size / SPHERE.avatarSize, 0.7, 1.1);
+          ctx.save();
+          ctx.globalAlpha = p.alpha;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "alphabetic";
+          ctx.fillStyle = rgba(fg, 1);
+          ctx.font = `600 ${12 * fs}px ${FONT}`;
+          ctx.fillText(u.name, p.x, p.y + size / 2 + 16 * fs);
+          ctx.fillStyle = rgba(fg, 0.55);
+          ctx.font = `${11 * fs}px ${FONT}`;
+          ctx.fillText(`@${u.handle}`, p.x, p.y + size / 2 + 30 * fs);
+          ctx.restore();
+        }
       }
-      ptrHistory.current = [];
-      pinchHistory.current = [];
-      didDragRef.current = false;
-      ptrs.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-      if (ptrs.current.size === 2) {
-        const [a, b] = Array.from(ptrs.current.values());
-        prevPinchDist.current = Math.hypot(b.x - a.x, b.y - a.y);
-      }
-    },
-    [stopInertia, pickLandingDriftDirection],
-  );
+    }
 
-  const onPointerMove = useCallback(
-    (e: React.PointerEvent) => {
-      const prev = ptrs.current.get(e.pointerId);
-      if (!prev) return;
-      ptrs.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      const { px, py, z } = viewRef.current;
+    function drawDots(placed: PlacedAvatar[], now: number) {
+      const ctx = dotsCanvas!.getContext("2d");
+      if (!ctx) return;
+      const dpr = window.devicePixelRatio || 1;
+      const { w, h } = sizeRef.current;
+      const { fg } = colorsRef.current;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
 
-      if (ptrs.current.size === 1) {
-        const dx = e.clientX - prev.x;
-        const dy = e.clientY - prev.y;
-        if (Math.abs(dx) + Math.abs(dy) > 4) didDragRef.current = true;
+      const entrance = entranceStartRef.current;
+      const fieldFade = entrance === null
+        ? 0
+        : clamp((now - entrance) / SPHERE.fieldFadeIn, 0, 1);
+      if (fieldFade <= 0) return;
 
-        const now = performance.now();
-        ptrHistory.current.push({ x: e.clientX, y: e.clientY, t: now });
-        ptrHistory.current = ptrHistory.current.filter((p) => now - p.t < 80);
-        commit({ px: px + dx, py: py + dy, z });
-      } else if (ptrs.current.size === 2) {
-        const [a, b] = Array.from(ptrs.current.values());
-        const newDist = Math.hypot(b.x - a.x, b.y - a.y);
-        const midX = (a.x + b.x) / 2;
-        const midY = (a.y + b.y) / 2;
-        const scale = prevPinchDist.current > 0 ? newDist / prevPinchDist.current : 1;
-        const newZ = clamp(z * scale, zoomMinRef.current, ZOOM_MAX);
-        const ratio = newZ / z;
-        prevPinchDist.current = newDist;
-        zoomMidRef.current = { x: midX, y: midY };
+      const cx = w / 2;
+      const cy = h / 2;
+      const rimX = w * SPHERE.rimFractionX;
+      const rimY = h * SPHERE.rimFractionY;
+      const { panX, panY, zoom } = motion;
+      const reduced = motion.reducedMotion;
 
-        const now = performance.now();
-        pinchHistory.current.push({ dist: newDist, t: now });
-        pinchHistory.current = pinchHistory.current.filter((p) => now - p.t < 80);
+      // LOD: keep projected pitch ≥ 18 px.
+      let sp = SPHERE.dotSpacing;
+      while (sp * zoom < SPHERE.dotLodMinPx) sp *= 2;
 
-        commit({
-          px: midX - (midX - px) * ratio,
-          py: midY - (midY - py) * ratio,
-          z: newZ,
-        });
-      }
+      // Spatial hash of avatars for the hug pass.
+      const bucketSize = 100;
+      const buckets = new Map<string, number[]>();
+      placed.forEach((p, i) => {
+        const key = `${Math.floor(p.x / bucketSize)},${Math.floor(p.y / bucketSize)}`;
+        const arr = buckets.get(key);
+        if (arr) arr.push(i);
+        else buckets.set(key, [i]);
+      });
 
-      updateGlobeCanvasCursor(e.clientX, e.clientY);
-    },
-    [commit, updateGlobeCanvasCursor],
-  );
+      const rip = reduced ? 0 : motion.rippleAmount;
+      const grab = reduced ? 0 : motion.grabAmount;
+      const pointer = pointerPosRef.current;
 
-  const onPointerUp = useCallback(
-    (e: React.PointerEvent) => {
-      const prevSize = ptrs.current.size;
-      ptrs.current.delete(e.pointerId);
-      if (ptrs.current.size < 2) prevPinchDist.current = 0;
+      const inv = 1 / (zoom * (1 - SPHERE.rimCompression));
+      const colMin = Math.floor((((0 - 8) - cx) * inv - panX) / sp) - 1;
+      const colMax = Math.ceil((((w + 8) - cx) * inv - panX) / sp) + 1;
+      const rowMin = Math.floor((((0 - 8) - cy) * inv - panY) / sp) - 1;
+      const rowMax = Math.ceil((((h + 8) - cy) * inv - panY) / sp) + 1;
 
-      // Tap detection: single-finger lift with no drag
-      if (!didDragRef.current && prevSize === 1 && ptrs.current.size === 0) {
-        detectTap(e.clientX, e.clientY);
-      }
+      for (let row = rowMin; row <= rowMax; row++) {
+        for (let col = colMin; col <= colMax; col++) {
+          const wp = warp(col * sp, row * sp, panX, panY, zoom, cx, cy, rimX, rimY);
+          if (wp.r > 1.05) continue;
+          let px = wp.x;
+          let py = wp.y;
+          if (px < -8 || px > w + 8 || py < -8 || py > h + 8) continue;
 
-      // Pinch zoom inertia on finger lift
-      if (prevSize === 2 && ptrs.current.size === 1) {
-        const h = pinchHistory.current;
-        if (h.length >= 2) {
-          const last = h[h.length - 1];
-          const base = h.filter((p) => p.t >= last.t - 40)[0] ?? h[h.length - 2];
-          const dt = last.t - base.t;
-          if (dt > 0 && base.dist > 0) {
-            const logVel =
-              ((Math.log(last.dist) - Math.log(base.dist)) / dt) * (1000 / 60);
-            const clamped = clamp(Math.exp(logVel), 0.88, 1.12);
-            if (Math.abs(clamped - 1) > 0.002) {
-              zoomVelRef.current = clamped;
-              startZoomInertia();
+          // Hug: dots gather onto a ring around nearby avatars.
+          let hug = 0;
+          let selfHug = 0;
+          const bx = Math.floor(px / bucketSize);
+          const by = Math.floor(py / bucketSize);
+          for (let oy = -1; oy <= 1; oy++) {
+            for (let ox = -1; ox <= 1; ox++) {
+              const arr = buckets.get(`${bx + ox},${by + oy}`);
+              if (!arr) continue;
+              for (const i of arr) {
+                const a = placed[i];
+                const dx = px - a.x;
+                const dy = py - a.y;
+                const d = Math.hypot(dx, dy) || 0.001;
+                const ringR = a.size / 2 + SPHERE.hugGap;
+                const outer = ringR + SPHERE.hugFalloff;
+                if (d >= outer) continue;
+                const t = d / outer;
+                const mapped = ringR + Math.pow(t, SPHERE.hugCurve) * (outer - ringR);
+                px += (dx / d) * (mapped - d);
+                py += (dy / d) * (mapped - d);
+                const hh = 1 - (mapped - ringR) / (outer - ringR);
+                hug = Math.max(hug, hh);
+                if (a.isYou) selfHug = Math.max(selfHug, hh);
+              }
             }
           }
-        }
-        pinchHistory.current = [];
-        ptrHistory.current = [];
-      }
 
-      // Pan inertia on last finger up
-      if (ptrs.current.size === 0) {
-        const history = ptrHistory.current;
-        if (history.length >= 2) {
-          const last = history[history.length - 1];
-          const base =
-            history.filter((p) => p.t >= last.t - 30)[0] ?? history[history.length - 2];
-          const dt = last.t - base.t;
-          if (dt > 0) {
-            const FRAME_MS = 1000 / 60;
-            const vx = ((last.x - base.x) / dt) * FRAME_MS;
-            const vy = ((last.y - base.y) / dt) * FRAME_MS;
-            const speed = Math.hypot(vx, vy);
-            const MAX_SPEED = 40;
-            const s = speed > MAX_SPEED ? MAX_SPEED / speed : 1;
-            velRef.current = { x: vx * s, y: vy * s };
-            startInertia();
+          // Touch ripple / grab.
+          if ((rip > 0.01 || grab > 0.01) && pointer) {
+            const dx = px - pointer.x;
+            const dy = py - pointer.y;
+            const d = Math.hypot(dx, dy) || 0.001;
+            if (d < SPHERE.rippleRadius) {
+              const t = 1 - d / SPHERE.rippleRadius;
+              let push = t * t * (SPHERE.rippleStrength * rip - SPHERE.grabStrength * grab);
+              push = Math.max(push, -d * 0.8);
+              px += (dx / d) * push;
+              py += (dy / d) * push;
+            }
           }
+
+          let radius = Math.max(1.6 * wp.scale * zoom, 0.7);
+          radius *= 1 + SPHERE.hugSwell * hug;
+          radius *= 1 + SPHERE.selfRingSwell * selfHug;
+
+          let alpha = (0.04 + (1 - Math.min(wp.r, 1)) * 0.12) * wp.alpha;
+          alpha *= 1 + SPHERE.hugGlow * hug * hug;
+          if (!reduced) {
+            const phase = (cellHash(col ^ 0x2f, row ^ 0x71) & 0xffff) / 65535 * Math.PI * 2;
+            alpha *= 1 + SPHERE.shimmerAmount * Math.sin(now * SPHERE.shimmerSpeed + phase);
+          }
+          alpha *= fieldFade;
+
+          // Self ring: dots hugging the signed-in athlete blend to accent.
+          const s = selfHug * selfHug;
+          const color = s > 0.001
+            ? {
+                r: fg.r + (ACCENT_RGB.r - fg.r) * s,
+                g: fg.g + (ACCENT_RGB.g - fg.g) * s,
+                b: fg.b + (ACCENT_RGB.b - fg.b) * s,
+              }
+            : fg;
+          const finalAlpha = s > 0.001
+            ? alpha + (SPHERE.selfRingMaxOpacity * fieldFade - alpha) * s
+            : alpha;
+          if (finalAlpha <= 0.003) continue;
+
+          ctx.beginPath();
+          ctx.arc(px, py, radius, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(${color.r | 0},${color.g | 0},${color.b | 0},${finalAlpha})`;
+          ctx.fill();
         }
-        ptrHistory.current = [];
       }
+    }
 
-      if (ptrs.current.size === 0) {
-        updateGlobeCanvasCursor(e.clientX, e.clientY);
+    // ── the loop ────────────────────────────────────────────────────────────
+    let raf = 0;
+    let lastT = 0;
+    const loop = (tms: number) => {
+      raf = requestAnimationFrame(loop);
+      if (document.hidden || stateRef.current.paused || !stateRef.current.hydrated) {
+        lastT = 0; // clock reset: no giant dt on resume
+        return;
       }
-    },
-    [startInertia, startZoomInertia, detectTap, updateGlobeCanvasCursor],
-  );
+      const now = tms / 1000;
+      if (!lastT) lastT = now;
+      const dt = Math.min(now - lastT, 1 / 30);
+      lastT = now;
 
-  const onPointerLeaveGlobe = useCallback(() => {
-    const el = canvasRef.current;
-    if (el) el.style.cursor = "";
+      motion.tick(dt, now);
+
+      const placed = placeAvatars(now);
+      placedRef.current = placed;
+
+      // Feed the magnetic settle the avatar nearest to center (within reach).
+      const { w, h } = sizeRef.current;
+      let candidate: { x: number; y: number } | null = null;
+      let bestD: number = SPHERE.settleReach;
+      for (const p of placed) {
+        const d = Math.hypot(p.x - w / 2, p.y - h / 2);
+        if (d < bestD) {
+          bestD = d;
+          candidate = { x: p.worldCX, y: p.worldCY };
+        }
+      }
+      motion.setSettleCandidate(candidate);
+
+      drawAvatars(placed);
+      drawDots(placed, now);
+
+      // Micro-tilt: one shared 3D lean on the avatar layer, against travel.
+      // Always applied so it eases continuously to identity — snapping the
+      // transform off at a threshold reads as a size glitch on release.
+      const t = motion.tilt();
+      avatarCanvas!.style.transform =
+        `perspective(900px) rotate3d(${t.ax.toFixed(4)},${t.ay.toFixed(4)},0,${t.deg.toFixed(3)}deg)`;
+    };
+    raf = requestAnimationFrame(loop);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", resizeBoth);
+      avatarCanvas.removeEventListener("wheel", onWheel);
+      themeObserver.disconnect();
+    };
   }, []);
 
+  // ── render ────────────────────────────────────────────────────────────────
   return (
     <div style={{ position: "fixed", inset: 0, background: "var(--background)" }}>
-      {/* ── infinite canvas (split on landing: avatars → chrome → dots) ─── */}
-      {dotsOverlayAboveChrome ? (
-        <>
-          <canvas
-            ref={canvasRef}
-            style={{
-              position: "absolute",
-              inset: 0,
-              zIndex: 1,
-              touchAction: "none",
-            }}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerCancel={onPointerUp}
-            onPointerLeave={onPointerLeaveGlobe}
-          />
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              zIndex: 2,
-              pointerEvents: "none",
-            }}
-          >
-            {chromeOverlay}
-          </div>
-          <canvas
-            ref={dotsCanvasRef}
-            style={{
-              position: "absolute",
-              inset: 0,
-              zIndex: 3,
-              pointerEvents: "none",
-            }}
-          />
-        </>
-      ) : (
-        <canvas
-          ref={canvasRef}
-          style={{ position: "absolute", inset: 0, touchAction: "none" }}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
-          onPointerLeave={onPointerLeaveGlobe}
-        />
-      )}
+      {/* dots: above scrims on landing (z 3), beneath avatars in-app (z 0) */}
+      <canvas
+        ref={dotsCanvasRef}
+        style={{
+          position: "absolute",
+          inset: 0,
+          zIndex: dotsOverlayAboveChrome ? 3 : 0,
+          pointerEvents: "none",
+        }}
+      />
+      <canvas
+        ref={avatarCanvasRef}
+        style={{
+          position: "absolute",
+          inset: 0,
+          zIndex: 1,
+          touchAction: "none",
+          willChange: "transform",
+        }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onPointerLeave={onPointerLeaveGlobe}
+      />
+      {chromeOverlay ? (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 2,
+            pointerEvents: "none",
+          }}
+        >
+          {chromeOverlay}
+        </div>
+      ) : null}
 
       {/* ── loading skeleton ─────────────────────────────────────────────── */}
       {!hydrated && (
@@ -1701,7 +1265,7 @@ export default function AthletesGlobeView({
 
       {mode === "app" && (
         <>
-          {/* ── title / counter ──────────────────────────────────────────────── */}
+          {/* ── title / counter ──────────────────────────────────────────── */}
           <div
             aria-hidden
             style={{
@@ -1758,7 +1322,7 @@ export default function AthletesGlobeView({
             </button>
           </div>
 
-          {/* ── search sheet ─────────────────────────────────────────────────── */}
+          {/* ── search sheet ─────────────────────────────────────────────── */}
           {searchOpen && (
             <SearchSheet
               friends={friendsForSearch}

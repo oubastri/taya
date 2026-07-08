@@ -135,6 +135,7 @@ export default function HomeLanding({
           showAvatarLabels={false}
           dotsOverlayAboveChrome
           chromeOverlay={landingChromeOverlay}
+          paused={showManifesto}
         />
       </div>
 
@@ -160,7 +161,16 @@ export default function HomeLanding({
             paddingRight: "max(20px, env(safe-area-inset-right))",
           }}
         >
-          <div style={{ margin: "auto 0", width: "100%", maxWidth: 720 }}>
+          <div
+            style={{
+              margin: "auto 0",
+              width: "100%",
+              maxWidth: 720,
+              // Sit a touch above true center on desktop; phones (≤640px)
+              // keep true centering — the lift crowded the header there.
+              transform: "translateY(min(0px, calc((100vw - 640px) * -0.045)))",
+            }}
+          >
             <Typewriter play />
           </div>
         </div>

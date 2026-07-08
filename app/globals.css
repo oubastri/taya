@@ -1515,6 +1515,14 @@ textarea::placeholder {
   width: 100%;
 }
 
+/* Phone header row: badge on the left, "?" hugging the right screen edge. */
+@media (max-width: 640px) {
+  .landing-nav-app-pair {
+    flex-direction: row-reverse;
+    justify-content: space-between;
+  }
+}
+
 .landing-appstore-badge {
   display: inline-flex;
   flex-shrink: 0;

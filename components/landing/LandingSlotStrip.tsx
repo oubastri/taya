@@ -37,6 +37,17 @@ const SLOT_OPACITY_EXIT = 0.08;
 const SLOT_Y = "55%" as const;
 
 /**
+ * Soft edge for the swap: content fades through a masked zone at the strip's
+ * top/bottom instead of appearing along a hard overflow-clip line. The shell
+ * grows by this much on each side (offset by negative margins, so flow layout
+ * is unchanged) and the mask's fade lives entirely in that bleed — resting
+ * content never sits inside it.
+ */
+const EDGE_FADE = 8;
+
+const toCss = (v: string | number) => (typeof v === "number" ? `${v}px` : v);
+
+/**
  * Vertical slot swap with `mode="wait"`. Motion layers are position:absolute inside a fixed-height
  * shell so enter/exit don’t change flow width/height (reduces landing grid/header jitter).
  */
@@ -80,8 +91,11 @@ export function LandingSlotStrip({
         position: "relative",
         overflow: "hidden",
         /* Fixed block size: in-flow min-height alone let AnimatePresence / motion reflow siblings */
-        height: minHeight,
-        minHeight,
+        height: `calc(${toCss(minHeight)} + ${EDGE_FADE * 2}px)`,
+        minHeight: `calc(${toCss(minHeight)} + ${EDGE_FADE * 2}px)`,
+        margin: `${-EDGE_FADE}px 0`,
+        maskImage: `linear-gradient(to bottom, transparent 0, black ${EDGE_FADE}px, black calc(100% - ${EDGE_FADE}px), transparent 100%)`,
+        WebkitMaskImage: `linear-gradient(to bottom, transparent 0, black ${EDGE_FADE}px, black calc(100% - ${EDGE_FADE}px), transparent 100%)`,
         minWidth: minWidthProp,
         width: reduce ? "auto" : "100%",
         ...style,

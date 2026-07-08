@@ -300,7 +300,8 @@ export function LandingFigmaHero({ stripProfiles }: LandingFigmaHeroProps) {
           alignItems: "center",
           width: "100%",
           minWidth: 0,
-          overflow: "hidden",
+          // No overflow clip here: the slot strip's soft edge-fade mask needs
+          // its vertical bleed visible (text overflow is guarded inside).
         }}
       >
         {profileBlock}
@@ -312,7 +313,8 @@ export function LandingFigmaHero({ stripProfiles }: LandingFigmaHeroProps) {
           alignItems: "center",
           width: "100%",
           minWidth: 0,
-          overflow: "hidden",
+          // No overflow clip here: the slot strip's soft edge-fade mask needs
+          // its vertical bleed visible (text overflow is guarded inside).
         }}
       >
         {activityBlock}
