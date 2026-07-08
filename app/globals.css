@@ -1482,17 +1482,82 @@ textarea::placeholder {
   }
 }
 
-.landing-nav-manifesto-btn:hover {
-  background: #000;
-  color: #fff;
-  border-color: #000 !important;
-  transform: translateY(-1px);
+/* Hover styles only where a real pointer exists — on touch, :hover sticks
+   after a tap, which left the "?" toggle stuck black after deselecting. */
+@media (hover: hover) {
+  .landing-nav-manifesto-btn:hover {
+    background: #000;
+    color: #fff;
+    border-color: #000 !important;
+    transform: translateY(-1px);
+  }
+
+  [data-theme="dark"] .landing-nav-manifesto-btn:hover {
+    background: #fff;
+    color: #000;
+    border-color: #fff !important;
+  }
 }
 
-[data-theme="dark"] .landing-nav-manifesto-btn:hover {
-  background: #fff;
-  color: #000;
-  border-color: #fff !important;
+/* "?" held on — the manifesto is up over the globe. */
+.landing-nav-manifesto-btn.is-active {
+  background: var(--foreground) !important;
+  color: var(--background) !important;
+  border-color: var(--foreground) !important;
+}
+
+/* App Store badge replacing the web auth CTAs (SHOW_WEB_AUTH=false):
+   circle | badge, content-sized, no stretching Apple's artwork. */
+.landing-nav-app-pair {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.landing-appstore-badge {
+  display: inline-flex;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.2s var(--ease-out-expo), opacity 0.2s;
+}
+
+@media (hover: hover) {
+  .landing-appstore-badge:hover {
+    transform: translateY(-1px);
+  }
+}
+
+/* Badge height tracks the "?" circle at every breakpoint. */
+.landing-appstore-badge__img {
+  display: block;
+  height: 54px;
+  width: auto;
+}
+
+@media (max-width: 640px) {
+  .landing-header__auth .landing-appstore-badge__img {
+    height: 50px;
+  }
+}
+
+@media (max-width: 520px) {
+  .landing-appstore-badge__img {
+    height: 46px;
+  }
+}
+
+/* Black lockup on light, white lockup on dark. */
+.landing-appstore-badge__img--white {
+  display: none;
+}
+
+[data-theme="dark"] .landing-appstore-badge__img--black {
+  display: none;
+}
+
+[data-theme="dark"] .landing-appstore-badge__img--white {
+  display: block;
 }
 
 .landing-nav-login {

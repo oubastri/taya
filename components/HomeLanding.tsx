@@ -17,6 +17,16 @@ import {
 
 const sans = 'var(--font-sans), system-ui, sans-serif';
 
+const APP_STORE_URL =
+  "https://apps.apple.com/us/app/taya-to-all-you-athletes/id6784818728";
+
+/**
+ * The iOS app is the product right now — the landing page points people at
+ * the App Store instead of web signup. Flip to true to bring the web
+ * Login / Join buttons back (nothing was deleted, just unrendered).
+ */
+const SHOW_WEB_AUTH = false;
+
 type HomeLandingProps = {
   /**
    * From the server: profile rows for globe + hero strip.
@@ -142,11 +152,15 @@ export default function HomeLanding({
             display: "flex",
             flexDirection: "column",
             overflowY: "auto",
-            padding:
-              "min(17vh, 185px) clamp(20px, 6vw, 40px) min(20vh, 220px)",
+            // Horizontal padding mirrors .landing-header, so the text's left
+            // edge lines up with the To All You Athletes wordmark above it.
+            paddingTop: "min(17vh, 185px)",
+            paddingBottom: "min(20vh, 220px)",
+            paddingLeft: "max(20px, env(safe-area-inset-left))",
+            paddingRight: "max(20px, env(safe-area-inset-right))",
           }}
         >
-          <div style={{ margin: "auto", width: "100%", maxWidth: 720 }}>
+          <div style={{ margin: "auto 0", width: "100%", maxWidth: 720 }}>
             <Typewriter play />
           </div>
         </div>
@@ -159,13 +173,17 @@ export default function HomeLanding({
 
         <div className="landing-header__actions-bar">
           <nav className="landing-header__auth" aria-label="Account">
-            <div className="landing-nav-auth-pair">
+            <div
+              className={
+                SHOW_WEB_AUTH ? "landing-nav-auth-pair" : "landing-nav-app-pair"
+              }
+            >
               <button
                 type="button"
                 aria-label="Our manifesto"
                 aria-pressed={showManifesto}
                 onClick={() => setShowManifesto((v) => !v)}
-                className="landing-nav-manifesto-btn landing-nav-auth-cta active:opacity-85 active:scale-[0.98]"
+                className={`landing-nav-manifesto-btn landing-nav-auth-cta active:opacity-85 active:scale-[0.98]${showManifesto ? " is-active" : ""}`}
                 style={{
                   fontFamily: sans,
                   borderRadius: "50%",
@@ -178,9 +196,7 @@ export default function HomeLanding({
                   flexShrink: 0,
                   padding: 0,
                   cursor: "pointer",
-                  // Filled while the manifesto is up, so the toggle reads as "on".
-                  background: showManifesto ? "var(--foreground)" : "transparent",
-                  color: showManifesto ? "var(--background)" : "var(--foreground)",
+                  color: "var(--foreground)",
                 }}
               >
                 <svg
@@ -202,6 +218,31 @@ export default function HomeLanding({
                 </svg>
               </button>
 
+              {!SHOW_WEB_AUTH ? (
+                <a
+                  href={APP_STORE_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Download TAYA on the App Store"
+                  className="landing-appstore-badge active:opacity-85 active:scale-[0.98]"
+                >
+                  {/* Black lockup for light theme, white for dark — CSS swaps them. */}
+                  <img
+                    src="/landing/appstore-badge-black.svg"
+                    alt="Download on the App Store"
+                    className="landing-appstore-badge__img landing-appstore-badge__img--black"
+                  />
+                  <img
+                    src="/landing/appstore-badge-white.svg"
+                    alt=""
+                    aria-hidden
+                    className="landing-appstore-badge__img landing-appstore-badge__img--white"
+                  />
+                </a>
+              ) : null}
+
+              {SHOW_WEB_AUTH ? (
+              <>
               <Link
                 href="/login"
                 className="landing-nav-login landing-nav-auth-cta active:opacity-85 active:scale-[0.98]"
@@ -241,6 +282,8 @@ export default function HomeLanding({
               >
                 Join TAYA
               </Link>
+              </>
+              ) : null}
             </div>
           </nav>
         </div>
