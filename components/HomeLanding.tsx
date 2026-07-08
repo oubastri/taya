@@ -110,7 +110,11 @@ export default function HomeLanding({
   return (
     <div
       style={{
-        minHeight: "100dvh",
+        // Exactly the viewport, never taller: the page itself must not
+        // scroll — the globe is the only thing that pans, and chrome
+        // (header, hero strips) stays pinned.
+        height: "100dvh",
+        overflow: "hidden",
         display: "flex",
         flexDirection: "column",
         position: "relative",
@@ -145,6 +149,9 @@ export default function HomeLanding({
         // wordmark, hero strip, and activities stay exactly where they are.
         // Remounts on every toggle-on, so the typewriter starts fresh.
         <div
+          // Padding lives in CSS (.landing-manifesto-layer) so mobile can
+          // clear the taller two-row header via media query.
+          className="landing-manifesto-layer"
           style={{
             position: "fixed",
             inset: 0,
@@ -153,12 +160,6 @@ export default function HomeLanding({
             display: "flex",
             flexDirection: "column",
             overflowY: "auto",
-            // Horizontal padding mirrors .landing-header, so the text's left
-            // edge lines up with the To All You Athletes wordmark above it.
-            paddingTop: "min(17vh, 185px)",
-            paddingBottom: "min(20vh, 220px)",
-            paddingLeft: "max(20px, env(safe-area-inset-left))",
-            paddingRight: "max(20px, env(safe-area-inset-right))",
           }}
         >
           <div

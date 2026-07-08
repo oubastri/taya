@@ -1523,6 +1523,23 @@ textarea::placeholder {
   }
 }
 
+/* Manifesto layer padding: horizontal mirrors .landing-header so the text
+   left-aligns with the wordmark; top clears the header (which grows to two
+   rows on phones — the media query adds the difference). */
+.landing-manifesto-layer {
+  padding-top: min(17vh, 185px);
+  padding-bottom: min(20vh, 220px);
+  padding-left: max(20px, env(safe-area-inset-left));
+  padding-right: max(20px, env(safe-area-inset-right));
+}
+
+@media (max-width: 640px) {
+  .landing-manifesto-layer {
+    padding-top: calc(max(env(safe-area-inset-top), 20px) + 180px);
+    padding-bottom: min(16vh, 150px);
+  }
+}
+
 .landing-appstore-badge {
   display: inline-flex;
   flex-shrink: 0;
